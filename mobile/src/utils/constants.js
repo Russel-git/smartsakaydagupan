@@ -19,7 +19,9 @@ const getDevServerIp = () => {
 
 const DEV_IP = getDevServerIp();
 
-export const API_BASE_URL = Platform.select({
+const CLOUDFLARE_BACKEND_URL = 'https://argument-options-correlation-dream.trycloudflare.com/api';
+
+export const API_BASE_URL = CLOUDFLARE_BACKEND_URL || Platform.select({
   web: 'http://localhost:5000/api',
   default: `http://${DEV_IP}:5000/api`,
 });

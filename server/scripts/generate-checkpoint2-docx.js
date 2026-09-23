@@ -233,7 +233,7 @@ async function generateDocx() {
               new TableRow({
                 children: [
                   createDataCell('Frontend Deployment URL', true),
-                  createDataCell('https://samples-mortgage-val-interests.trycloudflare.com\n(Local: http://localhost:3001 & http://localhost:8081)'),
+                  createDataCell('Admin: https://samples-mortgage-val-interests.trycloudflare.com\nCommuter Web: https://infectious-huntington-fourth-citation.trycloudflare.com\n(Local: http://localhost:3001 & http://localhost:8081)'),
                 ],
               }),
               new TableRow({
@@ -1214,7 +1214,7 @@ async function generateDocx() {
               new TableRow({
                 children: [
                   createDataCell('Live Frontend', true),
-                  createDataCell('https://samples-mortgage-val-interests.trycloudflare.com\n(Local: http://localhost:3001)'),
+                  createDataCell('Admin: https://samples-mortgage-val-interests.trycloudflare.com\nCommuter Web: https://infectious-huntington-fourth-citation.trycloudflare.com\n(Local: http://localhost:3001 & http://localhost:8081)'),
                 ],
               }),
               new TableRow({
