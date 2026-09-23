@@ -146,36 +146,64 @@ const FareCalculatorScreen = () => {
         </View>
 
         {/* Discount */}
-        <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>Discount</Text>
+        <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>Statutory Discount (20% Off)</Text>
         <View style={styles.discountGrid}>
-          {DISCOUNT_TYPES.map((dt) => (
-            <TouchableOpacity
-              key={dt.value}
-              style={[
-                styles.discountChip,
-                {
-                  backgroundColor: discount === dt.value ? colors.accent + '20' : colors.surface,
-                  borderColor: discount === dt.value ? colors.accent : colors.border,
-                },
-              ]}
-              onPress={() => setDiscount(dt.value)}
-            >
-              <MaterialCommunityIcons
-                name={dt.icon}
-                size={18}
-                color={discount === dt.value ? colors.accent : colors.textMuted}
-              />
-              <Text
-                style={{
-                  color: discount === dt.value ? colors.accent : colors.textPrimary,
-                  fontSize: FONTS.sizes.xs,
-                  fontWeight: '600',
-                }}
+          {DISCOUNT_TYPES.map((dt) => {
+            const isSelected = discount === dt.value;
+            const isDiscountOption = dt.value !== 'none';
+            return (
+              <TouchableOpacity
+                key={dt.value}
+                style={[
+                  styles.discountChip,
+                  {
+                    backgroundColor: isSelected
+                      ? (isDiscountOption ? '#FEF3C7' : colors.primary)
+                      : colors.surface,
+                    borderColor: isSelected
+                      ? (isDiscountOption ? '#D97706' : colors.primary)
+                      : colors.border,
+                    borderWidth: isSelected ? 2 : 1.5,
+                  },
+                ]}
+                onPress={() => setDiscount(dt.value)}
+                activeOpacity={0.7}
               >
-                {dt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <MaterialCommunityIcons
+                  name={dt.icon}
+                  size={22}
+                  color={isSelected
+                    ? (isDiscountOption ? '#B45309' : '#FFFFFF')
+                    : colors.textSecondary}
+                />
+                <View style={{ marginLeft: 8, flex: 1 }}>
+                  <Text
+                    style={{
+                      color: isSelected
+                        ? (isDiscountOption ? '#92400E' : '#FFFFFF')
+                        : colors.textPrimary,
+                      fontSize: FONTS.sizes.sm,
+                      fontWeight: '700',
+                    }}
+                  >
+                    {dt.label}
+                  </Text>
+                  <Text
+                    style={{
+                      color: isSelected
+                        ? (isDiscountOption ? '#B45309' : 'rgba(255,255,255,0.85)')
+                        : colors.textMuted,
+                      fontSize: 11,
+                      fontWeight: '600',
+                      marginTop: 2,
+                    }}
+                  >
+                    {dt.tag}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* Result */}
@@ -295,8 +323,8 @@ const styles = StyleSheet.create({
   routeChipDist: { fontSize: FONTS.sizes.xs, marginTop: 2 },
   toggleRow: { flexDirection: 'row', gap: SPACING.md, marginBottom: SPACING.xxl },
   toggle: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm, paddingVertical: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1.5 },
-  discountGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.xxl },
-  discountChip: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: RADIUS.full, borderWidth: 1.5 },
+  discountGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md, marginBottom: SPACING.xxl },
+  discountChip: { minWidth: '47%', flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: SPACING.md, borderRadius: RADIUS.md },
   resultCard: { alignItems: 'center', paddingVertical: SPACING.xl, paddingHorizontal: SPACING.lg },
   baseFareBadge: {
     flexDirection: 'row',

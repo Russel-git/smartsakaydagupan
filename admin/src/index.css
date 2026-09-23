@@ -8,10 +8,10 @@
   --bg-surface-elevated: #1e293b;
   --bg-glass: rgba(17, 24, 39, 0.85);
   
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-glow: rgba(37, 99, 235, 0.35);
-  --primary-light: #60a5fa;
+  --primary: #dc2626;
+  --primary-hover: #b91c1c;
+  --primary-glow: rgba(220, 38, 38, 0.35);
+  --primary-light: #f87171;
 
   --accent: #10b981;
   --accent-light: #34d399;
@@ -32,7 +32,7 @@
   --text-dim: #64748b;
 
   --border: rgba(255, 255, 255, 0.08);
-  --border-focus: rgba(37, 99, 235, 0.6);
+  --border-focus: rgba(220, 38, 38, 0.6);
 
   --radius-sm: 8px;
   --radius-md: 12px;

@@ -250,6 +250,47 @@ const HomeScreen = ({ navigation }) => {
           </Card>
         ))}
 
+        {/* Statutory 20% Discounts (Senior, PWD, Student) */}
+        <SectionHeader title="Statutory Commuter Discounts" />
+        <Card style={{ backgroundColor: '#FEF3C7', borderColor: '#F59E0B', borderWidth: 1.5, marginBottom: SPACING.lg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#D97706', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialCommunityIcons name="percent-outline" size={24} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#92400E' }}>
+                  20% Fare Discount
+                </Text>
+                <View style={{ backgroundColor: '#D97706', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800' }}>STATUTORY RIGHT</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, color: '#78350F', marginTop: 4, lineHeight: 17 }}>
+                Under Philippine law (RA 9994, RA 7277, RA 11314), all <Text style={{ fontWeight: '700' }}>Students, Senior Citizens, and PWDs</Text> are legally entitled to 20% off all public jeeps & tricycles in Dagupan City upon presenting valid ID.
+              </Text>
+              <TouchableOpacity
+                style={{
+                  marginTop: 10,
+                  backgroundColor: '#B45309',
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 10,
+                  alignSelf: 'flex-start',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                onPress={() => navigation.navigate('RoutesAndFares', { initialTab: 'fares' })}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="calculator" size={16} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12 }}>Calculate Discounted Fare</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Card>
+
         {/* Commuter Rights */}
         <SectionHeader title="Know Your Rights" />
         <Card>

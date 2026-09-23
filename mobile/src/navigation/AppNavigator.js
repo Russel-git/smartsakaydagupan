@@ -108,10 +108,10 @@ const GuestTabs = () => {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           paddingBottom: 6,
-          paddingTop: 4,
-          height: 58,
+          paddingTop: 6,
+          height: 62,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '700' },
         tabBarIcon: ({ color, size }) => {
           const icons = {
             Home: 'home',
@@ -156,10 +156,10 @@ const MainTabs = () => {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           paddingBottom: 6,
-          paddingTop: 4,
-          height: 58,
+          paddingTop: 6,
+          height: 62,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '700' },
         tabBarIcon: ({ color, size }) => {
           const icons = {
             Home: 'home',

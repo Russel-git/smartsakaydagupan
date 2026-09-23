@@ -28,51 +28,66 @@ export const API_BASE_URL = CLOUDFLARE_BACKEND_URL || Platform.select({
 
 
 export const COLORS = {
-  // Primary palette
-  primary: '#1A56DB',
-  primaryLight: '#3B82F6',
-  primaryDark: '#1E40AF',
+  // Primary palette: Dagupan Transit Crimson
+  primary: '#DC2626',
+  primaryLight: '#EF4444',
+  primaryDark: '#991B1B',
+  primaryMuted: '#FEE2E2',
+  primaryGlow: 'rgba(220, 38, 38, 0.25)',
   
-  // Secondary
-  secondary: '#F59E0B',
-  secondaryLight: '#FBBF24',
-  secondaryDark: '#D97706',
+  // Secondary: Royal Slate & Midnight Navy (for high-contrast stability)
+  secondary: '#0F172A',
+  secondaryLight: '#1E293B',
+  secondaryDark: '#020617',
   
-  // Accent
-  accent: '#10B981',
-  accentLight: '#34D399',
-  accentDark: '#059669',
+  // Accent: Warm Amber Gold (Student, Senior Citizen & PWD Statutory Discount)
+  accent: '#D97706',
+  accentLight: '#F59E0B',
+  accentDark: '#B45309',
+  accentMuted: '#FEF3C7',
+  discountGold: '#D97706',
+  discountBg: '#FEF3C7',
+  discountText: '#92400E',
   
   // Semantic
-  error: '#EF4444',
+  error: '#DC2626',
   errorLight: '#FEE2E2',
-  warning: '#F59E0B',
+  warning: '#D97706',
   warningLight: '#FEF3C7',
-  success: '#10B981',
+  success: '#059669',
   successLight: '#D1FAE5',
-  info: '#3B82F6',
-  infoLight: '#DBEAFE',
+  info: '#0284C7',
+  infoLight: '#E0F2FE',
 
-  // Neutral
+  // Neutral (High Contrast WCAG AAA compliant)
   white: '#FFFFFF',
   background: '#F8FAFC',
   surface: '#FFFFFF',
+  surfaceCard: '#FFFFFF',
   border: '#E2E8F0',
+  borderStrong: '#CBD5E1',
   textPrimary: '#0F172A',
-  textSecondary: '#64748B',
-  textMuted: '#94A3B8',
+  textSecondary: '#475569',
+  textMuted: '#64748B',
   disabled: '#CBD5E1',
 
   // Dark mode
   dark: {
-    background: '#0F172A',
-    surface: '#1E293B',
-    surfaceElevated: '#334155',
-    border: '#334155',
+    background: '#0B0F19',
+    surface: '#111827',
+    surfaceElevated: '#1E293B',
+    border: '#1E293B',
     textPrimary: '#F8FAFC',
     textSecondary: '#94A3B8',
     textMuted: '#64748B',
   },
+};
+
+export const ACCESSIBILITY = {
+  minTouchTarget: 48,
+  seniorTouchTarget: 54,
+  focusOutlineWidth: 2,
+  largeFontScale: 1.15,
 };
 
 export const FONTS = {
@@ -177,6 +192,8 @@ export const VEHICLE_TYPES = [
 ];
 
 export const DISCOUNT_TYPES = [
-  { value: 'none', label: 'Regular Fare', icon: 'account' },
-  { value: 'discounted', label: 'Student / Senior / PWD (20% Off)', icon: 'percent-outline' },
+  { value: 'none', label: 'Regular Fare', icon: 'account', tag: 'Standard Rate' },
+  { value: 'student', label: 'Student', icon: 'school', tag: '20% Off (RA 11314)' },
+  { value: 'senior', label: 'Senior Citizen', icon: 'account-clock', tag: '20% Off (RA 9994)' },
+  { value: 'pwd', label: 'PWD Commuter', icon: 'wheelchair-accessibility', tag: '20% Off (RA 7277)' },
 ];

@@ -39,3 +39,4 @@ server/uploads/
 
 # Progress tracking / IDE scratch
 .superpowers/
+.agents/
