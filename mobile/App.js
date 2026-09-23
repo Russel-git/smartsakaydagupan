@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, LogBox } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, LogBox, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -8,6 +8,36 @@ import { ThemeProvider } from './src/contexts/ThemeContext';
 import { FeedbackProvider } from './src/contexts/FeedbackContext';
 import { NotificationProvider } from './src/contexts/NotificationContext';
 import AppNavigator from './src/navigation/AppNavigator';
+
+// Inject vector icon fonts on Web so @expo/vector-icons renders properly instead of empty boxes
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const iconFontStyles = `
+    @font-face {
+      font-family: 'material-community';
+      src: url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.0/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+    }
+    @font-face {
+      font-family: 'MaterialCommunityIcons';
+      src: url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.0/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+    }
+    @font-face {
+      font-family: 'Ionicons';
+      src: url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.0/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf') format('truetype');
+    }
+    @font-face {
+      font-family: 'MaterialIcons';
+      src: url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.0/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf') format('truetype');
+    }
+  `;
+  const styleId = 'expo-vector-icons-web-fonts';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.type = 'text/css';
+    style.appendChild(document.createTextNode(iconFontStyles));
+    document.head.appendChild(style);
+  }
+}
 
 LogBox.ignoreLogs([
   'Cannot connect to Expo CLI',
