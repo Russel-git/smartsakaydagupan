@@ -10,7 +10,7 @@ import {
   ArrowUpRight, 
   CheckCircle2, 
   Clock, 
-  AlertCircle 
+  TrendingUp
 } from 'lucide-react';
 import api from '../api/client';
 
@@ -20,7 +20,7 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchData = async () => {
       try {
         const [statsRes, actRes] = await Promise.all([
           api.get('/admin/stats'),
@@ -28,169 +28,163 @@ const DashboardPage = () => {
         ]);
         setStats(statsRes.data?.data || null);
 
-        const rawActivity = actRes.data?.data;
-        let formattedActivity = [];
-        if (Array.isArray(rawActivity)) {
-          formattedActivity = rawActivity;
-        } else if (rawActivity && typeof rawActivity === 'object') {
-          const users = Array.isArray(rawActivity.recentUsers) ? rawActivity.recentUsers : [];
-          const complaints = Array.isArray(rawActivity.recentComplaints) ? rawActivity.recentComplaints : [];
-
-          users.forEach((u) => {
-            formattedActivity.push({
-              action: 'New Commuter Registered',
-              details: `${u.firstName || 'User'} ${u.lastName || ''} (${u.email || 'N/A'})`,
-              timestamp: u.createdAt || new Date(),
-            });
-          });
-
+        const raw = actRes.data?.data;
+        let items = [];
+        if (Array.isArray(raw)) {
+          items = raw;
+        } else if (raw && typeof raw === 'object') {
+          const users = Array.isArray(raw.recentUsers) ? raw.recentUsers : [];
+          const complaints = Array.isArray(raw.recentComplaints) ? raw.recentComplaints : [];
+          users.forEach((u) => items.push({
+            action: 'New Commuter Registered',
+            details: `${u.firstName || 'User'} ${u.lastName || ''} (${u.email || 'N/A'})`,
+            timestamp: u.createdAt || new Date(),
+            type: 'user',
+          }));
           complaints.forEach((c) => {
             const reporter = c.userId ? `${c.userId.firstName || ''} ${c.userId.lastName || ''}`.trim() : 'Anonymous';
-            formattedActivity.push({
-              action: `Grievance: ${c.category ? c.category.toUpperCase() : 'General'}`,
-              details: `${c.subject || 'Complaint filed'} [${c.status || 'pending'}] by ${reporter || 'Commuter'}`,
+            items.push({
+              action: `Grievance: ${c.category ? c.category.replace('_', ' ').toUpperCase() : 'General'}`,
+              details: `${c.subject || 'Complaint filed'} [${c.status || 'pending'}] — ${reporter || 'Commuter'}`,
               timestamp: c.createdAt || new Date(),
+              type: 'complaint',
             });
           });
-
-          formattedActivity.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+          items.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         }
-
-        setActivity(formattedActivity);
+        setActivity(items);
       } catch (err) {
-        console.error('Failed to load dashboard data:', err);
-        setActivity([]);
+        console.error('Dashboard fetch error:', err);
       } finally {
         setLoading(false);
       }
     };
-
-    fetchDashboardData();
+    fetchData();
   }, []);
 
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px' }}>
-        <div style={{ color: 'var(--text-muted)', fontSize: '15px' }}>Loading Command Center analytics...</div>
+        <div style={{ color: 'var(--text-400)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Activity size={18} style={{ animation: 'pulse-dot 1.5s ease infinite' }} />
+          Loading analytics...
+        </div>
       </div>
     );
   }
 
+  const STAT_CARDS = [
+    {
+      label: 'Registered Commuters',
+      value: stats?.users?.total ?? 0,
+      sub: `${stats?.users?.verified ?? 0} verified accounts`,
+      icon: Users,
+      color: 'var(--primary)',
+    },
+    {
+      label: 'Jeepney Routes',
+      value: stats?.routes?.total ?? 0,
+      sub: `${stats?.routes?.active ?? 0} active routes`,
+      icon: MapPin,
+      color: 'var(--info)',
+    },
+    {
+      label: 'Pending Complaints',
+      value: stats?.complaints?.pending ?? 0,
+      sub: `${stats?.complaints?.under_review ?? 0} under review`,
+      icon: AlertTriangle,
+      color: 'var(--warning)',
+    },
+    {
+      label: 'Resolved Reports',
+      value: stats?.complaints?.resolved ?? 0,
+      sub: `${stats?.complaints?.total ?? 0} total submitted`,
+      icon: CheckCircle2,
+      color: 'var(--success)',
+    },
+  ];
+
+  const QUICK_ACTIONS = [
+    { to: '/fares',         label: 'Manage LTFRB Fares',   icon: Calculator,    color: 'var(--primary-light)' },
+    { to: '/complaints',    label: 'Triage Complaints',     icon: AlertTriangle, color: 'var(--warning)' },
+    { to: '/routes',        label: 'Route Matrix',          icon: MapPin,        color: 'var(--success)' },
+    { to: '/notifications', label: 'Broadcast Advisory',    icon: Bell,          color: 'var(--info)' },
+    { to: '/users',         label: 'User Directory',        icon: Users,         color: '#a78bfa' },
+  ];
+
   return (
     <div>
-      <div style={{ marginBottom: '28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* Page Header */}
+      <div className="page-header">
         <div>
-          <h1 style={{ fontSize: '26px', color: '#ffffff', marginBottom: '4px' }}>Executive Overview</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-            Real-time public transit telemetry and commuter feedback for Dagupan City.
-          </p>
+          <h1>Executive Overview</h1>
+          <p>Real-time public transit telemetry and commuter intelligence for Dagupan City.</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <Link to="/notifications" className="btn btn-primary btn-sm">
             <Bell size={14} />
-            <span>Send Alert</span>
+            Send Alert
           </Link>
           <Link to="/fares" className="btn btn-secondary btn-sm">
             <Calculator size={14} />
-            <span>Update Rates</span>
+            Update Fares
           </Link>
         </div>
       </div>
 
       {/* Stats Grid */}
       <div className="stat-grid">
-        <div className="stat-card" style={{ '--stat-color': 'var(--primary)' }}>
-          <div>
-            <div className="stat-label">Registered Commuters</div>
-            <div className="stat-value">{stats?.users?.total || 0}</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '4px' }}>
-              {stats?.users?.verified || 0} verified accounts
+        {STAT_CARDS.map((s) => {
+          const Icon = s.icon;
+          return (
+            <div key={s.label} className="stat-card" style={{ '--stat-color': s.color }}>
+              <div>
+                <div className="stat-label">{s.label}</div>
+                <div className="stat-value">{s.value}</div>
+                <div className="stat-sub">{s.sub}</div>
+              </div>
+              <div className="stat-icon">
+                <Icon size={22} />
+              </div>
             </div>
-          </div>
-          <div className="stat-icon">
-            <Users size={24} />
-          </div>
-        </div>
-
-        <div className="stat-card" style={{ '--stat-color': 'var(--info)' }}>
-          <div>
-            <div className="stat-label">Jeepney Routes</div>
-            <div className="stat-value">{stats?.routes?.total || 0}</div>
-            <div style={{ fontSize: '12px', color: 'var(--accent-light)', marginTop: '4px' }}>
-              {stats?.routes?.active || 0} active routes
-            </div>
-          </div>
-          <div className="stat-icon">
-            <MapPin size={24} />
-          </div>
-        </div>
-
-        <div className="stat-card" style={{ '--stat-color': 'var(--warning)' }}>
-          <div>
-            <div className="stat-label">Pending Complaints</div>
-            <div className="stat-value">{stats?.complaints?.pending || 0}</div>
-            <div style={{ fontSize: '12px', color: 'var(--warning-light)', marginTop: '4px' }}>
-              {stats?.complaints?.under_review || 0} under review
-            </div>
-          </div>
-          <div className="stat-icon">
-            <AlertTriangle size={24} />
-          </div>
-        </div>
-
-        <div className="stat-card" style={{ '--stat-color': 'var(--accent)' }}>
-          <div>
-            <div className="stat-label">Resolved Reports</div>
-            <div className="stat-value">{stats?.complaints?.resolved || 0}</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '4px' }}>
-              Total {stats?.complaints?.total || 0} submitted
-            </div>
-          </div>
-          <div className="stat-icon">
-            <CheckCircle2 size={24} />
-          </div>
-        </div>
+          );
+        })}
       </div>
 
-      {/* Main Sections: Recent Activity & Quick Navigation */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-        {/* Recent Activity */}
+      {/* Main Panels */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
+
+        {/* Activity Feed */}
         <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Activity size={20} color="var(--primary-light)" />
-              <h3 style={{ fontSize: '17px', color: '#ffffff' }}>Live Activity Log</h3>
+          <div className="card-header">
+            <div className="card-title">
+              <Activity size={18} color="var(--primary-light)" />
+              Live Activity Log
             </div>
-            <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>Auto-refreshed</span>
+            <span className="card-meta">Auto-refreshed</span>
           </div>
 
-          {(!Array.isArray(activity) || activity.length === 0) ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-              No recent administrative actions recorded.
+          {activity.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-400)' }}>
+              No recent activity recorded.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {Array.isArray(activity) && activity.map((act, i) => (
-                <div 
-                  key={i} 
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'flex-start', 
-                    gap: '14px', 
-                    padding: '12px', 
-                    borderRadius: 'var(--radius-md)', 
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid var(--border)'
-                  }}
-                >
-                  <div style={{ marginTop: '2px', color: 'var(--primary-light)' }}>
-                    <Clock size={16} />
-                  </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {activity.slice(0, 10).map((act, i) => (
+                <div key={i} className="activity-item">
+                  <div
+                    className="activity-dot"
+                    style={{ background: act.type === 'user' ? 'var(--primary)' : 'var(--warning)' }}
+                  />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>{act.action}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{act.details}</div>
+                    <div style={{ fontSize: '13.5px', fontWeight: '600', color: 'var(--text-100)' }}>
+                      {act.action}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-400)', marginTop: '2px' }}>
+                      {act.details}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-600)', flexShrink: 0 }}>
                     {new Date(act.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
@@ -199,97 +193,58 @@ const DashboardPage = () => {
           )}
         </div>
 
-        {/* Quick Management Shortcuts */}
+        {/* Right Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {/* Quick Actions */}
           <div className="card">
-            <h3 style={{ fontSize: '16px', color: '#ffffff', marginBottom: '14px' }}>Quick Actions</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <Link 
-                to="/fares" 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between', 
-                  padding: '12px', 
-                  borderRadius: 'var(--radius-md)', 
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid var(--border)',
-                  color: 'white'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Calculator size={16} color="var(--primary-light)" />
-                  <span style={{ fontSize: '13px', fontWeight: '500' }}>Manage LTFRB Fares</span>
-                </div>
-                <ArrowUpRight size={16} color="var(--text-dim)" />
-              </Link>
-
-              <Link 
-                to="/complaints" 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between', 
-                  padding: '12px', 
-                  borderRadius: 'var(--radius-md)', 
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid var(--border)',
-                  color: 'white'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <AlertTriangle size={16} color="var(--warning-light)" />
-                  <span style={{ fontSize: '13px', fontWeight: '500' }}>Triage Complaints</span>
-                </div>
-                <ArrowUpRight size={16} color="var(--text-dim)" />
-              </Link>
-
-              <Link 
-                to="/routes" 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between', 
-                  padding: '12px', 
-                  borderRadius: 'var(--radius-md)', 
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid var(--border)',
-                  color: 'white'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <MapPin size={16} color="var(--accent-light)" />
-                  <span style={{ fontSize: '13px', fontWeight: '500' }}>Jeepney Route Matrix</span>
-                </div>
-                <ArrowUpRight size={16} color="var(--text-dim)" />
-              </Link>
-
-              <Link 
-                to="/notifications" 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between', 
-                  padding: '12px', 
-                  borderRadius: 'var(--radius-md)', 
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid var(--border)',
-                  color: 'white'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Bell size={16} color="var(--info)" />
-                  <span style={{ fontSize: '13px', fontWeight: '500' }}>Broadcast Advisory</span>
-                </div>
-                <ArrowUpRight size={16} color="var(--text-dim)" />
-              </Link>
+            <div className="card-header">
+              <div className="card-title">
+                <TrendingUp size={16} color="var(--accent)" />
+                Quick Actions
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {QUICK_ACTIONS.map((qa) => {
+                const Icon = qa.icon;
+                return (
+                  <Link key={qa.to} to={qa.to} className="quick-action-link">
+                    <div className="icon">
+                      <Icon size={15} color={qa.color} />
+                      <span>{qa.label}</span>
+                    </div>
+                    <ArrowUpRight size={14} color="var(--text-600)" />
+                  </Link>
+                );
+              })}
             </div>
           </div>
 
-          <div className="card" style={{ background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(16, 185, 129, 0.05))' }}>
-            <h4 style={{ fontSize: '14px', color: '#ffffff', marginBottom: '8px' }}>LTFRB Regulation Notice</h4>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-              Under LTFRB Memorandum Circulars, PUV operators must honor the 20% discount for Students, PWDs, and Seniors across all Dagupan City transit lines.
+          {/* LTFRB Notice */}
+          <div
+            className="card"
+            style={{
+              background: 'linear-gradient(135deg, rgba(225, 29, 72, 0.08), rgba(245, 158, 11, 0.06))',
+              borderColor: 'rgba(225, 29, 72, 0.2)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              <div style={{
+                width: '28px', height: '28px',
+                background: 'linear-gradient(135deg, var(--primary), #be123c)',
+                borderRadius: '8px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <CheckCircle2 size={14} color="white" />
+              </div>
+              <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-100)' }}>
+                LTFRB Regulation Notice
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-400)', lineHeight: '1.65' }}>
+              Under LTFRB Memorandum Circulars, all PUV operators must honor the{' '}
+              <strong style={{ color: 'var(--text-200)' }}>20% statutory discount</strong> for
+              Students, PWDs, and Seniors across all Dagupan City transit lines upon presentation of valid ID.
             </p>
           </div>
         </div>

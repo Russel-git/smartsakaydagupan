@@ -41,21 +41,21 @@ const LoginPage = () => {
   return (
     <div className="login-screen">
       <div className="login-card">
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <div className="brand-icon" style={{ margin: '0 auto 16px', width: '56px', height: '56px' }}>
-            <Bus size={32} />
+        <div className="login-logo">
+          <div className="login-logo-icon">
+            <Bus size={30} />
           </div>
-          <h1 style={{ fontSize: '24px', color: '#ffffff', marginBottom: '6px' }}>SmartSakay Admin</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+          <h1 style={{ fontSize: '22px', marginBottom: '6px', letterSpacing: '-0.5px' }}>SmartSakay Admin</h1>
+          <p style={{ fontSize: '13px', color: 'var(--text-400)', textAlign: 'center' }}>
             Sign in to manage Dagupan City transport networks
           </p>
         </div>
 
         {error && (
           <div style={{
-            background: 'rgba(239, 68, 68, 0.12)',
+            background: 'var(--danger-subtle)',
             border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: 'var(--radius-md)',
+            borderRadius: 'var(--r-sm)',
             padding: '12px',
             marginBottom: '20px',
             display: 'flex',
@@ -117,7 +117,7 @@ const LoginPage = () => {
           </button>
         </form>
 
-        <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+        <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border-subtle)', textAlign: 'center' }}>
           <button
             type="button"
             onClick={handleFillDemo}
