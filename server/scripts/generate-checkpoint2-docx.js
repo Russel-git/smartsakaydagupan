@@ -13,6 +13,7 @@ const {
   HeadingLevel,
   BorderStyle,
   ShadingType,
+  ImageRun,
 } = require('docx');
 
 // Helper to create consistent table borders
@@ -369,6 +370,22 @@ async function generateDocx() {
                   createDataCell('REST / HTTP(S) with JSON'),
                   createDataCell('Transmits requests and responses securely using Bearer JWT authentication, CORS origin restriction, and Helmet header protection.'),
                 ],
+              }),
+            ],
+          }),
+
+          // MERN Architecture Diagram
+          createSubHeader('MERN Architecture Diagram'),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 140, after: 200 },
+            children: [
+              new ImageRun({
+                data: fs.readFileSync(path.join(__dirname, '../../SmartSakay_MERN_Architecture_Diagram.jpg')),
+                transformation: {
+                  width: 580,
+                  height: 326,
+                },
               }),
             ],
           }),

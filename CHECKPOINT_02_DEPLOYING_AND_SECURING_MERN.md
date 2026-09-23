@@ -92,6 +92,8 @@ graph TB
     D1 -->|"BSON Queries & WiredTiger Engine"| D2
 ```
 
+![SmartSakay Dagupan MERN Architecture Diagram](SmartSakay_MERN_Architecture_Diagram.jpg)
+
 ### Component Breakdown Table
 
 | Component | Technology Used | Role in Our Project |
