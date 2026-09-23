@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment Variables & Secrets (CRITICAL SECURITY)
+.env
+**/.env
+.env.*
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Build outputs
+dist/
+**/dist/
+build/
+**/build/
+coverage/
+
+# Logs
+*.log
+**/*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# React Native & Expo
+mobile/android/app/build/
+mobile/ios/Pods/
+mobile/ios/build/
+.expo/
+**/.expo/
+
+# Server uploads
+server/uploads/
+
+# Progress tracking / IDE scratch
+.superpowers/
