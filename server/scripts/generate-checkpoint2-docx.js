@@ -245,7 +245,7 @@ async function generateDocx() {
               new TableRow({
                 children: [
                   createDataCell('Repository URL', true),
-                  createDataCell('https://github.com/smartsakaydagupan/smartsakay-dagupan'),
+                  createDataCell('https://github.com/Russel-git/smartsakaydagupan'),
                 ],
               }),
             ],
@@ -1208,7 +1208,7 @@ async function generateDocx() {
               new TableRow({
                 children: [
                   createDataCell('Source Code Repository', true),
-                  createDataCell('https://github.com/smartsakaydagupan/smartsakay-dagupan'),
+                  createDataCell('https://github.com/Russel-git/smartsakaydagupan'),
                 ],
               }),
               new TableRow({

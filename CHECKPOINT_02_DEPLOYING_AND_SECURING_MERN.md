@@ -15,7 +15,7 @@
 | **Date** | September 23, 2026 |
 | **Frontend Deployment URL** | `https://samples-mortgage-val-interests.trycloudflare.com` (Local Staging: `http://localhost:3001` / Mobile: `http://localhost:8081`) |
 | **Backend / API Deployment URL** | `https://argument-options-correlation-dream.trycloudflare.com` (Health Check: `https://argument-options-correlation-dream.trycloudflare.com/api/health`) |
-| **Repository URL** | `https://github.com/smartsakaydagupan/smartsakay-dagupan` |
+| **Repository URL** | `https://github.com/Russel-git/smartsakaydagupan` |
 
 ---
 
@@ -522,7 +522,7 @@ Given additional development time, we would implement:
 
 | Required Item | Submission / Link |
 | :--- | :--- |
-| **Source Code Repository** | [SmartSakay Dagupan GitHub Repository](https://github.com/smartsakaydagupan/smartsakay-dagupan) |
+| **Source Code Repository** | [SmartSakay Dagupan GitHub Repository](https://github.com/Russel-git/smartsakaydagupan) |
 | **Live Frontend** | `https://samples-mortgage-val-interests.trycloudflare.com` (Local Staging: `http://localhost:3001`) |
 | **Live Backend / API** | `https://argument-options-correlation-dream.trycloudflare.com` (Health Check: `https://argument-options-correlation-dream.trycloudflare.com/api/health`) |
 | **Database Configuration Evidence** | MongoDB Atlas 7.0 Managed Cluster with TLS 1.3 & IP Access Whitelist |
