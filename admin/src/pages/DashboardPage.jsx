@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  Users, 
-  MapPin, 
-  Calculator, 
-  AlertTriangle, 
-  Bell, 
+import {
+  Users,
+  MapPin,
+  Calculator,
+  AlertTriangle,
+  Bell,
   Activity,
-  ArrowUpRight, 
-  CheckCircle2, 
-  Clock, 
-  TrendingUp
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  TrendingUp,
+  FileText
 } from 'lucide-react';
 import api from '../api/client';
 
@@ -20,7 +21,7 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchDashboardData = async () => {
       try {
         const [statsRes, actRes] = await Promise.all([
           api.get('/admin/stats'),
@@ -28,122 +29,173 @@ const DashboardPage = () => {
         ]);
         setStats(statsRes.data?.data || null);
 
-        const raw = actRes.data?.data;
-        let items = [];
-        if (Array.isArray(raw)) {
-          items = raw;
-        } else if (raw && typeof raw === 'object') {
-          const users = Array.isArray(raw.recentUsers) ? raw.recentUsers : [];
-          const complaints = Array.isArray(raw.recentComplaints) ? raw.recentComplaints : [];
-          users.forEach((u) => items.push({
-            action: 'New Commuter Registered',
-            details: `${u.firstName || 'User'} ${u.lastName || ''} (${u.email || 'N/A'})`,
-            timestamp: u.createdAt || new Date(),
-            type: 'user',
-          }));
+        const rawActivity = actRes.data?.data;
+        let formattedActivity = [];
+        if (Array.isArray(rawActivity)) {
+          formattedActivity = rawActivity;
+        } else if (rawActivity && typeof rawActivity === 'object') {
+          const users = Array.isArray(rawActivity.recentUsers) ? rawActivity.recentUsers : [];
+          const complaints = Array.isArray(rawActivity.recentComplaints) ? rawActivity.recentComplaints : [];
+
+          users.forEach((u) => {
+            formattedActivity.push({
+              action: 'New Commuter Registered',
+              details: `${u.firstName || 'User'} ${u.lastName || ''} (${u.email || 'N/A'})`,
+              timestamp: u.createdAt || new Date(),
+              type: 'user',
+            });
+          });
+
           complaints.forEach((c) => {
             const reporter = c.userId ? `${c.userId.firstName || ''} ${c.userId.lastName || ''}`.trim() : 'Anonymous';
-            items.push({
-              action: `Grievance: ${c.category ? c.category.replace('_', ' ').toUpperCase() : 'General'}`,
-              details: `${c.subject || 'Complaint filed'} [${c.status || 'pending'}] — ${reporter || 'Commuter'}`,
+            formattedActivity.push({
+              action: `Grievance: ${c.category ? c.category.toUpperCase() : 'General'}`,
+              details: `${c.subject || 'Complaint filed'} [${c.status || 'pending'}] by ${reporter || 'Commuter'}`,
               timestamp: c.createdAt || new Date(),
               type: 'complaint',
             });
           });
-          items.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+          formattedActivity.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         }
-        setActivity(items);
+
+        setActivity(formattedActivity);
       } catch (err) {
-        console.error('Dashboard fetch error:', err);
+        console.error('Failed to load dashboard data:', err);
+        setActivity([]);
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
+
+    fetchDashboardData();
   }, []);
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px' }}>
-        <div style={{ color: 'var(--text-400)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Activity size={18} style={{ animation: 'pulse-dot 1.5s ease infinite' }} />
-          Loading analytics...
+      <div>
+        <div className="page-header">
+          <div className="page-header-left">
+            <div className="skeleton" style={{ width: '200px', height: '28px', marginBottom: '8px' }} />
+            <div className="skeleton" style={{ width: '300px', height: '16px' }} />
+          </div>
+        </div>
+        <div className="stat-grid">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="card" style={{ height: '100px' }}>
+              <div className="skeleton" style={{ width: '100%', height: '100%', borderRadius: 'var(--radius-md)' }} />
+            </div>
+          ))}
         </div>
       </div>
     );
   }
 
-  const STAT_CARDS = [
+  const statCards = [
     {
       label: 'Registered Commuters',
-      value: stats?.users?.total ?? 0,
-      sub: `${stats?.users?.verified ?? 0} verified accounts`,
+      value: stats?.users?.total || 0,
+      trend: `${stats?.users?.verified || 0} verified`,
       icon: Users,
       color: 'var(--primary)',
+      bg: 'var(--primary-light)',
+      trendClass: 'positive',
     },
     {
       label: 'Jeepney Routes',
-      value: stats?.routes?.total ?? 0,
-      sub: `${stats?.routes?.active ?? 0} active routes`,
+      value: stats?.routes?.total || 0,
+      trend: `${stats?.routes?.active || 0} active routes`,
       icon: MapPin,
       color: 'var(--info)',
+      bg: 'var(--info-light)',
+      trendClass: 'positive',
     },
     {
       label: 'Pending Complaints',
-      value: stats?.complaints?.pending ?? 0,
-      sub: `${stats?.complaints?.under_review ?? 0} under review`,
+      value: stats?.complaints?.pending || 0,
+      trend: `${stats?.complaints?.under_review || 0} under review`,
+      icon: AlertTriangle,
+      color: 'var(--warning)',
+      bg: 'var(--warning-light)',
+      trendClass: 'warning',
+    },
+    {
+      label: 'Resolved Reports',
+      value: stats?.complaints?.resolved || 0,
+      trend: `${stats?.complaints?.total || 0} total submitted`,
+      icon: CheckCircle2,
+      color: 'var(--accent)',
+      bg: 'var(--accent-light)',
+      trendClass: 'positive',
+    },
+  ];
+
+  const quickActions = [
+    {
+      to: '/fares',
+      label: 'Manage LTFRB Fares',
+      desc: 'Update fare matrix & discounts',
+      icon: Calculator,
+      color: 'var(--primary)',
+    },
+    {
+      to: '/complaints',
+      label: 'Triage Complaints',
+      desc: 'Review pending commuter reports',
       icon: AlertTriangle,
       color: 'var(--warning)',
     },
     {
-      label: 'Resolved Reports',
-      value: stats?.complaints?.resolved ?? 0,
-      sub: `${stats?.complaints?.total ?? 0} total submitted`,
-      icon: CheckCircle2,
-      color: 'var(--success)',
+      to: '/routes',
+      label: 'Jeepney Route Matrix',
+      desc: 'View and manage active routes',
+      icon: MapPin,
+      color: 'var(--info)',
     },
-  ];
-
-  const QUICK_ACTIONS = [
-    { to: '/fares',         label: 'Manage LTFRB Fares',   icon: Calculator,    color: 'var(--primary-light)' },
-    { to: '/complaints',    label: 'Triage Complaints',     icon: AlertTriangle, color: 'var(--warning)' },
-    { to: '/routes',        label: 'Route Matrix',          icon: MapPin,        color: 'var(--success)' },
-    { to: '/notifications', label: 'Broadcast Advisory',    icon: Bell,          color: 'var(--info)' },
-    { to: '/users',         label: 'User Directory',        icon: Users,         color: '#a78bfa' },
+    {
+      to: '/notifications',
+      label: 'Broadcast Advisory',
+      desc: 'Send alerts to commuters',
+      icon: Bell,
+      color: 'var(--danger)',
+    },
   ];
 
   return (
     <div>
       {/* Page Header */}
       <div className="page-header">
-        <div>
+        <div className="page-header-left">
           <h1>Executive Overview</h1>
-          <p>Real-time public transit telemetry and commuter intelligence for Dagupan City.</p>
+          <p>Real-time public transit telemetry and commuter feedback for Dagupan City.</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <Link to="/notifications" className="btn btn-primary btn-sm">
             <Bell size={14} />
-            Send Alert
+            <span>Send Alert</span>
           </Link>
           <Link to="/fares" className="btn btn-secondary btn-sm">
             <Calculator size={14} />
-            Update Fares
+            <span>Update Rates</span>
           </Link>
         </div>
       </div>
 
       {/* Stats Grid */}
       <div className="stat-grid">
-        {STAT_CARDS.map((s) => {
-          const Icon = s.icon;
+        {statCards.map((card) => {
+          const Icon = card.icon;
           return (
-            <div key={s.label} className="stat-card" style={{ '--stat-color': s.color }}>
-              <div>
-                <div className="stat-label">{s.label}</div>
-                <div className="stat-value">{s.value}</div>
-                <div className="stat-sub">{s.sub}</div>
+            <div key={card.label} className="stat-card">
+              <div className="stat-card-left">
+                <div className="stat-label">{card.label}</div>
+                <div className="stat-value">{card.value}</div>
+                <div className={`stat-trend ${card.trendClass}`}>{card.trend}</div>
               </div>
-              <div className="stat-icon">
+              <div
+                className="stat-icon"
+                style={{ '--stat-color': card.color, '--stat-bg': card.bg, background: card.bg, color: card.color }}
+              >
                 <Icon size={22} />
               </div>
             </div>
@@ -151,40 +203,43 @@ const DashboardPage = () => {
         })}
       </div>
 
-      {/* Main Panels */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
+      {/* Bottom Grid: Activity + Quick Actions */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '20px', alignItems: 'start' }}>
 
-        {/* Activity Feed */}
+        {/* Live Activity */}
         <div className="card">
           <div className="card-header">
-            <div className="card-title">
-              <Activity size={18} color="var(--primary-light)" />
-              Live Activity Log
+            <div>
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Activity size={16} color="var(--primary)" />
+                Live Activity Log
+              </div>
+              <div className="card-subtitle">Recent events across the platform</div>
             </div>
-            <span className="card-meta">Auto-refreshed</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 500 }}>Auto-refreshed</span>
           </div>
 
-          {activity.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-400)' }}>
-              No recent activity recorded.
+          {(!Array.isArray(activity) || activity.length === 0) ? (
+            <div className="empty-state" style={{ padding: '40px 0' }}>
+              <div className="empty-state-icon">
+                <FileText size={28} />
+              </div>
+              <h3>No recent activity</h3>
+              <p>Administrative actions will appear here once they occur.</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {activity.slice(0, 10).map((act, i) => (
+            <div>
+              {Array.isArray(activity) && activity.map((act, i) => (
                 <div key={i} className="activity-item">
                   <div
                     className="activity-dot"
-                    style={{ background: act.type === 'user' ? 'var(--primary)' : 'var(--warning)' }}
+                    style={{ background: act.type === 'complaint' ? 'var(--warning)' : 'var(--primary)' }}
                   />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '13.5px', fontWeight: '600', color: 'var(--text-100)' }}>
-                      {act.action}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-400)', marginTop: '2px' }}>
-                      {act.details}
-                    </div>
+                  <div className="activity-content">
+                    <div className="activity-action">{act.action}</div>
+                    <div className="activity-details">{act.details}</div>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-600)', flexShrink: 0 }}>
+                  <div className="activity-time">
                     {new Date(act.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
@@ -195,25 +250,26 @@ const DashboardPage = () => {
 
         {/* Right Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
           {/* Quick Actions */}
           <div className="card">
-            <div className="card-header">
-              <div className="card-title">
-                <TrendingUp size={16} color="var(--accent)" />
-                Quick Actions
-              </div>
+            <div className="card-header" style={{ marginBottom: '12px' }}>
+              <div className="card-title">Quick Actions</div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {QUICK_ACTIONS.map((qa) => {
-                const Icon = qa.icon;
+              {quickActions.map((action) => {
+                const Icon = action.icon;
                 return (
-                  <Link key={qa.to} to={qa.to} className="quick-action-link">
-                    <div className="icon">
-                      <Icon size={15} color={qa.color} />
-                      <span>{qa.label}</span>
+                  <Link key={action.to} to={action.to} style={{ textDecoration: 'none' }}>
+                    <div className="quick-action">
+                      <div className="quick-action-icon">
+                        <Icon size={16} color={action.color} />
+                      </div>
+                      <div className="quick-action-text">
+                        <strong>{action.label}</strong>
+                        <span>{action.desc}</span>
+                      </div>
+                      <ArrowRight size={14} color="var(--text-dim)" />
                     </div>
-                    <ArrowUpRight size={14} color="var(--text-600)" />
                   </Link>
                 );
               })}
@@ -224,28 +280,34 @@ const DashboardPage = () => {
           <div
             className="card"
             style={{
-              background: 'linear-gradient(135deg, rgba(225, 29, 72, 0.08), rgba(245, 158, 11, 0.06))',
-              borderColor: 'rgba(225, 29, 72, 0.2)',
+              background: 'linear-gradient(135deg, #fff7ed, #ffedd5)',
+              borderColor: '#fed7aa',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-              <div style={{
-                width: '28px', height: '28px',
-                background: 'linear-gradient(135deg, var(--primary), #be123c)',
-                borderRadius: '8px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <CheckCircle2 size={14} color="white" />
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <TrendingUp size={16} color="white" />
               </div>
-              <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-100)' }}>
-                LTFRB Regulation Notice
-              </span>
+              <div>
+                <h4 style={{ fontSize: '13px', color: 'var(--primary-dark)', fontWeight: 700, marginBottom: '5px' }}>
+                  LTFRB Regulation Notice
+                </h4>
+                <p style={{ fontSize: '12px', color: '#7c3700', lineHeight: '1.6' }}>
+                  PUV operators must honor the 20% discount for Students, PWDs, and Seniors across all Dagupan City transit lines under LTFRB Memorandum Circulars.
+                </p>
+              </div>
             </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-400)', lineHeight: '1.65' }}>
-              Under LTFRB Memorandum Circulars, all PUV operators must honor the{' '}
-              <strong style={{ color: 'var(--text-200)' }}>20% statutory discount</strong> for
-              Students, PWDs, and Seniors across all Dagupan City transit lines upon presentation of valid ID.
-            </p>
           </div>
         </div>
       </div>

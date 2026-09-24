@@ -1,5 +1,4 @@
-// SmartSakay Dagupan — Design System v3.0
-// Palette: Ember Crimson × Obsidian × Warm Gold
+// SmartSakay Dagupan — Design System Constants
 import { Platform, NativeModules } from 'react-native';
 
 const getDevServerIp = () => {
@@ -10,7 +9,9 @@ const getDevServerIp = () => {
     if (address) {
       const host = address.split('/')[0];
       const ip = host.split(':')[0];
-      if (ip && ip !== 'localhost' && ip !== '127.0.0.1') return ip;
+      if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+        return ip;
+      }
     }
   }
   return '192.168.1.14';
@@ -18,256 +19,164 @@ const getDevServerIp = () => {
 
 const DEV_IP = getDevServerIp();
 
-const CLOUDFLARE_BACKEND_URL = 'https://argument-options-correlation-dream.trycloudflare.com/api';
+const CLOUDFLARE_BACKEND_URL = 'https://avoid-cdt-vsnet-latina.trycloudflare.com/api';
 
 export const API_BASE_URL = CLOUDFLARE_BACKEND_URL || Platform.select({
   web: 'http://localhost:5000/api',
   default: `http://${DEV_IP}:5000/api`,
 });
 
-// ──────────────────────────────────────────────────────────────
-//  COLOR TOKENS
-// ──────────────────────────────────────────────────────────────
+
 export const COLORS = {
-  // ── Primary: Ember Crimson ──
-  primary:       '#E11D48',   // Rose-600  (vibrant, accessible)
-  primaryHover:  '#BE123C',   // Rose-700
-  primaryLight:  '#FB7185',   // Rose-400  (on dark surfaces)
-  primaryDark:   '#9F1239',   // Rose-800
-  primaryMuted:  '#FFE4E6',   // Rose-100
-  primarySubtle: 'rgba(225, 29, 72, 0.12)',
-  primaryGlow:   'rgba(225, 29, 72, 0.35)',
-  primaryBorder: 'rgba(225, 29, 72, 0.30)',
+  // Primary palette — GoBus-inspired Orange
+  primary: '#f97316',
+  primaryLight: '#ffedd5',
+  primaryDark: '#c2550f',
 
-  // ── Secondary: Obsidian Charcoal ──
-  secondary:      '#0D0F18',
-  secondaryLight: '#181C2A',
-  secondaryMid:   '#1F2436',
-  secondaryCard:  '#12151F',
+  // Secondary
+  secondary: '#22c55e',
+  secondaryLight: '#dcfce7',
+  secondaryDark: '#15803d',
 
-  // ── Accent: Warm Amber Gold ── (Senior, PWD, Student badges)
-  accent:       '#F59E0B',   // Amber-500
-  accentLight:  '#FCD34D',   // Amber-300
-  accentDark:   '#B45309',   // Amber-700
-  accentMuted:  '#FEF3C7',   // Amber-100
-  accentSubtle: 'rgba(245, 158, 11, 0.14)',
-  accentBorder: 'rgba(245, 158, 11, 0.30)',
+  // Accent
+  accent: '#3b82f6',
+  accentLight: '#dbeafe',
+  accentDark: '#1d4ed8',
 
-  // ── Statutory Discount Highlight ──
-  discountBg:   '#FEF3C7',
-  discountText: '#92400E',
-  discountBadge:'#D97706',
-  discountGold: '#F59E0B',
+  // Semantic
+  error: '#ef4444',
+  errorLight: '#fee2e2',
+  warning: '#f59e0b',
+  warningLight: '#fef3c7',
+  success: '#22c55e',
+  successLight: '#dcfce7',
+  info: '#3b82f6',
+  infoLight: '#dbeafe',
 
-  // ── Semantic ──
-  success:        '#10B981',
-  successLight:   '#34D399',
-  successSubtle:  'rgba(16, 185, 129, 0.12)',
-  successBorder:  'rgba(16, 185, 129, 0.30)',
-  successBg:      '#D1FAE5',
+  // Neutral — clean light theme
+  white: '#FFFFFF',
+  background: '#f5f6fa',
+  surface: '#FFFFFF',
+  border: '#e5e7eb',
+  textPrimary: '#111827',
+  textSecondary: '#374151',
+  textMuted: '#6b7280',
+  disabled: '#d1d5db',
 
-  error:          '#E11D48',
-  errorLight:     '#FB7185',
-  errorBg:        '#FFE4E6',
-
-  warning:        '#F59E0B',
-  warningLight:   '#FCD34D',
-  warningBg:      '#FEF3C7',
-
-  info:           '#38BDF8',
-  infoLight:      '#7DD3FC',
-  infoBg:         '#E0F2FE',
-
-  // ── Neutral (Light theme — commuter app) ──
-  white:          '#FFFFFF',
-  background:     '#F9FAFB',
-  surface:        '#FFFFFF',
-  surfaceElevated:'#F3F4F6',
-  card:           '#FFFFFF',
-  border:         '#E5E7EB',
-  borderStrong:   '#D1D5DB',
-  textPrimary:    '#111827',
-  textSecondary:  '#374151',
-  textMuted:      '#6B7280',
-  textFaint:      '#9CA3AF',
-  disabled:       '#E5E7EB',
-
-  // ── Dark Mode (for admin or dark-preferring) ──
+  // Dark mode
   dark: {
-    background:      '#0D0F18',
-    surface:         '#12151F',
-    surfaceElevated: '#181C2A',
-    border:          'rgba(255,255,255,0.08)',
-    borderSoft:      'rgba(255,255,255,0.05)',
-    textPrimary:     '#F9FAFB',
-    textSecondary:   '#D1D5DB',
-    textMuted:       '#6B7280',
+    background: '#0F172A',
+    surface: '#1E293B',
+    surfaceElevated: '#334155',
+    border: '#334155',
+    textPrimary: '#F8FAFC',
+    textSecondary: '#94A3B8',
+    textMuted: '#64748B',
   },
 };
 
-// ──────────────────────────────────────────────────────────────
-//  TYPOGRAPHY
-// ──────────────────────────────────────────────────────────────
 export const FONTS = {
-  regular:  'System',
-  medium:   'System',
-  bold:     'System',
+  regular: 'System',
+  medium: 'System',
+  bold: 'System',
   weights: {
-    light:     '300',
-    regular:   '400',
-    medium:    '500',
-    semibold:  '600',
-    bold:      '700',
+    regular: '400',
+    medium: '500',
+    semibold: '600',
+    bold: '700',
     extrabold: '800',
-    black:     '900',
+    black: '900',
   },
   sizes: {
-    xs:   11,
-    sm:   13,
-    md:   15,
-    lg:   17,
-    xl:   20,
-    xxl:  25,
-    xxxl: 30,
-    hero: 38,
-  },
-  lineHeights: {
-    tight:  1.2,
-    snug:   1.35,
-    normal: 1.5,
-    relaxed: 1.7,
+    xs: 11,
+    sm: 13,
+    md: 15,
+    lg: 17,
+    xl: 20,
+    xxl: 24,
+    xxxl: 32,
+    hero: 40,
   },
 };
 
-// ──────────────────────────────────────────────────────────────
-//  SPACING
-// ──────────────────────────────────────────────────────────────
 export const SPACING = {
-  xs:      4,
-  sm:      8,
-  md:      12,
-  lg:      16,
-  xl:      20,
-  xxl:     24,
-  xxxl:    32,
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
   section: 40,
-  page:    48,
 };
 
-// ──────────────────────────────────────────────────────────────
-//  BORDER RADII
-// ──────────────────────────────────────────────────────────────
 export const RADIUS = {
-  xs:   4,
-  sm:   8,
-  md:   12,
-  lg:   16,
-  xl:   22,
-  xxl:  28,
+  sm: 6,
+  md: 10,
+  lg: 14,
+  xl: 20,
   full: 999,
 };
 
-// ──────────────────────────────────────────────────────────────
-//  SHADOWS  (mobile — elevation-based)
-// ──────────────────────────────────────────────────────────────
 export const SHADOWS = {
-  xs: {
+  sm: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
-  sm: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.09,
-    shadowRadius: 5,
-    elevation: 2,
-  },
   md: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   lg: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  primary: {
-    shadowColor: '#E11D48',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.30,
-    shadowRadius: 12,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     elevation: 6,
   },
-  card: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
-  },
 };
 
-// ──────────────────────────────────────────────────────────────
-//  ACCESSIBILITY
-// ──────────────────────────────────────────────────────────────
-export const ACCESSIBILITY = {
-  minTouchTarget:    48,   // WCAG 2.5.5 — minimum 44px, we exceed at 48
-  seniorTouchTarget: 56,   // Larger for elderly / motor-impaired
-  focusOutlineWidth: 2.5,
-  focusOutlineColor: '#E11D48',
-  largeFontScale:    1.18, // Senior-friendly text scaling
-};
-
-// ──────────────────────────────────────────────────────────────
-//  MAP CONFIG
-// ──────────────────────────────────────────────────────────────
+// Dagupan City center coordinates
 export const MAP_CONFIG = {
   center: {
-    latitude:  16.0433,
+    latitude: 16.0433,
     longitude: 120.3342,
   },
   defaultDelta: {
-    latitudeDelta:  0.08,
+    latitudeDelta: 0.08,
     longitudeDelta: 0.08,
   },
 };
 
-// ──────────────────────────────────────────────────────────────
-//  DOMAIN CONSTANTS
-// ──────────────────────────────────────────────────────────────
 export const COMPLAINT_CATEGORIES = [
-  { value: 'overcharging',     label: 'Overcharging',          icon: 'cash-remove' },
-  { value: 'reckless_driving', label: 'Reckless Driving',      icon: 'car-emergency' },
-  { value: 'harassment',       label: 'Harassment',            icon: 'alert-circle' },
-  { value: 'route_deviation',  label: 'Route Deviation',       icon: 'map-marker-off' },
-  { value: 'vehicle_condition',label: 'Poor Vehicle Condition', icon: 'car-wrench' },
-  { value: 'other',            label: 'Other',                  icon: 'dots-horizontal-circle' },
+  { value: 'overcharging', label: 'Overcharging', icon: 'cash-remove' },
+  { value: 'reckless_driving', label: 'Reckless Driving', icon: 'car-emergency' },
+  { value: 'harassment', label: 'Harassment', icon: 'alert-circle' },
+  { value: 'route_deviation', label: 'Route Deviation', icon: 'map-marker-off' },
+  { value: 'vehicle_condition', label: 'Poor Vehicle Condition', icon: 'car-wrench' },
+  { value: 'other', label: 'Other', icon: 'dots-horizontal-circle' },
 ];
 
 export const COMPLAINT_STATUS = {
-  pending:      { label: 'Pending',      color: COLORS.warning,  bgColor: COLORS.warningBg },
-  under_review: { label: 'Under Review', color: COLORS.info,     bgColor: COLORS.infoBg },
-  resolved:     { label: 'Resolved',     color: COLORS.success,  bgColor: COLORS.successBg },
-  dismissed:    { label: 'Dismissed',    color: COLORS.error,    bgColor: COLORS.errorBg },
+  pending: { label: 'Pending', color: COLORS.warning, bgColor: COLORS.warningLight },
+  under_review: { label: 'Under Review', color: COLORS.info, bgColor: COLORS.infoLight },
+  resolved: { label: 'Resolved', color: COLORS.success, bgColor: COLORS.successLight },
+  dismissed: { label: 'Dismissed', color: COLORS.error, bgColor: COLORS.errorLight },
 };
 
 export const VEHICLE_TYPES = [
   { value: 'traditional', label: 'Traditional Jeepney', icon: 'bus' },
-  { value: 'modern',      label: 'Modern Jeepney',      icon: 'bus-articulated-front' },
-  { value: 'tricycle',    label: 'Dagupan Tricycle',    icon: 'rickshaw' },
+  { value: 'modern', label: 'Modern Jeepney', icon: 'bus-articulated-front' },
+  { value: 'tricycle', label: 'Dagupan Tricycle', icon: 'rickshaw' },
 ];
 
 export const DISCOUNT_TYPES = [
-  { value: 'none',    label: 'Regular Fare',     icon: 'account',                   tag: 'Standard Rate' },
-  { value: 'student', label: 'Student',           icon: 'school',                    tag: '20% Off (RA 11314)' },
-  { value: 'senior',  label: 'Senior Citizen',    icon: 'account-clock',             tag: '20% Off (RA 9994)' },
-  { value: 'pwd',     label: 'PWD Commuter',      icon: 'wheelchair-accessibility',  tag: '20% Off (RA 7277)' },
+  { value: 'none', label: 'Regular Fare', icon: 'account' },
+  { value: 'discounted', label: 'Student / Senior / PWD (20% Off)', icon: 'percent-outline' },
 ];

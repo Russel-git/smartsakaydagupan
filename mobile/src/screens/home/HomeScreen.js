@@ -1,93 +1,38 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, Animated,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
-import { Card, Badge } from '../../components/common/SharedComponents';
+import { Card, SectionHeader, Badge } from '../../components/common/SharedComponents';
 import AuthPromptModal from '../../components/common/AuthPromptModal';
+import HomeMapWidget from '../../components/common/HomeMapWidget';
 import { faresAPI, weatherAPI } from '../../api/services';
-import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../utils/constants';
+import { FONTS, SPACING, RADIUS, SHADOWS } from '../../utils/constants';
 import { formatPeso, getWeatherIcon } from '../../utils/helpers';
-
-// ── Quick Action Config ────────────────────────────────────
-const QUICK_ACTIONS = [
-  {
-    icon: 'steering', label: 'Start Ride', screen: 'Ride',
-    gradient: ['#E11D48', '#9F1239'],
-    auth: true,
-    promptTitle: 'Sign In to Start Ride Tracking',
-    promptMsg: 'Real-time GPS ride tracking and live LTFRB fare calculation require a verified account.',
-    promptIcon: 'steering', promptTag: 'Live Ride Tracker',
-  },
-  {
-    icon: 'map-marker-radius', label: 'Routes & Fares', screen: 'RoutesAndFares',
-    gradient: ['#0EA5E9', '#0369A1'],
-  },
-  {
-    icon: 'robot', label: 'AI Assistant', screen: 'Assistant',
-    gradient: ['#7C3AED', '#5B21B6'],
-    auth: true,
-    promptTitle: 'Sign In to Use AI Assistant',
-    promptMsg: 'Get personalized 24/7 route guidance. Please sign in or create an account.',
-    promptIcon: 'robot', promptTag: 'Smart Assistant',
-  },
-  {
-    icon: 'clipboard-alert', label: 'File Report', screen: 'SubmitComplaint',
-    gradient: ['#F59E0B', '#B45309'],
-    auth: true,
-    promptTitle: 'Sign In to File a Report',
-    promptMsg: 'Verified commuter accounts are required by transport regulators to process official grievances.',
-    promptIcon: 'clipboard-alert', promptTag: 'Grievance Filing',
-  },
-];
-
-// ── Persona Cards ───────────────────────────────────────────
-const PERSONAS = [
-  {
-    icon: 'school',                 label: 'Student',       law: 'RA 11314',
-    color: '#0EA5E9', bg: '#E0F2FE',
-  },
-  {
-    icon: 'account-clock',          label: 'Senior Citizen',law: 'RA 9994',
-    color: '#10B981', bg: '#D1FAE5',
-  },
-  {
-    icon: 'wheelchair-accessibility',label: 'PWD',           law: 'RA 7277',
-    color: '#8B5CF6', bg: '#EDE9FE',
-  },
-];
 
 const HomeScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
-  const { user, isGuest } = useAuth();
+  const { user, isGuest, exitGuestMode } = useAuth();
   const { unreadCount } = useNotifications();
   const [fares, setFares] = useState([]);
   const [weather, setWeather] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [promptModal, setPromptModal] = useState({
-    visible: false, title: '', message: '', icon: 'account-lock', tag: '',
+    visible: false,
+    title: '',
+    message: '',
+    icon: 'account-lock',
+    tag: '',
   });
 
-  // Entrance animation
-  const headerAnim = useRef(new Animated.Value(-20)).current;
-  const contentAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(headerAnim, { toValue: 0, tension: 80, friction: 12, useNativeDriver: true }),
-      Animated.timing(contentAnim, { toValue: 1, duration: 500, delay: 150, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
-  const openPrompt = (title, message, icon, tag) =>
+  const openPrompt = (title, message, icon, tag) => {
     setPromptModal({ visible: true, title, message, icon, tag });
-  const closePrompt = () =>
-    setPromptModal((p) => ({ ...p, visible: false }));
+  };
+
+  const closePrompt = () => {
+    setPromptModal((prev) => ({ ...prev, visible: false }));
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -97,7 +42,7 @@ const HomeScreen = ({ navigation }) => {
       ]);
       if (faresRes.status === 'fulfilled') setFares(faresRes.value.data.data || []);
       if (weatherRes.status === 'fulfilled') setWeather(weatherRes.value.data.data || null);
-    } catch (_) { /* silent */ }
+    } catch (e) { /* Silently fail */ }
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -115,13 +60,6 @@ const HomeScreen = ({ navigation }) => {
     return 'Good evening';
   };
 
-  const handleAction = (action) => {
-    if (action.auth && isGuest) {
-      openPrompt(action.promptTitle, action.promptMsg, action.promptIcon, action.promptTag);
-      return;
-    }
-    navigation.navigate(action.screen);
-  };
 
   return (
     <>
@@ -133,431 +71,193 @@ const HomeScreen = ({ navigation }) => {
         icon={promptModal.icon}
         featureTag={promptModal.tag}
       />
-
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[COLORS.primary]}
-            tintColor={COLORS.primary}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
       >
-        {/* ── HEADER ──────────────────────────────── */}
-        <Animated.View style={{ transform: [{ translateY: headerAnim }] }}>
-          <LinearGradient
-            colors={['#7F1D2E', '#BE123C', '#E11D48']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.header}
-          >
-            {/* decorative blob */}
-            <View style={styles.headerBlob} />
-            <View style={styles.headerBlob2} />
-
-            <View style={styles.headerRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.greeting}>
-                  {greeting()}{user ? `, ${user.firstName}` : ''}! 👋
-                </Text>
-                <Text style={styles.headerSub}>
-                  {isGuest ? 'Guest Session • Dagupan City' : 'SmartSakay Dagupan'}
-                </Text>
-              </View>
-
-              {isGuest ? (
-                <TouchableOpacity
-                  style={styles.notifBtn}
-                  onPress={() => openPrompt(
-                    'Transit Notifications',
-                    'Sign up to receive personalized route detours, fare revisions, and weather advisories.',
-                    'bell-ring-outline',
-                    'Alerts'
-                  )}
-                >
-                  <MaterialCommunityIcons name="bell-badge-outline" size={24} color="#FCD34D" />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.notifBtn}
-                  onPress={() => navigation.navigate('Notifications')}
-                >
-                  <MaterialCommunityIcons name="bell-outline" size={24} color="#FFFFFF" />
-                  <Badge count={unreadCount} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Weather strip */}
-            {weather && (() => {
-              const condStr = weather.current?.condition?.text
-                || (typeof weather.current?.condition === 'string' ? weather.current?.condition : null)
-                || weather.conditionText || 'Dagupan City';
-              const isWarn = condStr.toLowerCase().includes('rain') || condStr.toLowerCase().includes('thunder');
-              return (
-                <TouchableOpacity
-                  style={[styles.weatherStrip, isWarn && styles.weatherStripWarn]}
-                  onPress={() => navigation.navigate('Weather')}
-                  activeOpacity={0.8}
-                >
-                  <MaterialCommunityIcons
-                    name={getWeatherIcon(condStr)}
-                    size={20}
-                    color={isWarn ? '#FCA5A5' : '#FCD34D'}
-                  />
-                  <Text style={styles.weatherTemp}>
-                    {weather.current?.temp_c ?? weather.current?.tempC ?? weather.temp_c ?? '--'}°C
-                  </Text>
-                  <Text style={styles.weatherDesc} numberOfLines={1}>
-                    {condStr} • Dagupan
-                  </Text>
-                  <MaterialCommunityIcons
-                    name="chevron-right" size={16} color="rgba(255,255,255,0.5)"
-                    style={{ marginLeft: 'auto' }}
-                  />
-                </TouchableOpacity>
-              );
-            })()}
-          </LinearGradient>
-        </Animated.View>
-
-        {/* ── GUEST BANNER ─────────────────────────── */}
-        {isGuest && (
-          <View style={[styles.guestBanner, { backgroundColor: COLORS.primarySubtle, borderColor: COLORS.primaryBorder }]}>
-            <MaterialCommunityIcons name="shield-account-outline" size={18} color={COLORS.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.guestTitle, { color: colors.textPrimary }]}>Browsing in Guest Mode</Text>
-              <Text style={[styles.guestDesc, { color: colors.textMuted }]}>
-                Sign up to file complaints & use the AI assistant
+        {/* Header */}
+        <View style={[styles.header, { backgroundColor: colors.primary }]}>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.greeting}>{greeting()}{user ? `, ${user.firstName}` : ''}! 👋</Text>
+              <Text style={styles.headerSubtitle}>
+                {isGuest ? 'Guest Session • Dagupan City' : 'SmartSakay Dagupan'}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.guestCta}
-              onPress={() => openPrompt(
-                'Join SmartSakay',
-                'Register your free account to access AI transit assistance and file commuter complaints.',
-                'account-plus',
-                'Free Account'
-              )}
-            >
-              <Text style={styles.guestCtaText}>Sign Up</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <Animated.View style={[styles.body, { opacity: contentAnim }]}>
-
-          {/* ── QUICK ACTIONS ─────────────────────── */}
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
-            {QUICK_ACTIONS.map((a, i) => (
+            {isGuest ? (
               <TouchableOpacity
-                key={i}
-                style={[styles.actionCard, SHADOWS.md]}
-                onPress={() => handleAction(a)}
-                activeOpacity={0.82}
+                onPress={() => openPrompt('Transit Notifications', 'Sign up to receive personalized route detours, fare revisions, and severe weather advisories.', 'bell-ring-outline', 'Alerts')}
+                style={styles.notifBtn}
               >
-                <LinearGradient
-                  colors={a.gradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.actionGradient}
-                >
-                  <View style={styles.actionIconBg}>
-                    <MaterialCommunityIcons name={a.icon} size={28} color="#FFFFFF" />
-                  </View>
-                  <Text style={styles.actionLabel}>{a.label}</Text>
-                </LinearGradient>
+                <MaterialCommunityIcons name="bell-badge-outline" size={24} color="#FBBF24" />
               </TouchableOpacity>
-            ))}
+            ) : (
+              <TouchableOpacity onPress={() => navigation.navigate('Notifications')} style={styles.notifBtn}>
+                <MaterialCommunityIcons name="bell-outline" size={24} color="#FFFFFF" />
+                <Badge count={unreadCount} />
+              </TouchableOpacity>
+            )}
           </View>
 
-          {/* ── FARE RATES ───────────────────────── */}
-          {fares.length > 0 && (
-            <>
-              <View style={styles.sectionRow}>
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Current Fare Rates</Text>
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('RoutesAndFares', { initialTab: 'fares' })}
-                >
-                  <Text style={[styles.sectionLink, { color: COLORS.primary }]}>View Matrix →</Text>
-                </TouchableOpacity>
-              </View>
+        {/* Weather mini card */}
+        {weather && (() => {
+          const conditionStr = weather.current?.condition?.text || (typeof weather.current?.condition === 'string' ? weather.current?.condition : null) || weather.conditionText || 'Dagupan City';
+          const iconName = getWeatherIcon(conditionStr);
+          const isWarning = conditionStr.toLowerCase().includes('rain') || conditionStr.toLowerCase().includes('thunder');
 
-              {fares.map((fare) => {
-                const isTraditional = fare.vehicleType === 'traditional';
-                return (
-                  <View
-                    key={fare._id}
-                    style={[
-                      styles.fareCard,
-                      { backgroundColor: colors.card, borderColor: colors.border },
-                      SHADOWS.sm,
-                    ]}
-                  >
-                    <View style={[
-                      styles.fareAccent,
-                      { backgroundColor: isTraditional ? COLORS.accent : '#3B82F6' },
-                    ]} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.fareType, { color: colors.textPrimary }]}>
-                        {isTraditional ? '🚐 Traditional' : '🚌 Modern'} Jeepney
-                      </Text>
-                      <Text style={[styles.fareDetail, { color: colors.textMuted }]}>
-                        Base {formatPeso(fare.baseFare)} • first {fare.baseDistanceKm} km
-                      </Text>
-                    </View>
-                    <View style={styles.fareRight}>
-                      <Text style={[styles.fareRate, { color: COLORS.primary }]}>
-                        {formatPeso(fare.perKmRate)}
-                      </Text>
-                      <Text style={[styles.fareRateLabel, { color: colors.textMuted }]}>/ km</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </>
-          )}
+          return (
+            <TouchableOpacity
+              style={[styles.weatherMini, isWarning && { backgroundColor: 'rgba(239, 68, 68, 0.25)', borderColor: 'rgba(239, 68, 68, 0.4)', borderWidth: 1 }]}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('Weather')}
+            >
+              <MaterialCommunityIcons name={iconName} size={22} color={isWarning ? "#FCA5A5" : "#FBBF24"} />
+              <Text style={styles.weatherTemp}>
+                {weather.current?.temp_c ?? weather.current?.tempC ?? weather.temp_c ?? '--'}°C
+              </Text>
+              <Text style={styles.weatherDesc} numberOfLines={1}>
+                {conditionStr} • Dagupan
+              </Text>
+              <MaterialCommunityIcons name="chevron-right" size={16} color="rgba(255,255,255,0.6)" style={{ marginLeft: 'auto' }} />
+            </TouchableOpacity>
+          );
+        })()}
+      </View>
 
-          {/* ── STATUTORY DISCOUNT ───────────────── */}
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Statutory Discounts</Text>
-
-          <LinearGradient
-            colors={['#FFFBEB', '#FEF3C7']}
-            style={[styles.discountHero, { borderColor: COLORS.accentBorder }]}
+      {/* Guest Mode Banner */}
+      {isGuest && (
+        <View style={[styles.guestBanner, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '35' }]}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+              <MaterialCommunityIcons name="shield-outline" size={16} color={colors.primary} />
+              <Text style={[styles.guestBannerTitle, { color: colors.textPrimary }]}>Browsing in Guest Mode</Text>
+            </View>
+            <Text style={[styles.guestBannerDesc, { color: colors.textSecondary }]}>
+              Sign up to file verified complaints & chat with the AI assistant.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.guestBannerBtn, { backgroundColor: colors.primary }]}
+            onPress={() => openPrompt('Join SmartSakay Dagupan', 'Register your free account to access AI transit assistance, file commuter complaints, and bookmark routes.', 'account-plus', 'Free Account')}
           >
-            <View style={styles.discountHeader}>
-              <View style={styles.discountIconBig}>
-                <MaterialCommunityIcons name="percent" size={26} color="#FFFFFF" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={styles.discountTitleRow}>
-                  <Text style={styles.discountTitle}>20% Fare Discount</Text>
-                  <View style={styles.legalBadge}>
-                    <Text style={styles.legalBadgeText}>LEGAL RIGHT</Text>
-                  </View>
-                </View>
-                <Text style={styles.discountDesc}>
-                  Philippine law mandates a 20% discount on all public transport for these commuters.
+            <Text style={styles.guestBannerBtnText}>Sign Up</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <View style={styles.content}>
+        {/* Live Map Widget */}
+        <SectionHeader
+          title="Live Transit Map"
+          actionText="Full View"
+          onAction={() => navigation.navigate('RoutesAndFares')}
+        />
+        <HomeMapWidget navigation={navigation} height={260} />
+
+        {/* Fare Rates Summary */}
+        <SectionHeader
+          title="Current Fare Rates"
+          actionText="View Matrix"
+          onAction={() => navigation.navigate('RoutesAndFares', { initialTab: 'fares' })}
+        />
+        {fares.map((fare) => (
+          <Card key={fare._id} style={{ borderLeftWidth: 3, borderLeftColor: fare.vehicleType === 'traditional' ? '#f97316' : '#3b82f6' }}>
+            <View style={styles.fareRow}>
+              <View>
+                <Text style={[styles.fareType, { color: colors.textPrimary }]}>
+                  {fare.vehicleType === 'traditional' ? '🚐 Traditional' : '🚌 Modern'} Jeepney
+                </Text>
+                <Text style={[styles.fareDetail, { color: colors.textSecondary }]}>
+                  Base: {formatPeso(fare.baseFare)} (first {fare.baseDistanceKm} km)
                 </Text>
               </View>
+              <View style={styles.fareRight}>
+                <Text style={[styles.fareRate, { color: colors.primary }]}>
+                  {formatPeso(fare.perKmRate)}
+                </Text>
+                <Text style={[styles.fareRateLabel, { color: colors.textMuted }]}>per km</Text>
+              </View>
             </View>
+          </Card>
+        ))}
 
-            <View style={styles.personaRow}>
-              {PERSONAS.map((p, i) => (
-                <View key={i} style={[styles.personaCard, { backgroundColor: p.bg }]}>
-                  <MaterialCommunityIcons name={p.icon} size={22} color={p.color} />
-                  <Text style={[styles.personaLabel, { color: p.color }]}>{p.label}</Text>
-                  <Text style={styles.personaLaw}>{p.law}</Text>
-                </View>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={styles.calcBtn}
-              onPress={() => navigation.navigate('RoutesAndFares', { initialTab: 'fares' })}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons name="calculator-variant" size={16} color="#FFFFFF" />
-              <Text style={styles.calcBtnText}>Calculate Discounted Fare</Text>
-            </TouchableOpacity>
-          </LinearGradient>
-
-          {/* ── COMMUTER RIGHTS ──────────────────── */}
+        {/* Commuter Rights */}
+        <SectionHeader title="Know Your Rights" />
+        <Card>
           <TouchableOpacity
-            style={[styles.rightsCard, { backgroundColor: colors.card, borderColor: colors.border }, SHADOWS.sm]}
+            style={styles.rightsCard}
             onPress={() => navigation.navigate('CommuterRights')}
-            activeOpacity={0.82}
           >
-            <View style={styles.rightsIconWrap}>
-              <MaterialCommunityIcons name="scale-balance" size={24} color={COLORS.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Know Your Rights</Text>
-              <Text style={[styles.rightsDesc, { color: colors.textMuted }]}>
-                LTFRB commuter rights & hotline: 1342
+            <MaterialCommunityIcons name="scale-balance" size={28} color={colors.primary} />
+            <View style={styles.rightsText}>
+              <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Commuter Rights</Text>
+              <Text style={[styles.rightsDesc, { color: colors.textSecondary }]}>
+                Know your rights as a commuter. LTFRB hotline: 1342
               </Text>
             </View>
-            <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textMuted} />
+            <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textMuted} />
           </TouchableOpacity>
+        </Card>
 
-          <View style={{ height: 48 }} />
-        </Animated.View>
-      </ScrollView>
+        <View style={{ height: 40 }} />
+      </View>
+    </ScrollView>
     </>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-
-  // ── Header
-  header: {
-    paddingTop: 52,
-    paddingBottom: SPACING.xxl,
-    paddingHorizontal: SPACING.xxl,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    overflow: 'hidden',
-  },
-  headerBlob: {
-    position: 'absolute', top: -60, right: -40,
-    width: 200, height: 200, borderRadius: 100,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  headerBlob2: {
-    position: 'absolute', bottom: -40, left: -20,
-    width: 130, height: 130, borderRadius: 65,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  header: { paddingTop: 50, paddingBottom: SPACING.xxl, paddingHorizontal: SPACING.xxl, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   greeting: { fontSize: FONTS.sizes.xxl, fontWeight: '800', color: '#FFFFFF' },
-  headerSub: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.72)', marginTop: 2 },
+  headerSubtitle: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
   notifBtn: { padding: 8 },
-
-  weatherStrip: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
-    marginTop: SPACING.lg,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: SPACING.md, paddingVertical: 9,
-    borderRadius: RADIUS.full,
-  },
-  weatherStripWarn: {
-    backgroundColor: 'rgba(239,68,68,0.2)',
-    borderWidth: 1, borderColor: 'rgba(239,68,68,0.35)',
-  },
+  weatherMini: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.lg, backgroundColor: 'rgba(255,255,255,0.12)', padding: SPACING.sm + 2, borderRadius: RADIUS.full, paddingHorizontal: SPACING.lg },
   weatherTemp: { fontSize: FONTS.sizes.md, fontWeight: '700', color: '#FFFFFF' },
-  weatherDesc: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.78)', flex: 1 },
-
-  // ── Guest Banner
+  weatherDesc: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.8)' },
+  content: { padding: SPACING.xxl, paddingTop: SPACING.xl },
+  fareRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  fareType: { fontSize: FONTS.sizes.md, fontWeight: '700', marginBottom: 2 },
+  fareDetail: { fontSize: FONTS.sizes.sm },
+  fareRight: { alignItems: 'flex-end' },
+  fareRate: { fontSize: FONTS.sizes.xl, fontWeight: '800' },
+  fareRateLabel: { fontSize: FONTS.sizes.xs },
+  rightsCard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  rightsText: { flex: 1 },
+  rightsTitle: { fontSize: FONTS.sizes.md, fontWeight: '700' },
+  rightsDesc: { fontSize: FONTS.sizes.sm, marginTop: 2 },
   guestBanner: {
-    margin: SPACING.lg,
-    marginTop: -8,
-    padding: SPACING.md,
+    marginHorizontal: SPACING.xxl,
+    marginTop: -12,
+    marginBottom: SPACING.sm,
+    padding: 14,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    flexDirection: 'row', alignItems: 'center',
-    gap: SPACING.sm, ...SHADOWS.xs,
-  },
-  guestTitle: { fontSize: 13, fontWeight: '700' },
-  guestDesc:  { fontSize: 11, marginTop: 2 },
-  guestCta: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.md, paddingVertical: 8,
-    borderRadius: RADIUS.md,
-  },
-  guestCtaText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12 },
-
-  // ── Body
-  body: { paddingHorizontal: SPACING.xxl, paddingTop: SPACING.xl },
-
-  sectionTitle: {
-    fontSize: FONTS.sizes.lg, fontWeight: '800',
-    marginBottom: SPACING.md, letterSpacing: -0.3,
-  },
-  sectionRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: SPACING.md,
-  },
-  sectionLink: { fontSize: FONTS.sizes.sm, fontWeight: '700' },
-
-  // ── Quick Actions
-  actionsGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md,
-    marginBottom: SPACING.xxxl,
-  },
-  actionCard: {
-    width: '47%', borderRadius: RADIUS.xl, overflow: 'hidden',
-  },
-  actionGradient: {
-    padding: SPACING.lg, paddingVertical: SPACING.xl,
-    alignItems: 'center', gap: SPACING.sm,
-  },
-  actionIconBg: {
-    width: 54, height: 54, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 4,
-  },
-  actionLabel: {
-    fontSize: FONTS.sizes.sm + 1, fontWeight: '700', color: '#FFFFFF',
-    textAlign: 'center',
-  },
-
-  // ── Fare Cards
-  fareCard: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: RADIUS.lg, borderWidth: 1,
-    marginBottom: SPACING.md, overflow: 'hidden',
-    paddingVertical: SPACING.md, paddingHorizontal: SPACING.lg,
-  },
-  fareAccent: { width: 4, height: '100%', position: 'absolute', left: 0 },
-  fareType: { fontSize: FONTS.sizes.md, fontWeight: '700' },
-  fareDetail: { fontSize: FONTS.sizes.sm, marginTop: 2 },
-  fareRight: { alignItems: 'flex-end' },
-  fareRate: { fontSize: FONTS.sizes.xl, fontWeight: '900' },
-  fareRateLabel: { fontSize: FONTS.sizes.xs },
-
-  // ── Discount Hero Card
-  discountHero: {
-    borderRadius: RADIUS.xl, borderWidth: 1.5,
-    padding: SPACING.lg, marginBottom: SPACING.xxl, overflow: 'hidden',
-  },
-  discountHeader: {
-    flexDirection: 'row', gap: SPACING.md, marginBottom: SPACING.lg,
-  },
-  discountIconBig: {
-    width: 52, height: 52, borderRadius: 16,
-    backgroundColor: COLORS.accentDark,
-    justifyContent: 'center', alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
     ...SHADOWS.sm,
   },
-  discountTitleRow: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
-    flexWrap: 'wrap', marginBottom: 4,
+  guestBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
   },
-  discountTitle: { fontSize: FONTS.sizes.lg, fontWeight: '900', color: '#92400E' },
-  legalBadge: {
-    backgroundColor: COLORS.accentDark,
-    paddingHorizontal: 7, paddingVertical: 2,
-    borderRadius: RADIUS.full,
+  guestBannerDesc: {
+    fontSize: 11,
+    lineHeight: 15,
   },
-  legalBadgeText: { color: '#FFFFFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
-  discountDesc: { fontSize: 12, color: '#78350F', lineHeight: 17 },
-
-  personaRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.md },
-  personaCard: {
-    flex: 1, borderRadius: RADIUS.lg, padding: SPACING.md,
-    alignItems: 'center', gap: 4,
+  guestBannerBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: RADIUS.md,
   },
-  personaLabel: { fontSize: 11, fontWeight: '800', textAlign: 'center' },
-  personaLaw:   { fontSize: 9, fontWeight: '600', color: '#6B7280', textAlign: 'center' },
-
-  calcBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
-    backgroundColor: COLORS.accentDark,
-    paddingVertical: 11, paddingHorizontal: SPACING.lg,
-    borderRadius: RADIUS.md, alignSelf: 'flex-start',
+  guestBannerBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
   },
-  calcBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: FONTS.sizes.sm },
-
-  // ── Rights Card
-  rightsCard: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: SPACING.md, padding: SPACING.lg,
-    borderRadius: RADIUS.lg, borderWidth: 1,
-    marginBottom: SPACING.lg,
-  },
-  rightsIconWrap: {
-    width: 44, height: 44, borderRadius: RADIUS.md,
-    backgroundColor: COLORS.primarySubtle,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  rightsTitle: { fontSize: FONTS.sizes.md, fontWeight: '700' },
-  rightsDesc:  { fontSize: FONTS.sizes.sm, marginTop: 2 },
 });
 
 export default HomeScreen;

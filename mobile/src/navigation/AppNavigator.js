@@ -98,13 +98,6 @@ const MoreStack = () => (
 // Guest Tab Navigator (limited access)
 const GuestTabs = () => {
   const { colors } = useTheme();
-  const TAB_ICONS = {
-    Home: 'home-variant',
-    RoutesAndFares: 'map-marker-radius',
-    Ride: 'steering',
-    Assistant: 'robot-outline',
-    Account: 'account-circle-outline',
-  };
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -113,38 +106,22 @@ const GuestTabs = () => {
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
           backgroundColor: colors.surface,
-          borderTopWidth: 1,
           borderTopColor: colors.border,
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 68,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
-          elevation: 10,
+          paddingBottom: 6,
+          paddingTop: 4,
+          height: 58,
         },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '700',
-          marginTop: 2,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarIcon: ({ color, size }) => {
+          const icons = {
+            Home: 'home',
+            RoutesAndFares: 'map-marker-radius',
+            Ride: 'steering',
+            Assistant: 'robot',
+            Account: 'account-outline',
+          };
+          return <MaterialCommunityIcons name={icons[route.name]} size={size} color={color} />;
         },
-        tabBarIcon: ({ color, focused, size }) => (
-          <View style={[
-            focused && {
-              backgroundColor: `${colors.primary}18`,
-              borderRadius: 10,
-              paddingHorizontal: 10,
-              paddingVertical: 3,
-            }
-          ]}>
-            <MaterialCommunityIcons
-              name={TAB_ICONS[route.name]}
-              size={focused ? 24 : 22}
-              color={color}
-            />
-          </View>
-        ),
       })}
     >
       <Tab.Screen name="Home" component={HomeStack} />
@@ -169,14 +146,6 @@ const MainTabs = () => {
   const { colors } = useTheme();
   const { unreadCount } = useNotifications();
 
-  const TAB_ICONS = {
-    Home: 'home-variant',
-    RoutesAndFares: 'map-marker-radius',
-    Ride: 'steering',
-    Assistant: 'robot-outline',
-    More: 'dots-grid',
-  };
-
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -185,39 +154,27 @@ const MainTabs = () => {
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
           backgroundColor: colors.surface,
-          borderTopWidth: 1,
           borderTopColor: colors.border,
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 68,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
-          elevation: 10,
+          paddingBottom: 6,
+          paddingTop: 4,
+          height: 58,
         },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '700',
-          marginTop: 2,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarIcon: ({ color, size }) => {
+          const icons = {
+            Home: 'home',
+            RoutesAndFares: 'map-marker-radius',
+            Ride: 'steering',
+            Assistant: 'robot',
+            More: 'menu',
+          };
+          return (
+            <View>
+              <MaterialCommunityIcons name={icons[route.name]} size={size} color={color} />
+              {route.name === 'More' && <Badge count={unreadCount} />}
+            </View>
+          );
         },
-        tabBarIcon: ({ color, focused, size }) => (
-          <View style={[
-            focused && {
-              backgroundColor: `${colors.primary}18`,
-              borderRadius: 10,
-              paddingHorizontal: 10,
-              paddingVertical: 3,
-            }
-          ]}>
-            <MaterialCommunityIcons
-              name={TAB_ICONS[route.name]}
-              size={focused ? 24 : 22}
-              color={color}
-            />
-            {route.name === 'More' && <Badge count={unreadCount} />}
-          </View>
-        ),
       })}
     >
       <Tab.Screen name="Home" component={HomeStack} />

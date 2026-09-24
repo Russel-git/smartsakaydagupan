@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Calculator, 
@@ -11,53 +11,15 @@ import {
   Bus,
   ShieldCheck,
   Navigation,
-  Activity
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-
-const PAGE_TITLES = {
-  '/':              'Executive Overview',
-  '/fares':         'Fare Management',
-  '/routes':        'Route Directory',
-  '/terminals':     'Terminal Hubs',
-  '/complaints':    'Commuter Complaints',
-  '/notifications': 'Broadcaster',
-  '/users':         'User Directory',
-  '/audit-logs':    'Security Audit Logs',
-};
-
-const NAV_GROUPS = [
-  {
-    label: 'Operations',
-    items: [
-      { to: '/',       label: 'Dashboard',     icon: LayoutDashboard, exact: true },
-      { to: '/fares',  label: 'Fare Management',icon: Calculator },
-      { to: '/routes', label: 'Route Directory', icon: MapPin },
-      { to: '/terminals', label: 'Terminal Hubs', icon: Navigation },
-    ],
-  },
-  {
-    label: 'Community',
-    items: [
-      { to: '/complaints',     label: 'Commuter Complaints', icon: AlertTriangle },
-      { to: '/notifications',  label: 'Broadcaster',          icon: Bell },
-      { to: '/users',          label: 'User Directory',        icon: Users },
-    ],
-  },
-  {
-    label: 'Security',
-    items: [
-      { to: '/audit-logs', label: 'Audit Logs', icon: ShieldCheck },
-    ],
-  },
-];
 
 const AdminLayout = () => {
   const { admin, logout } = useAuth();
   const { showInfo } = useToast();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const handleLogout = () => {
     logout();
@@ -65,11 +27,20 @@ const AdminLayout = () => {
     navigate('/login');
   };
 
-  const pageTitle = PAGE_TITLES[location.pathname] || 'SmartSakay Admin';
+  const navItems = [
+    { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+    { to: '/fares', label: 'Fare Management', icon: Calculator },
+    { to: '/routes', label: 'Route Directory', icon: MapPin },
+    { to: '/terminals', label: 'Terminal Hubs', icon: Navigation },
+    { to: '/complaints', label: 'Complaints', icon: AlertTriangle },
+    { to: '/notifications', label: 'Broadcaster', icon: Bell },
+    { to: '/users', label: 'User Directory', icon: Users },
+    { to: '/audit-logs', label: 'Audit Logs', icon: ShieldCheck },
+  ];
 
   return (
     <div className="app-container">
-      {/* ── Sidebar ─────────────────────────── */}
+      {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="brand-icon">
@@ -77,32 +48,42 @@ const AdminLayout = () => {
           </div>
           <div>
             <div className="brand-title">SmartSakay</div>
-            <span className="brand-subtitle">Dagupan Command</span>
+            <div className="brand-subtitle">Dagupan City</div>
           </div>
         </div>
 
         <nav className="sidebar-nav">
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label}>
-              <div className="nav-section-label">{group.label}</div>
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.exact}
-                    className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                  >
-                    <div className="nav-icon">
-                      <Icon size={17} />
-                    </div>
-                    <span>{item.label}</span>
-                  </NavLink>
-                );
-              })}
-            </div>
-          ))}
+          <div className="sidebar-section-label">Main Menu</div>
+          {navItems.slice(0, 4).map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.exact}
+                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              >
+                <Icon size={18} />
+                <span>{item.label}</span>
+              </NavLink>
+            );
+          })}
+
+          <div className="sidebar-section-label">Management</div>
+          {navItems.slice(4).map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.exact}
+                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              >
+                <Icon size={18} />
+                <span>{item.label}</span>
+              </NavLink>
+            );
+          })}
         </nav>
 
         <div className="sidebar-footer">
@@ -119,24 +100,27 @@ const AdminLayout = () => {
             onClick={handleLogout}
             title="Sign Out"
             className="btn btn-ghost btn-icon"
-            style={{ color: 'var(--text-400)' }}
+            style={{ color: 'var(--text-muted)' }}
           >
-            <LogOut size={17} />
+            <LogOut size={16} />
           </button>
         </div>
       </aside>
 
-      {/* ── Main Content ────────────────────── */}
+      {/* Main Content Area */}
       <div className="main-wrapper">
         <header className="topbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Activity size={18} color="var(--primary-light)" />
-            <span className="topbar-title">{pageTitle}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Dagupan City</span>
+            <ChevronRight size={14} color="var(--text-dim)" />
+            <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-main)' }}>
+              Transport Management Console
+            </span>
           </div>
-          <div className="topbar-right">
-            <span className="topbar-badge">System Operational</span>
-            <span style={{ fontSize: '12px', color: 'var(--text-600)' }}>
-              Dagupan City PTA
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="badge badge-success">
+              <span style={{ fontSize: '7px' }}>●</span>
+              System Online
             </span>
           </div>
         </header>

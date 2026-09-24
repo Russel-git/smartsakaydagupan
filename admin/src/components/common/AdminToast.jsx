@@ -10,24 +10,24 @@ const ICONS = {
 
 const COLORS = {
   success: {
-    accent: '#10B981',
-    bg: 'rgba(16, 185, 129, 0.12)',
-    border: 'rgba(16, 185, 129, 0.3)',
+    accent: '#16a34a',
+    bg: '#dcfce7',
+    border: '#86efac',
   },
   error: {
-    accent: '#EF4444',
-    bg: 'rgba(239, 68, 68, 0.12)',
-    border: 'rgba(239, 68, 68, 0.3)',
+    accent: '#b91c1c',
+    bg: '#fee2e2',
+    border: '#fca5a5',
   },
   warning: {
-    accent: '#F59E0B',
-    bg: 'rgba(245, 158, 11, 0.12)',
-    border: 'rgba(245, 158, 11, 0.3)',
+    accent: '#b45309',
+    bg: '#fef3c7',
+    border: '#fde68a',
   },
   info: {
-    accent: '#3B82F6',
-    bg: 'rgba(59, 130, 246, 0.12)',
-    border: 'rgba(59, 130, 246, 0.3)',
+    accent: '#1d4ed8',
+    bg: '#dbeafe',
+    border: '#93c5fd',
   },
 };
 
@@ -43,8 +43,8 @@ const AdminToast = ({ toasts, onDismiss }) => {
         zIndex: 99999,
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
-        maxWidth: '420px',
+        gap: '10px',
+        maxWidth: '380px',
         width: 'calc(100vw - 48px)',
         pointerEvents: 'none',
       }}
@@ -62,12 +62,11 @@ const AdminToast = ({ toasts, onDismiss }) => {
               alignItems: 'flex-start',
               gap: '12px',
               padding: '14px 16px',
-              backgroundColor: 'rgba(17, 24, 39, 0.94)',
-              backdropFilter: 'blur(12px)',
+              backgroundColor: '#ffffff',
               border: `1px solid ${color.border}`,
               borderLeft: `4px solid ${color.accent}`,
               borderRadius: '12px',
-              boxShadow: '0 12px 32px rgba(0, 0, 0, 0.55)',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.10)',
               animation: 'toastSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
               transition: 'all 0.2s ease',
             }}
@@ -94,7 +93,7 @@ const AdminToast = ({ toasts, onDismiss }) => {
                 style={{
                   fontSize: '14px',
                   fontWeight: '600',
-                  color: '#FFFFFF',
+                  color: '#111827',
                   lineHeight: '1.4',
                   marginBottom: toast.message ? '2px' : 0,
                 }}
@@ -119,7 +118,7 @@ const AdminToast = ({ toasts, onDismiss }) => {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: 'var(--text-dim, #64748B)',
+                color: '#9ca3af',
                 cursor: 'pointer',
                 padding: '4px',
                 borderRadius: '6px',
@@ -130,8 +129,8 @@ const AdminToast = ({ toasts, onDismiss }) => {
                 flexShrink: 0,
                 transition: 'color 0.15s ease',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#64748B')}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#111827')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#9ca3af')}
               aria-label="Close notification"
             >
               <X size={15} />
