@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const httpsRedirect = require('./config/httpsRedirect');
 const morgan = require('morgan');
 const mongoSanitize = require('express-mongo-sanitize');
 const { clean: cleanXss } = require('xss-clean/lib/xss');
@@ -31,6 +32,10 @@ app.use(cors({
     ? true
     : process.env.ALLOWED_ORIGINS?.split(',') || [],
   credentials: true,
+});
+// Enforce HTTPS in Render/Tunnel environments
+app.use(httpsRedirect);
+
 }));
 
 // Rate limiting
