@@ -14,11 +14,12 @@ import { FONTS, SPACING, RADIUS } from '../../utils/constants';
 import RouteMapScreen from '../map/RouteMapScreen';
 import FareCalculatorScreen from '../fare/FareCalculatorScreen';
 import FareMatrixScreen from '../fare/FareMatrixScreen';
+import PinpointFareScreen from '../fare/PinpointFareScreen';
 
 const RoutesAndFaresScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
-  // Default to 'routes', but allow passing initialTab: 'fares' or 'routes' via route.params
-  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || 'routes');
+  // Default to 'pinpoint' or 'routes' if specified
+  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || 'pinpoint');
   const [fareSubTab, setFareSubTab] = useState('calculator'); // 'calculator' | 'matrix'
 
   useEffect(() => {
@@ -35,6 +36,36 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
           <TouchableOpacity
             style={[
               styles.segmentBtn,
+              activeTab === 'pinpoint' && {
+                backgroundColor: colors.primary,
+                shadowColor: colors.primary,
+                shadowOpacity: 0.25,
+                shadowRadius: 4,
+                elevation: 2,
+              },
+            ]}
+            onPress={() => setActiveTab('pinpoint')}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons
+              name="crosshairs-gps"
+              size={17}
+              color={activeTab === 'pinpoint' ? '#FFFFFF' : colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.segmentText,
+                { color: activeTab === 'pinpoint' ? '#FFFFFF' : colors.textSecondary },
+              ]}
+              numberOfLines={1}
+            >
+              Pinpoint Fare
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.segmentBtn,
               activeTab === 'routes' && {
                 backgroundColor: colors.primary,
                 shadowColor: colors.primary,
@@ -48,7 +79,7 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
           >
             <MaterialCommunityIcons
               name="map-marker-radius"
-              size={18}
+              size={17}
               color={activeTab === 'routes' ? '#FFFFFF' : colors.textSecondary}
             />
             <Text
@@ -56,8 +87,9 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
                 styles.segmentText,
                 { color: activeTab === 'routes' ? '#FFFFFF' : colors.textSecondary },
               ]}
+              numberOfLines={1}
             >
-              Route Maps
+              Routes
             </Text>
           </TouchableOpacity>
 
@@ -77,7 +109,7 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
           >
             <MaterialCommunityIcons
               name="calculator"
-              size={18}
+              size={17}
               color={activeTab === 'fares' ? '#FFFFFF' : colors.textSecondary}
             />
             <Text
@@ -85,8 +117,9 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
                 styles.segmentText,
                 { color: activeTab === 'fares' ? '#FFFFFF' : colors.textSecondary },
               ]}
+              numberOfLines={1}
             >
-              Fares & Matrix
+              Matrix
             </Text>
           </TouchableOpacity>
         </View>
@@ -94,7 +127,9 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
 
       {/* Main Content Area */}
       <View style={styles.body}>
-        {activeTab === 'routes' ? (
+        {activeTab === 'pinpoint' ? (
+          <PinpointFareScreen navigation={navigation} />
+        ) : activeTab === 'routes' ? (
           <RouteMapScreen navigation={navigation} />
         ) : (
           <View style={styles.fareContainer}>
@@ -113,7 +148,7 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
                     { color: fareSubTab === 'calculator' ? colors.primary : colors.textMuted },
                   ]}
                 >
-                  Fare Calculator
+                  Station Fare
                 </Text>
               </TouchableOpacity>
 

@@ -162,6 +162,33 @@ const HomeScreen = ({ navigation }) => {
       )}
 
       <View style={styles.content}>
+        {/* Interactive Pinpoint Destination & Fair Fare Hero Card */}
+        <TouchableOpacity
+          style={[styles.pinpointHeroCard, { backgroundColor: colors.surface, borderColor: colors.primary + '35' }]}
+          onPress={() => navigation.navigate('PinpointFare')}
+          activeOpacity={0.88}
+        >
+          <View style={styles.pinpointHeroRow}>
+            <View style={[styles.pinpointIconBadge, { backgroundColor: colors.primary }]}>
+              <MaterialCommunityIcons name="crosshairs-gps" size={26} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <Text style={[styles.pinpointHeroTitle, { color: colors.textPrimary }]}>
+                  Pinpoint Destination & Fair Fare
+                </Text>
+                <View style={[styles.liveTag, { backgroundColor: '#10B98120', borderColor: '#10B98150' }]}>
+                  <Text style={[styles.liveTagText, { color: '#059669' }]}>LIVE</Text>
+                </View>
+              </View>
+              <Text style={[styles.pinpointHeroSubtitle, { color: colors.textSecondary }]}>
+                Current location ➔ Tap map • Auto-adjusts Tricycle, Jeep & Modern Jeep fares
+              </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={22} color={colors.primary} />
+          </View>
+        </TouchableOpacity>
+
         {/* Quick Actions Grid */}
         <View style={styles.quickGrid}>
           <TouchableOpacity
@@ -541,6 +568,45 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#0284C7',
+  },
+  pinpointHeroCard: {
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    marginBottom: SPACING.md,
+    ...SHADOWS.sm,
+  },
+  pinpointHeroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pinpointIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinpointHeroTitle: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: '800',
+  },
+  pinpointHeroSubtitle: {
+    fontSize: FONTS.sizes.xs,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  liveTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  liveTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });
 

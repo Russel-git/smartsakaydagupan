@@ -20,17 +20,36 @@ import AuthPromptModal from '../../components/common/AuthPromptModal';
 import { complaintsAPI, routesAPI } from '../../api/services';
 import { FONTS, SPACING, RADIUS, COMPLAINT_CATEGORIES } from '../../utils/constants';
 
-const SubmitComplaintScreen = ({ navigation }) => {
+const SubmitComplaintScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
   const { isGuest } = useAuth();
   const { showSuccess, showError, showWarning } = useFeedback();
   const [promptVisible, setPromptVisible] = useState(false);
   const [routes, setRoutes] = useState([]);
-  const [form, setForm] = useState({ category: '', subject: '', description: '', routeId: '', vehiclePlateNumber: '' });
+  const [form, setForm] = useState({
+    category: route?.params?.category || '',
+    subject: route?.params?.subject || '',
+    description: route?.params?.description || '',
+    routeId: route?.params?.routeId || '',
+    vehiclePlateNumber: route?.params?.vehiclePlateNumber || '',
+  });
   const [selectedImage, setSelectedImage] = useState(null);
   const [todayCount, setTodayCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (route?.params) {
+      setForm((prev) => ({
+        ...prev,
+        category: route.params.category || prev.category,
+        subject: route.params.subject || prev.subject,
+        description: route.params.description || prev.description,
+        vehiclePlateNumber: route.params.vehiclePlateNumber || prev.vehiclePlateNumber,
+        routeId: route.params.routeId || prev.routeId,
+      }));
+    }
+  }, [route?.params]);
 
   useEffect(() => {
     routesAPI.getAllRoutes().then(({ data }) => setRoutes(data.data || [])).catch(() => {});

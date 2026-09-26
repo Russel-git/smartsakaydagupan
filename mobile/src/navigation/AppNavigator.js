@@ -21,6 +21,7 @@ import HomeScreen from '../screens/home/HomeScreen';
 import RoutesAndFaresScreen from '../screens/routes/RoutesAndFaresScreen';
 import RouteDetailScreen from '../screens/map/RouteDetailScreen';
 import FareMatrixScreen from '../screens/fare/FareMatrixScreen';
+import PinpointFareScreen from '../screens/fare/PinpointFareScreen';
 import RideTrackerScreen from '../screens/ride/RideTrackerScreen';
 import AssistantScreen from '../screens/assistant/AssistantScreen';
 import WeatherScreen from '../screens/weather/WeatherScreen';
@@ -55,6 +56,7 @@ const AuthStack = ({ initialRouteName = 'Welcome' }) => (
 const HomeStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="HomeMain" component={HomeScreen} />
+    <Stack.Screen name="PinpointFare" component={PinpointFareScreen} options={{ headerShown: true, title: 'Pinpoint Trip & Fair Fare' }} />
     <Stack.Screen name="Weather" component={WeatherScreen} options={{ headerShown: true, title: 'Dagupan Weather & Flood Advisory' }} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: true, title: 'Notifications' }} />
     <Stack.Screen name="CommuterRights" component={CommuterRightsScreen} options={{ headerShown: true, title: 'Commuter Rights' }} />
@@ -70,6 +72,7 @@ const HomeStack = () => (
 const RoutesAndFaresStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="RoutesAndFaresMain" component={RoutesAndFaresScreen} />
+    <Stack.Screen name="PinpointFare" component={PinpointFareScreen} options={{ headerShown: true, title: 'Pinpoint Trip & Fair Fare' }} />
     <Stack.Screen name="RouteDetail" component={RouteDetailScreen} options={{ headerShown: true, title: 'Route Details' }} />
     <Stack.Screen name="FareMatrix" component={FareMatrixScreen} options={{ headerShown: true, title: 'Fare Matrix' }} />
   </Stack.Navigator>
