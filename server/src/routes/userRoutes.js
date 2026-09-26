@@ -10,8 +10,10 @@ router.use(authMiddleware);
 router.get('/me', userController.getProfile);
 router.put('/me', validate(updateProfileSchema), userController.updateProfile);
 router.put('/me/password', validate(changePasswordSchema), userController.changePassword);
-router.get('/', rbac('admin'), userController.getAllUsers);
-router.put('/:id/status', rbac('admin'), userController.updateUserStatus);
-router.delete('/:id', rbac('admin'), userController.deleteUser);
+router.get('/', rbac('superadmin'), userController.getAllUsers);
+router.post('/', rbac('superadmin'), userController.createUser);
+router.put('/:id/role', rbac('superadmin'), userController.updateUserRole);
+router.put('/:id/status', rbac('superadmin'), userController.updateUserStatus);
+router.delete('/:id', rbac('superadmin'), userController.deleteUser);
 
 module.exports = router;

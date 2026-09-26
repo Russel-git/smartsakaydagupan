@@ -21,17 +21,53 @@ const seed = async () => {
     await FareMatrix.deleteMany({});
     console.log('Cleared existing data.');
 
-    // Seed admin user
-    const admin = await User.create({
+    // Seed superadmin developer user
+    const superadmin = await User.create({
       email: config.admin.email,
       passwordHash: config.admin.defaultPassword,
-      firstName: 'System',
-      lastName: 'Admin',
+      firstName: 'Developer',
+      lastName: 'Superadmin',
+      role: 'superadmin',
+      isVerified: true,
+      isActive: true,
+    });
+    console.log(`Superadmin created: ${superadmin.email}`);
+
+    // Seed operator admin user
+    const operator = await User.create({
+      email: 'operator@smartsakay.com',
+      passwordHash: config.admin.defaultPassword,
+      firstName: 'Transit',
+      lastName: 'Operator',
       role: 'admin',
       isVerified: true,
       isActive: true,
     });
-    console.log(`Admin created: ${admin.email}`);
+    console.log(`Operator created: ${operator.email}`);
+
+    // Seed LGU officer user
+    const lgu = await User.create({
+      email: 'lgu@dagupan.gov.ph',
+      passwordHash: config.admin.defaultPassword,
+      firstName: 'City POSO',
+      lastName: 'Officer',
+      role: 'lgu',
+      isVerified: true,
+      isActive: true,
+    });
+    console.log(`LGU Authority created: ${lgu.email}`);
+
+    // Seed sample commuter user
+    const commuter = await User.create({
+      email: 'commuter@smartsakay.ph',
+      passwordHash: config.admin.defaultPassword,
+      firstName: 'Maria',
+      lastName: 'Santos',
+      role: 'commuter',
+      isVerified: true,
+      isActive: true,
+    });
+    console.log(`Commuter created: ${commuter.email}`);
 
     // Seed fares
     const fares = await Fare.insertMany(fareSeedData);

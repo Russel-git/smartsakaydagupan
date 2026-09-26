@@ -174,8 +174,37 @@ const login = async (req, res, next) => {
     }
     if (!user.isActive) return apiResponse.error(res, 'Account has been deactivated. Contact support.', 403);
 
+    // Check if account is temporarily locked
+    if (user.lockUntil && user.lockUntil > new Date()) {
+      const remainingMs = user.lockUntil.getTime() - Date.now();
+      const remainingMinutes = Math.max(1, Math.ceil(remainingMs / (60 * 1000)));
+      return apiResponse.error(
+        res,
+        `Account temporarily locked due to multiple failed login attempts. Please try again in ${remainingMinutes} minute(s).`,
+        423
+      );
+    }
+
     const isMatch = await user.comparePassword(password);
-    if (!isMatch) return apiResponse.error(res, 'Invalid email or password.', 401);
+    if (!isMatch) {
+      user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+      let warningMsg = 'Invalid email or password.';
+      if (user.failedLoginAttempts >= 5) {
+        user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+        warningMsg = 'Account locked for 15 minutes due to 5 consecutive failed login attempts.';
+      } else {
+        const remaining = 5 - user.failedLoginAttempts;
+        warningMsg = `Invalid email or password. ${remaining} attempt(s) remaining before temporary lockout.`;
+      }
+      await user.save();
+      return apiResponse.error(res, warningMsg, user.failedLoginAttempts >= 5 ? 423 : 401);
+    }
+
+    // Reset failed attempts on successful authentication
+    if (user.failedLoginAttempts > 0 || user.lockUntil) {
+      user.failedLoginAttempts = 0;
+      user.lockUntil = null;
+    }
 
     const accessToken = generateAccessToken(user._id, user.role);
     const refreshToken = generateRefreshToken(user._id);

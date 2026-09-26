@@ -58,6 +58,64 @@ const getAllUsers = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const createUser = async (req, res, next) => {
+  try {
+    const { email, password, firstName, lastName, suffix = '', role = 'admin' } = req.body;
+    if (!['superadmin', 'admin', 'lgu', 'commuter'].includes(role)) {
+      return apiResponse.error(res, 'Invalid role specified.', 400);
+    }
+    const existing = await User.findOne({ email: email.toLowerCase() });
+    if (existing) return apiResponse.error(res, 'Email already registered.', 409);
+
+    const user = await User.create({
+      email: email.toLowerCase(),
+      passwordHash: password,
+      firstName,
+      lastName,
+      suffix: suffix?.trim() || '',
+      role,
+      isVerified: true,
+      isActive: true,
+    });
+
+    await logAuditEvent(req, {
+      action: 'USER_CREATE_STAFF',
+      resourceType: 'user',
+      resourceId: user._id,
+      details: { email: user.email, name: `${user.firstName} ${user.lastName}`, role: user.role },
+    });
+
+    return apiResponse.success(res, user.toJSON(), 'User account created successfully.', 201);
+  } catch (error) { next(error); }
+};
+
+const updateUserRole = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+    if (!['superadmin', 'admin', 'lgu', 'commuter'].includes(role)) {
+      return apiResponse.error(res, 'Invalid role specified.', 400);
+    }
+    const user = await User.findById(id);
+    if (!user) return apiResponse.error(res, 'User not found.', 404);
+    if (user._id.toString() === req.user._id.toString() && role !== 'superadmin') {
+      return apiResponse.error(res, 'Superadmin cannot revoke their own developer privileges.', 400);
+    }
+
+    user.role = role;
+    await user.save();
+
+    await logAuditEvent(req, {
+      action: 'USER_ROLE_UPDATE',
+      resourceType: 'user',
+      resourceId: user._id,
+      details: { email: user.email, newRole: role },
+    });
+
+    return apiResponse.success(res, user.toJSON(), `User role updated to ${role} successfully.`);
+  } catch (error) { next(error); }
+};
+
 const updateUserStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -84,8 +142,8 @@ const deleteUser = async (req, res, next) => {
     }
     const user = await User.findById(id);
     if (!user) return apiResponse.error(res, 'User not found.', 404);
-    if (user.role === 'admin') {
-      return apiResponse.error(res, 'Cannot delete an administrator account.', 403);
+    if (user.role === 'superadmin') {
+      return apiResponse.error(res, 'Cannot delete a Superadmin account.', 403);
     }
 
     await User.findByIdAndDelete(id);
@@ -102,4 +160,4 @@ const deleteUser = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getProfile, updateProfile, changePassword, getAllUsers, updateUserStatus, deleteUser };
+module.exports = { getProfile, updateProfile, changePassword, getAllUsers, createUser, updateUserRole, updateUserStatus, deleteUser };
