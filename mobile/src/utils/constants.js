@@ -14,14 +14,12 @@ const getDevServerIp = () => {
       }
     }
   }
-  return '192.168.1.14';
+  return '192.168.1.4';
 };
 
 const DEV_IP = getDevServerIp();
 
-const CLOUDFLARE_BACKEND_URL = 'https://avoid-cdt-vsnet-latina.trycloudflare.com/api';
-
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || CLOUDFLARE_BACKEND_URL || Platform.select({
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || Platform.select({
   web: 'http://localhost:5000/api',
   default: `http://${DEV_IP}:5000/api`,
 });
