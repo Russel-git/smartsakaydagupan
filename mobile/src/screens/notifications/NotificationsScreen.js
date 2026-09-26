@@ -145,7 +145,7 @@ const NotificationsScreen = ({ navigation }) => {
 
               <View style={styles.notifContent}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                  <span
+                  <Text
                     style={{
                       fontSize: 11,
                       fontWeight: '700',
@@ -154,7 +154,7 @@ const NotificationsScreen = ({ navigation }) => {
                     }}
                   >
                     {cfg.label}
-                  </span>
+                  </Text>
                   <Text style={[styles.notifTime, { color: colors.textMuted }]}>
                     {formatDate(item.createdAt)}
                   </Text>
@@ -191,7 +191,7 @@ const NotificationsScreen = ({ navigation }) => {
       />
 
       {/* Full-Context Announcement Detail Modal */}
-      {selectedNotif && (() => {
+      {Boolean(selectedNotif) ? (() => {
         const cfg = NOTIF_CONFIG[selectedNotif.type] || NOTIF_CONFIG.system;
         return (
           <Modal
@@ -314,7 +314,7 @@ const NotificationsScreen = ({ navigation }) => {
             </View>
           </Modal>
         );
-      })()}
+      })() : null}
     </View>
   );
 };
