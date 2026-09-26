@@ -76,7 +76,7 @@ const RoutesAndFaresStack = () => (
     <Stack.Screen name="FareMatrix" component={FareMatrixScreen} options={{ headerShown: true, title: 'Fare Matrix' }} />
     <Stack.Screen name="RideHistory" component={RideHistoryScreen} options={{ headerShown: true, title: 'Ride History' }} />
     <Stack.Screen name="RideTracker" component={RideTrackerScreen} options={{ headerShown: true, title: 'Jeepney Live Tracker' }} />
-    <Stack.Screen name="PinpointFare" component={PinpointFareScreen} options={{ headerShown: true, title: 'Tricycle Pinpoint' }} />
+    <Stack.Screen name="PinpointFare" component={PinpointFareScreen} options={{ headerShown: true, title: 'Solo Ride / Visitor' }} />
   </Stack.Navigator>
 );
 

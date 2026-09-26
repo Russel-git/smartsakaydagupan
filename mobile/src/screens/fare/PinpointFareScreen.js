@@ -33,17 +33,18 @@ const DAGUPAN_CENTER = {
   name: 'Dagupan City Plaza',
 };
 
-// Popular Dagupan Destinations for 1-tap pinpoint
+// Popular Dagupan to Visit for 1-tap pinpoint
 const POPULAR_DESTINATIONS = [
-  { name: 'CSI Mall Lucao', lat: 16.0333, lng: 120.3167, icon: 'shopping' },
-  { name: 'Nepo Mall Downtown', lat: 16.0425, lng: 120.3378, icon: 'store' },
-  { name: 'Dagupan City Plaza', lat: 16.0433, lng: 120.3342, icon: 'bank' },
-  { name: 'Bonuan Blue Beach', lat: 16.0825, lng: 120.3542, icon: 'umbrella-beach' },
-  { name: 'Lyceum University (Tapuac)', lat: 16.0342, lng: 120.3289, icon: 'school' },
-  { name: 'Region 1 Medical Center (R1MC)', lat: 16.0489, lng: 120.3417, icon: 'hospital-building' },
-  { name: 'Dagupan Bus Terminal', lat: 16.0400, lng: 120.3450, icon: 'bus-stop' },
-  { name: 'Pantal Fish Port', lat: 16.0510, lng: 120.3310, icon: 'ferry' },
-  { name: 'Caranglaan Commercial', lat: 16.0380, lng: 120.3580, icon: 'storefront' },
+  { name: 'Region 1', fullName: 'Region 1 Medical Center', lat: 16.04858883203431, lng: 120.34159201507514, icon: 'hospital-building' },
+  { name: 'University of Luzon', fullName: 'University of Luzon', lat: 16.03979698464543, lng: 120.33585706611083, icon: 'school' },
+  { name: 'UPang', fullName: 'PHINMA University of Pangasinan', lat: 16.047073152284103, lng: 120.3424288642609, icon: 'school' },
+  { name: 'Lyceum NorthWestern University', fullName: 'Lyceum Northwestern University', lat: 16.035223066160448, lng: 120.33011439807963, icon: 'school' },
+  { name: 'UDD', fullName: 'Universidad de Dagupan (UDD)', lat: 16.050671455090622, lng: 120.34088198010957, icon: 'school' },
+  { name: 'CSI Lucao', fullName: 'CSI The City Mall Lucao', lat: 16.023527558411267, lng: 120.32342891959715, icon: 'shopping' },
+  { name: 'SM Dagupan', fullName: 'SM Center Dagupan', lat: 16.044318662785823, lng: 120.34369785261799, icon: 'shopping' },
+  { name: 'Nepo Mall Dagupan', fullName: 'Nepo Mall Downtown Dagupan', lat: 16.05119585865268, lng: 120.34159281889808, icon: 'store' },
+  { name: 'CSI Square', fullName: 'CSI Square Downtown', lat: 16.043433644436057, lng: 120.33567150740232, icon: 'shopping' },
+  { name: 'City Mall Mayombo', fullName: 'CityMall Mayombo Dagupan', lat: 16.038098156410296, lng: 120.34736306873677, icon: 'shopping' },
 ];
 
 // Haversine distance in km
@@ -76,10 +77,14 @@ const PinpointFareScreen = ({ navigation }) => {
   });
 
   const [destination, setDestination] = useState({
-    lat: 16.0333,
-    lng: 120.3167,
-    name: 'CSI Mall Lucao',
+    lat: 16.023527558411267,
+    lng: 120.32342891959715,
+    name: 'CSI Lucao',
   });
+
+  // Pending Pinpoint state waiting for commuter to tap "Set"
+  const [pendingPinpoint, setPendingPinpoint] = useState(null);
+  const [isDestinationSet, setIsDestinationSet] = useState(true);
 
   // Location Permission State
   const [permissionStatus, setPermissionStatus] = useState('checking'); // 'checking' | 'granted' | 'denied'
@@ -91,7 +96,7 @@ const PinpointFareScreen = ({ navigation }) => {
   const [roadSummary, setRoadSummary] = useState('Aligning to Dagupan road network...');
   const [isRouting, setIsRouting] = useState(false);
 
-  // Active Fares & Tricycle Ordinance Settings
+  // Active Fares & Solo Ride / Visitor Ordinance Settings
   const [activeFares, setActiveFares] = useState({});
   const [isDiscounted, setIsDiscounted] = useState(false); // 20% Student/Senior/PWD discount
 
@@ -197,14 +202,14 @@ const PinpointFareScreen = ({ navigation }) => {
     return Math.round(direct * 1.25 * 10) / 10;
   }, [roadDistanceKm, origin, destination]);
 
-  // Tricycle Fair Fare Calculation (Dagupan City TFRB Ordinance)
+  // Solo Ride / Visitor Fair Fare Calculation (Dagupan City TFRB Ordinance)
   // Base ₱15 for 1st km, +₱3/km thereafter
   const computedFare = useMemo(() => {
     const dist = trackingState === 'tracking' ? Math.max(effectiveDistanceKm, distanceTraveledKm) : effectiveDistanceKm;
-    const triConf = activeFares.tricycle || { baseFare: 15, baseDistanceKm: 1, perKmRate: 3 };
-    const baseFare = triConf.baseFare;
-    const baseDist = triConf.baseDistanceKm;
-    const perKm = triConf.perKmRate;
+    const triConf = activeFares.solo_ride || activeFares.tricycle || { baseFare: 15, baseDistanceKm: 1, perKmRate: 3 };
+    const baseFare = triConf.baseFare || 15;
+    const baseDist = triConf.baseDistanceKm || 1;
+    const perKm = triConf.perKmRate || 3;
     const extraDist = dist > baseDist ? dist - baseDist : 0;
     const extraFare = Math.ceil(extraDist) * perKm;
     const regular = baseFare + extraFare;
@@ -221,26 +226,74 @@ const PinpointFareScreen = ({ navigation }) => {
     };
   }, [effectiveDistanceKm, distanceTraveledKm, trackingState, activeFares, isDiscounted]);
 
+  // Confirm and set the pinpointed destination
+  const handleConfirmSet = (target) => {
+    const toSet = target || pendingPinpoint;
+    if (toSet) {
+      setDestination((prev) => ({
+        ...prev,
+        lat: toSet.lat,
+        lng: toSet.lng,
+        name: toSet.name || prev.name,
+      }));
+      if (toSet.distanceKm) setRoadDistanceKm(toSet.distanceKm);
+      if (toSet.durationMins) setRoadDurationMins(toSet.durationMins);
+      if (toSet.summary) setRoadSummary(toSet.summary);
+    }
+    const destName = toSet?.name || destination.name;
+    setIsDestinationSet(true);
+    setPendingPinpoint(null);
+    showSuccess('Destination Set', `Destination set to ${destName}. Ready to track ride!`);
+
+    // Signal map to update pin popup
+    const script = `if (window.onDestinationConfirmed) { window.onDestinationConfirmed('${destName.replace(/'/g, "\\'")}'); }`;
+    if (webViewRef.current && Platform.OS !== 'web') {
+      webViewRef.current.injectJavaScript(script);
+    } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const iframe = document.getElementById('solo-ride-pinpoint-map') || document.getElementById('tricycle-pinpoint-map');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(JSON.stringify({ type: 'CONFIRM_SET_PINPOINT', name: destName }), '*');
+      }
+    }
+  };
+
   // Handle message from Leaflet Web / WebView
   const handleMapEvent = (data) => {
     if (!data) return;
+    if (data.type === 'CONFIRM_SET_PINPOINT') {
+      handleConfirmSet(data);
+      return;
+    }
     if (data.type === 'ROUTE_CALCULATED') {
       setIsRouting(false);
-      setDestination((prev) => ({
-        ...prev,
+      const name = data.name || (data.summary ? `Near ${data.summary.split('➔')[0].trim()}` : destination.name);
+      setPendingPinpoint({
         lat: data.lat,
         lng: data.lng,
-        name: data.summary ? `Near ${data.summary.split('➔')[0].trim()}` : prev.name,
-      }));
+        name,
+        distanceKm: data.distanceKm,
+        durationMins: data.durationMins,
+        summary: data.summary,
+      });
+      setIsDestinationSet(false);
       if (data.distanceKm) setRoadDistanceKm(data.distanceKm);
       if (data.durationMins) setRoadDurationMins(data.durationMins);
       if (data.summary) setRoadSummary(data.summary);
     } else if (data.type === 'PINPOINT_DESTINATION') {
       setIsRouting(false);
-      setDestination((prev) => ({ ...prev, lat: data.lat, lng: data.lng }));
       const d = calculateDistanceKm(origin.lat, origin.lng, data.lat, data.lng);
-      setRoadDistanceKm(Math.round(d * 1.25 * 10) / 10);
-      setRoadDurationMins(Math.max(2, Math.round((d / 18) * 60)));
+      const dist = Math.round(d * 1.25 * 10) / 10;
+      const mins = Math.max(2, Math.round((d / 18) * 60));
+      setPendingPinpoint({
+        lat: data.lat,
+        lng: data.lng,
+        name: data.name || 'Pinpointed Location',
+        distanceKm: dist,
+        durationMins: mins,
+      });
+      setIsDestinationSet(false);
+      setRoadDistanceKm(dist);
+      setRoadDurationMins(mins);
     } else if (data.type === 'ROUTING_STARTED') {
       setIsRouting(true);
     }
@@ -257,36 +310,40 @@ const PinpointFareScreen = ({ navigation }) => {
       window.addEventListener('message', handleWindowMsg);
       return () => window.removeEventListener('message', handleWindowMsg);
     }
-  }, [origin]);
+  }, [origin, pendingPinpoint, destination]);
 
-  // Send destination to Leaflet map from landmark chips
+  // Send destination to Leaflet map from Popular Dagupan to Visit chips
   const selectLandmark = (item) => {
-    setDestination({
+    setIsRouting(true);
+    setPendingPinpoint({
       lat: item.lat,
       lng: item.lng,
       name: item.name,
     });
-    setIsRouting(true);
-    const script = `if (window.setDestinationFromApp) { window.setDestinationFromApp(${item.lat}, ${item.lng}); }`;
+    setIsDestinationSet(false);
+    const script = `if (window.setDestinationFromApp) { window.setDestinationFromApp(${item.lat}, ${item.lng}, '${item.name.replace(/'/g, "\\'")}'); }`;
     if (webViewRef.current && Platform.OS !== 'web') {
       webViewRef.current.injectJavaScript(script);
     } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const iframe = document.getElementById('tricycle-pinpoint-map');
+      const iframe = document.getElementById('solo-ride-pinpoint-map') || document.getElementById('tricycle-pinpoint-map');
       if (iframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage(JSON.stringify({ type: 'SET_DESTINATION', lat: item.lat, lng: item.lng }), '*');
+        iframe.contentWindow.postMessage(JSON.stringify({ type: 'SET_DESTINATION', lat: item.lat, lng: item.lng, name: item.name }), '*');
       }
     }
   };
 
-  // Start Live Tricycle Tracking
+  // Start Live Solo Ride / Visitor Tracking
   const handleStartTracking = () => {
+    if (!isDestinationSet && pendingPinpoint) {
+      handleConfirmSet();
+    }
     setTrackingState('tracking');
     setDistanceTraveledKm(0);
     setElapsedSeconds(0);
     setCurrentGpsPos(origin);
     lastLocationRef.current = origin;
 
-    showInfo('Tracking Started', `Live Tricycle meter active towards ${destination.name}.`);
+    showInfo('Tracking Started', `Live Solo Ride / Visitor meter active towards ${destination.name}.`);
 
     timerIntervalRef.current = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
@@ -358,11 +415,11 @@ const PinpointFareScreen = ({ navigation }) => {
     const finalFare = isDiscounted ? Math.round(regFare * 0.80) : regFare;
 
     const completedRide = {
-      id: `ride_tri_${Date.now()}`,
+      id: `ride_solo_${Date.now()}`,
       timestamp: new Date().toISOString(),
-      routeName: `Tricycle to ${destination.name} (Early Drop-Off)`,
+      routeName: `Solo Ride / Visitor to ${destination.name} (Early Drop-Off)`,
       destination: `Early Drop-off near ${currentGpsPos?.name || 'Current Stop'}`,
-      vehicleType: 'tricycle',
+      vehicleType: 'solo_ride',
       fare: finalFare,
       regularFare: regFare,
       discount: isDiscounted ? 'discounted' : 'none',
@@ -386,11 +443,11 @@ const PinpointFareScreen = ({ navigation }) => {
 
     // Save to Ride History
     const completedRide = {
-      id: `ride_tri_${Date.now()}`,
+      id: `ride_solo_${Date.now()}`,
       timestamp: new Date().toISOString(),
-      routeName: `Tricycle to ${destination.name}`,
+      routeName: `Solo Ride / Visitor to ${destination.name}`,
       destination: destination.name,
-      vehicleType: 'tricycle',
+      vehicleType: 'solo_ride',
       fare: computedFare.finalFare,
       regularFare: computedFare.regular,
       discount: isDiscounted ? 'discounted' : 'none',
@@ -505,7 +562,7 @@ const PinpointFareScreen = ({ navigation }) => {
       </head>
       <body>
         <div id="map"></div>
-        <div class="map-tap-hint" id="status-hint">🛺 Tap or drag red pin to set destination</div>
+        <div class="map-tap-hint" id="status-hint">📍 Tap or drag red pin to choose destination, then tap Set</div>
         <div class="route-status-pill" id="route-meta">Finding fastest road...</div>
 
         <script>
@@ -522,6 +579,7 @@ const PinpointFareScreen = ({ navigation }) => {
           var oLng = ${oLng};
           var dLat = ${dLat};
           var dLng = ${dLng};
+          var currentDestName = '${destination.name.replace(/'/g, "\\'")}';
 
           var map = L.map('map', { zoomControl: false }).setView([(oLat + dLat)/2, (oLng + dLng)/2], 14);
           L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -547,20 +605,43 @@ const PinpointFareScreen = ({ navigation }) => {
             iconSize: [24, 24],
             iconAnchor: [12, 12]
           });
-          var destMarker = L.marker([dLat, dLng], { icon: destIcon, draggable: true }).addTo(map)
-            .bindPopup('<b>Tricycle Destination</b><br/>Drag or tap anywhere');
+          var destMarker = L.marker([dLat, dLng], { icon: destIcon, draggable: true }).addTo(map);
+
+          function buildPopupHtml(title, distKm, durMins, isConfirmed) {
+            return '<div style="text-align:center; padding:3px; min-width:140px; font-family:system-ui,-apple-system,sans-serif;">' +
+              '<b style="font-size:12px; color:#0f172a;">📍 ' + (title || 'Pinpoint Location') + '</b><br/>' +
+              (distKm ? ('<span style="font-size:11px; color:#64748b;">~' + distKm + ' km • ~' + durMins + ' mins</span><br/>') : '') +
+              (isConfirmed
+                ? '<div style="margin-top:5px; font-size:11px; font-weight:800; color:#16A34A;">✓ Destination Set</div>'
+                : '<button onclick="window.confirmFromMap()" style="background:#16A34A; color:#ffffff; border:none; padding:5px 14px; border-radius:12px; font-size:11px; font-weight:800; margin-top:6px; cursor:pointer; box-shadow:0 2px 4px rgba(22,163,74,0.3);">Set</button>'
+              ) +
+            '</div>';
+          }
+          destMarker.bindPopup(buildPopupHtml(currentDestName, null, null, true));
+
+          window.confirmFromMap = function() {
+            destMarker.closePopup();
+            postToApp({ type: 'CONFIRM_SET_PINPOINT', lat: dLat, lng: dLng, name: currentDestName });
+          };
+
+          window.onDestinationConfirmed = function(name) {
+            currentDestName = name;
+            var hintEl = document.getElementById('status-hint');
+            if (hintEl) hintEl.innerHTML = '✓ Destination Set: ' + name;
+            destMarker.setPopupContent(buildPopupHtml(name, null, null, true));
+          };
 
           var currentGlowLayer = null;
           var currentRouteLayer = null;
 
-          async function updateRoadRoute(destLatitude, destLongitude) {
+          async function updateRoadRoute(destLatitude, destLongitude, isUserInteraction) {
             dLat = destLatitude;
             dLng = destLongitude;
             destMarker.setLatLng([dLat, dLng]);
 
             var hintEl = document.getElementById('status-hint');
             var metaEl = document.getElementById('route-meta');
-            if (hintEl) hintEl.innerHTML = '⚡ Finding fastest tricycle route...';
+            if (hintEl) hintEl.innerHTML = '⚡ Finding fastest route...';
             if (metaEl) metaEl.innerHTML = 'Calculating road alignment...';
 
             postToApp({ type: 'ROUTING_STARTED', lat: dLat, lng: dLng });
@@ -609,8 +690,10 @@ const PinpointFareScreen = ({ navigation }) => {
                 }
                 var summary = streetNames.slice(0, 3).join(' ➔ ');
 
-                if (hintEl) hintEl.innerHTML = '🛺 Route: ' + distKm + ' km • ~' + durMins + ' mins';
+                if (hintEl) hintEl.innerHTML = '📍 Route: ' + distKm + ' km • Tap "Set" to confirm';
                 if (metaEl) metaEl.innerHTML = summary ? ('🛣️ ' + summary) : ('🛣️ Fastest road aligned');
+                destMarker.setPopupContent(buildPopupHtml(currentDestName || (summary ? summary.split('➔')[0].trim() : 'Pinpointed Location'), distKm, durMins, false));
+                if (isUserInteraction) destMarker.openPopup();
 
                 postToApp({
                   type: 'ROUTE_CALCULATED',
@@ -619,6 +702,7 @@ const PinpointFareScreen = ({ navigation }) => {
                   distanceKm: distKm,
                   durationMins: durMins,
                   summary: summary || 'Fastest street route',
+                  name: currentDestName,
                   coordinates: latLngs
                 });
                 return;
@@ -627,30 +711,38 @@ const PinpointFareScreen = ({ navigation }) => {
               console.warn('Road routing error:', err);
             }
 
-            if (hintEl) hintEl.innerHTML = '📍 Destination Updated';
-            postToApp({ type: 'PINPOINT_DESTINATION', lat: dLat, lng: dLng });
+            if (hintEl) hintEl.innerHTML = '📍 Tap "Set" to confirm destination';
+            destMarker.setPopupContent(buildPopupHtml(currentDestName || 'Pinpointed Location', null, null, false));
+            if (isUserInteraction) destMarker.openPopup();
+            postToApp({ type: 'PINPOINT_DESTINATION', lat: dLat, lng: dLng, name: currentDestName });
           }
 
-          updateRoadRoute(dLat, dLng);
+          updateRoadRoute(dLat, dLng, false);
 
           destMarker.on('dragend', function() {
             var pos = destMarker.getLatLng();
-            updateRoadRoute(pos.lat, pos.lng);
+            currentDestName = '';
+            updateRoadRoute(pos.lat, pos.lng, true);
           });
 
           map.on('click', function(e) {
-            updateRoadRoute(e.latlng.lat, e.latlng.lng);
+            currentDestName = '';
+            updateRoadRoute(e.latlng.lat, e.latlng.lng, true);
           });
 
-          window.setDestinationFromApp = function(lat, lng) {
-            updateRoadRoute(lat, lng);
+          window.setDestinationFromApp = function(lat, lng, name) {
+            currentDestName = name || '';
+            updateRoadRoute(lat, lng, true);
           };
 
           window.addEventListener('message', function(e) {
             try {
               var d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
               if (d && d.type === 'SET_DESTINATION') {
-                updateRoadRoute(d.lat, d.lng);
+                currentDestName = d.name || '';
+                updateRoadRoute(d.lat, d.lng, true);
+              } else if (d && d.type === 'CONFIRM_SET_PINPOINT') {
+                if (window.onDestinationConfirmed) window.onDestinationConfirmed(d.name);
               }
             } catch (_) {}
           });
@@ -708,7 +800,7 @@ const PinpointFareScreen = ({ navigation }) => {
                 </View>
                 <View style={styles.arrivalMetaCol}>
                   <Text style={[styles.arrivalMetaLabel, { color: colors.textMuted }]}>Mode</Text>
-                  <Text style={[styles.arrivalMetaVal, { color: colors.textPrimary }]}>Tricycle</Text>
+                  <Text style={[styles.arrivalMetaVal, { color: colors.textPrimary }]}>Solo Ride / Visitor</Text>
                 </View>
               </View>
             </View>
@@ -758,49 +850,52 @@ const PinpointFareScreen = ({ navigation }) => {
         <View style={styles.chipHeaderRow}>
           <MaterialCommunityIcons name="star-outline" size={16} color="#D97706" />
           <Text style={[styles.chipHeaderTitle, { color: colors.textSecondary }]}>
-            Popular Dagupan Drop-Offs (Tricycle):
+            Popular Dagupan to Visit:
           </Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
-          {POPULAR_DESTINATIONS.map((dest, idx) => (
-            <TouchableOpacity
-              key={`dest-${idx}`}
-              style={[
-                styles.landmarkChip,
-                { backgroundColor: colors.background, borderColor: colors.border },
-                destination.name === dest.name && {
-                  borderColor: '#D97706',
-                  backgroundColor: '#D9770615',
-                },
-              ]}
-              onPress={() => selectLandmark(dest)}
-              activeOpacity={0.7}
-            >
-              <MaterialCommunityIcons
-                name={dest.icon}
-                size={14}
-                color={destination.name === dest.name ? '#D97706' : colors.textMuted}
-              />
-              <Text
+          {POPULAR_DESTINATIONS.map((dest, idx) => {
+            const isSelected = pendingPinpoint ? pendingPinpoint.name === dest.name : destination.name === dest.name;
+            return (
+              <TouchableOpacity
+                key={`dest-${idx}`}
                 style={[
-                  styles.landmarkChipText,
-                  { color: destination.name === dest.name ? '#D97706' : colors.textPrimary },
+                  styles.landmarkChip,
+                  { backgroundColor: colors.background, borderColor: colors.border },
+                  isSelected && {
+                    borderColor: '#16A34A',
+                    backgroundColor: '#16A34A15',
+                  },
                 ]}
+                onPress={() => selectLandmark(dest)}
+                activeOpacity={0.7}
               >
-                {dest.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <MaterialCommunityIcons
+                  name={dest.icon}
+                  size={14}
+                  color={isSelected ? '#16A34A' : colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.landmarkChipText,
+                    { color: isSelected ? '#16A34A' : colors.textPrimary },
+                  ]}
+                >
+                  {dest.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
-      {/* Interactive Map with Custom Orange GPS Access Button and Smaller Red Pin */}
+      {/* Interactive Map with Custom Orange GPS Access Button, Set Button, and Pin */}
       <View style={styles.mapContainer}>
         {Platform.OS === 'web' ? (
           <iframe
-            id="tricycle-pinpoint-map"
+            id="solo-ride-pinpoint-map"
             key={`map-${origin.lat}-${origin.lng}`}
-            title="Dagupan Tricycle Pinpoint Map"
+            title="Dagupan Solo Ride / Visitor Pinpoint Map"
             srcDoc={generateLeafletHtml()}
             style={{ width: '100%', height: '100%', border: 'none' }}
           />
@@ -820,6 +915,62 @@ const PinpointFareScreen = ({ navigation }) => {
           />
         )}
 
+        {/* Floating "Set" Confirmation Bar over Map (Appears when destination is chosen) */}
+        {!isDestinationSet && pendingPinpoint && (
+          <View
+            style={[
+              styles.floatingSetBar,
+              {
+                backgroundColor: isDark ? 'rgba(15, 23, 42, 0.96)' : 'rgba(255, 255, 255, 0.97)',
+                borderColor: '#16A34A',
+              },
+            ]}
+          >
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={styles.pulseGreenDot} />
+                <Text style={styles.floatingSetHeader}>Pinpointed Destination</Text>
+              </View>
+              <Text
+                style={[styles.floatingSetTitle, { color: colors.textPrimary }]}
+                numberOfLines={1}
+              >
+                {pendingPinpoint.name || 'Selected Location'}
+              </Text>
+              <Text style={[styles.floatingSetSub, { color: colors.textMuted }]}>
+                ~{pendingPinpoint.distanceKm || roadDistanceKm} km • Tap "Set" to confirm
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.floatingSetBtn}
+              onPress={() => handleConfirmSet()}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons name="check-bold" size={16} color="#FFFFFF" />
+              <Text style={styles.floatingSetBtnText}>Set</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Confirmed Destination Tag */}
+        {isDestinationSet && (
+          <View
+            style={[
+              styles.confirmedDestBar,
+              {
+                backgroundColor: isDark ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.92)',
+                borderColor: '#16A34A60',
+              },
+            ]}
+          >
+            <MaterialCommunityIcons name="check-circle" size={15} color="#16A34A" />
+            <Text style={[styles.confirmedDestText, { color: colors.textPrimary }]} numberOfLines={1}>
+              Destination Set: <Text style={{ fontWeight: '800', color: '#16A34A' }}>{destination.name}</Text>
+            </Text>
+          </View>
+        )}
+
         {/* Floating Custom GPS Access Button (Using Uploaded Avatar Pin Icon) */}
         <TouchableOpacity
           style={styles.floatingGpsBtn}
@@ -836,12 +987,12 @@ const PinpointFareScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.contentPadding}>
-        {/* Tricycle Ordinance Notice */}
+        {/* Solo Ride / Visitor Ordinance Notice */}
         <View style={[styles.ordinanceBanner, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
-          <MaterialCommunityIcons name="moped" size={24} color="#D97706" />
+          <MaterialCommunityIcons name="account-arrow-right" size={24} color="#D97706" />
           <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={[styles.ordinanceTitle, { color: '#92400E' }]}>
-              Dagupan City Tricycle Ordinance Tariff (TFRB)
+              Dagupan City Solo Ride / Visitor Ordinance Tariff (TFRB)
             </Text>
             <Text style={[styles.ordinanceDesc, { color: '#B45309' }]}>
               Base fare ₱15.00 for the first 1.0 km, +₱3.00/km for succeeding distance. Pinpoint anywhere in the city.
@@ -857,7 +1008,7 @@ const PinpointFareScreen = ({ navigation }) => {
                 Road Route & Live Meter
               </Text>
               <Text style={[styles.metricsSubtitle, { color: colors.textMuted }]}>
-                Point-to-point road-aligned distance
+                Point-to-point road-aligned distance for solo ride / visitor
               </Text>
             </View>
             <View style={[styles.routingBadge, { backgroundColor: '#D9770615', borderColor: '#D9770650', borderWidth: 1 }]}>
@@ -934,8 +1085,8 @@ const PinpointFareScreen = ({ navigation }) => {
             onPress={handleStartTracking}
             activeOpacity={0.88}
           >
-            <MaterialCommunityIcons name="moped" size={24} color="#FFFFFF" />
-            <Text style={styles.startRideBtnText}>Start Tricycle Live Tracker</Text>
+            <MaterialCommunityIcons name="navigation-variant" size={24} color="#FFFFFF" />
+            <Text style={styles.startRideBtnText}>Start Solo Ride / Visitor Live Tracker</Text>
           </TouchableOpacity>
         ) : (
           <View style={[styles.activeTrackingCard, { backgroundColor: colors.surface, borderColor: '#D97706' }]}>
@@ -943,7 +1094,7 @@ const PinpointFareScreen = ({ navigation }) => {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <View style={styles.pulseDot} />
                 <Text style={[styles.activeTrackingTitle, { color: colors.textPrimary }]}>
-                  Live Tricycle Meter Active
+                  Live Solo Ride / Visitor Meter Active
                 </Text>
               </View>
               <Text style={[styles.timerText, { color: '#D97706' }]}>
@@ -1034,8 +1185,8 @@ const PinpointFareScreen = ({ navigation }) => {
           onPress={() => {
             navigation.navigate('SubmitComplaint', {
               category: 'overcharging',
-              subject: `Tricycle overcharging to ${destination.name}`,
-              description: `Tricycle driver overcharged for trip from ${origin.name} to ${destination.name} (${effectiveDistanceKm} km). Official Dagupan City tariff is ${formatPeso(computedFare.finalFare)} but driver demanded excess fare.`,
+              subject: `Solo Ride / Visitor overcharging to ${destination.name}`,
+              description: `Driver overcharged for solo ride / visitor trip from ${origin.name} to ${destination.name} (${effectiveDistanceKm} km). Official Dagupan City tariff is ${formatPeso(computedFare.finalFare)} but driver demanded excess fare.`,
             });
           }}
           activeOpacity={0.8}
@@ -1115,6 +1266,82 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#EA580C',
     zIndex: 1100,
+  },
+  floatingSetBar: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    right: 74,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    shadowColor: '#000000',
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 8,
+    zIndex: 1100,
+  },
+  pulseGreenDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#16A34A',
+  },
+  floatingSetHeader: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#16A34A',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  floatingSetTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  floatingSetSub: {
+    fontSize: 10,
+    marginTop: 1,
+  },
+  floatingSetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: RADIUS.md,
+    shadowColor: '#16A34A',
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  floatingSetBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  confirmedDestBar: {
+    position: 'absolute',
+    top: 10,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    zIndex: 1000,
+    maxWidth: '85%',
+  },
+  confirmedDestText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   gpsIconImg: {
     width: 32,

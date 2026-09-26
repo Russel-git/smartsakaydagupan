@@ -30,8 +30,9 @@ const FareMatrixScreen = () => {
   // Group by route
   const grouped = (Array.isArray(matrix) ? matrix : []).reduce((acc, item) => {
     const routeName = item.routeId?.name || 'Unknown';
-    if (!acc[routeName]) acc[routeName] = { traditional: null, modern: null, tricycle: null, distance: item.distanceKm };
-    if (item.vehicleType) acc[routeName][item.vehicleType] = item;
+    if (!acc[routeName]) acc[routeName] = { traditional: null, modern: null, solo_ride: null, distance: item.distanceKm };
+    const vt = (item.vehicleType === 'tricycle' || item.vehicleType === 'solo_ride') ? 'solo_ride' : item.vehicleType;
+    if (vt) acc[routeName][vt] = item;
     return acc;
   }, {});
 
@@ -70,7 +71,7 @@ const FareMatrixScreen = () => {
             </View>
 
             <View style={[styles.baseFareCard, { borderColor: '#10B981' }]}>
-              <Text style={styles.baseFareVehicle}>🛺 Tricycle</Text>
+              <Text style={styles.baseFareVehicle}>🚗 Solo / Visitor</Text>
               <Text style={[styles.baseFareNum, { color: '#059669' }]}>
                 {formatPeso(showDiscounted ? 12 : 15)}
               </Text>
@@ -81,12 +82,12 @@ const FareMatrixScreen = () => {
           </View>
         </View>
 
-        {/* Tricycle Zone & Special Trip Reference Guide */}
+        {/* Solo Ride / Visitor Zone & Reference Guide */}
         <View style={[styles.trikeGuideCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.trikeGuideHeader}>
-            <Text style={{ fontSize: 16 }}>🛺</Text>
+            <Text style={{ fontSize: 16 }}>🚗</Text>
             <Text style={[styles.trikeGuideTitle, { color: colors.textPrimary }]}>
-              Dagupan City Tricycle Tariff & Special Trip Guide
+              Dagupan City Solo Ride / Visitor Tariff & Guide
             </Text>
           </View>
           <Text style={[styles.trikeGuideSub, { color: colors.textSecondary }]}>
@@ -135,7 +136,7 @@ const FareMatrixScreen = () => {
           <Text style={[styles.headerCell, styles.distCell]}>Dist.</Text>
           <Text style={[styles.headerCell, styles.fareCell]}>Trad.</Text>
           <Text style={[styles.headerCell, styles.fareCell]}>Modern</Text>
-          <Text style={[styles.headerCell, styles.fareCell]}>Trike</Text>
+          <Text style={[styles.headerCell, styles.fareCell]}>Solo</Text>
         </View>
 
         {Object.entries(grouped).map(([routeName, data], i) => (
@@ -157,8 +158,8 @@ const FareMatrixScreen = () => {
                 : '—'}
             </Text>
             <Text style={[styles.cell, styles.fareCell, { color: '#059669', fontWeight: '700' }]}>
-              {data.tricycle
-                ? formatPeso(showDiscounted ? data.tricycle.discountedFare : data.tricycle.regularFare)
+              {(data.solo_ride || data.tricycle)
+                ? formatPeso(showDiscounted ? (data.solo_ride || data.tricycle).discountedFare : (data.solo_ride || data.tricycle).regularFare)
                 : '—'}
             </Text>
           </View>

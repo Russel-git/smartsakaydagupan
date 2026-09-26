@@ -16,7 +16,7 @@ const AssistantScreen = () => {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: 'Kumusta! I am your Smart Sakay Dagupan AI Assistant.\n\n• Magtanong tungkol sa ruta ng jeep, signboards, o pamasahe\n• Live weather & tidal flood watch sa kalsada\n• Tricycle fare estimates at commuter rights\n\nSaan po ang inyong sakayan at bababaan?',
+      content: 'Kumusta! I am your Smart Sakay Dagupan AI Assistant.\n\n• Magtanong tungkol sa ruta ng jeep, signboards, o pamasahe\n• Live weather & tidal flood watch sa kalsada\n• Solo ride / visitor fare estimates at commuter rights\n\nSaan po ang inyong sakayan at bababaan?',
       timestamp: new Date(),
     },
   ]);
@@ -26,9 +26,9 @@ const AssistantScreen = () => {
 
   const QUICK_PROMPTS = [
     { label: '🛒 Papunta CSI Lucao', text: 'paano pumunta sa csi lucao? ano sasakyan kong jeep?' },
-    { label: '⚠️ Paano mag-report?', text: 'paano magrereport kapag overcharging o may reklamo sa jeep o tricycle?' },
+    { label: '⚠️ Paano mag-report?', text: 'paano magrereport kapag overcharging o may reklamo sa jeep o solo ride?' },
     { label: '🚌 Bus sa Perez Blvd', text: 'saan papunta kapag sumakay ng bus sa Perez Boulevard?' },
-    { label: '🛺 Tricycle Fares', text: 'magkano pamasahe sa tricycle sa Dagupan City?' },
+    { label: '🚗 Solo Ride Fares', text: 'magkano pamasahe sa solo ride / visitor sa Dagupan City?' },
   ];
 
   const handleSendText = async (textToSend) => {

@@ -269,7 +269,7 @@ const RouteMapScreen = ({ navigation }) => {
       if (!near) {
         showWarning(
           'Outside Route Corridor',
-          `You cannot use the live tracker for "${routeItem.name}" because your current location is not along this jeepney route corridor. Live tracking is strictly restricted to passengers along the route. For door-to-door trips, please use Tricycle Pinpoint.`
+          `You cannot use the live tracker for "${routeItem.name}" because your current location is not along this jeepney route corridor. Live tracking is strictly restricted to passengers along the route. For door-to-door trips, please use Solo Ride / Visitor Pinpoint.`
         );
         return;
       }
@@ -529,10 +529,10 @@ const RouteMapScreen = ({ navigation }) => {
               typeEmoji = '🚐';
               badgeColor = '#10B981';
               badgeLabel = 'JEEPNEY STAGING HUB';
-            } else if (t.type === 'tricycle') {
-              typeEmoji = '🛺';
+            } else if (t.type === 'tricycle' || t.type === 'solo_ride') {
+              typeEmoji = '🚗';
               badgeColor = '#F59E0B';
-              badgeLabel = 'TRICYCLE TODA HUB';
+              badgeLabel = 'SOLO RIDE / TODA HUB';
             } else if (t.type === 'multimodal') {
               typeEmoji = '🏢';
               badgeColor = '#8B5CF6';
@@ -602,7 +602,7 @@ const RouteMapScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Sub-Header Bar: Terminals visible notice + Tricycle Pinpoint action */}
+      {/* Sub-Header Bar: Terminals visible notice + Solo Ride / Visitor action */}
       <View style={[styles.subBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.hubIndicator}>
           <MaterialCommunityIcons name="domain" size={15} color={colors.primary} />
@@ -616,8 +616,8 @@ const RouteMapScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('PinpointFare')}
           activeOpacity={0.8}
         >
-          <MaterialCommunityIcons name="moped" size={15} color="#D97706" />
-          <Text style={styles.tricycleQuickBtnText}>Tricycle Pinpoint</Text>
+          <MaterialCommunityIcons name="account-arrow-right" size={15} color="#D97706" />
+          <Text style={styles.tricycleQuickBtnText}>Solo Ride / Visitor</Text>
           <MaterialCommunityIcons name="chevron-right" size={14} color="#D97706" />
         </TouchableOpacity>
       </View>

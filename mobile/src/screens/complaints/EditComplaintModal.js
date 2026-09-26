@@ -223,7 +223,7 @@ const EditComplaintModal = ({ visible, complaint, onClose, onSuccess }) => {
               ]}
               value={form.vehiclePlateNumber}
               onChangeText={(text) => updateField('vehiclePlateNumber', text.toUpperCase())}
-              placeholder="e.g. ABC 1234 or Dagupan Tricycle #421"
+              placeholder="e.g. ABC 1234 or Dagupan Solo Ride #421"
               placeholderTextColor={colors.textMuted}
               autoCapitalize="characters"
               editable={isEditable}

@@ -129,8 +129,8 @@ const WelcomeScreen = ({ navigation }) => {
                 </View>
 
                 <View style={[styles.floatingFeaturePill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#EED7CC' }]}>
-                  <Text style={styles.pillEmoji}>🛺</Text>
-                  <Text style={[styles.pillLabel, { color: colors.textPrimary }]}>Tricycle Pinpoint</Text>
+                  <Text style={styles.pillEmoji}>🚗</Text>
+                  <Text style={[styles.pillLabel, { color: colors.textPrimary }]}>Solo Ride / Visitor</Text>
                 </View>
 
                 <View style={[styles.floatingFeaturePill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#EED7CC' }]}>
@@ -277,7 +277,7 @@ const WelcomeScreen = ({ navigation }) => {
               <Text style={[styles.titlePrefix, { color: colors.textPrimary }]}>Quick and Reliable</Text>
               <Text style={styles.titleHighlight}>Transit & Ride Tracking</Text>
               <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
-                Use our real-time tracking feature to see exact jeepney corridors, live tricycle meters, and know when you will arrive at your stop.
+                Use our real-time tracking feature to see exact jeepney corridors, live solo ride / visitor meters, and know when you will arrive at your stop.
               </Text>
             </View>
 
@@ -337,8 +337,8 @@ const WelcomeScreen = ({ navigation }) => {
                   resizeMode="cover"
                 />
                 <View style={styles.photoBadgeOverlay}>
-                  <MaterialCommunityIcons name="moped" size={13} color="#FFFFFF" />
-                  <Text style={styles.photoBadgeText}>Dagupan City Tricycles</Text>
+                  <MaterialCommunityIcons name="account-arrow-right" size={13} color="#FFFFFF" />
+                  <Text style={styles.photoBadgeText}>Dagupan Solo Ride / Visitor</Text>
                 </View>
               </View>
             </View>

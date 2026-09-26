@@ -47,7 +47,7 @@ const RideHistoryScreen = ({ navigation }) => {
   };
 
   const renderRideItem = ({ item }) => {
-    const isTricycle = item.vehicleType === 'tricycle';
+    const isSoloRide = item.vehicleType === 'solo_ride' || item.vehicleType === 'tricycle';
     const dateStr = item.timestamp
       ? new Date(item.timestamp).toLocaleDateString('en-US', {
           month: 'short',
@@ -65,18 +65,18 @@ const RideHistoryScreen = ({ navigation }) => {
             <View
               style={[
                 styles.vehicleIconCircle,
-                { backgroundColor: isTricycle ? '#F59E0B20' : colors.primary + '20' },
+                { backgroundColor: isSoloRide ? '#F59E0B20' : colors.primary + '20' },
               ]}
             >
               <MaterialCommunityIcons
-                name={isTricycle ? 'moped' : 'van-passenger'}
+                name={isSoloRide ? 'account-arrow-right' : 'van-passenger'}
                 size={20}
-                color={isTricycle ? '#D97706' : colors.primary}
+                color={isSoloRide ? '#D97706' : colors.primary}
               />
             </View>
             <View>
-              <Text style={[styles.vehicleTypeLabel, { color: isTricycle ? '#D97706' : colors.primary }]}>
-                {isTricycle ? 'TRICYCLE PINPOINT' : item.vehicleType === 'modern' ? 'MODERN PUJ' : 'JEEPNEY ROUTE'}
+              <Text style={[styles.vehicleTypeLabel, { color: isSoloRide ? '#D97706' : colors.primary }]}>
+                {isSoloRide ? 'SOLO RIDE / VISITOR' : item.vehicleType === 'modern' ? 'MODERN PUJ' : 'JEEPNEY ROUTE'}
               </Text>
               <Text style={[styles.rideTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                 {item.routeName || item.destination || 'Dagupan Trip'}
@@ -164,7 +164,7 @@ const RideHistoryScreen = ({ navigation }) => {
           <MaterialCommunityIcons name="history" size={64} color={colors.textMuted} style={{ opacity: 0.5 }} />
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Rides Yet</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            When you complete a Tricycle or Jeepney ride, your official fares, distances, and receipts will be saved here automatically.
+            When you complete a Solo Ride / Visitor or Jeepney ride, your official fares, distances, and receipts will be saved here automatically.
           </Text>
           <TouchableOpacity
             style={[styles.exploreBtn, { backgroundColor: colors.primary }]}

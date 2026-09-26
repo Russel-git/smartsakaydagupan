@@ -207,7 +207,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
       baseFare = 17;
       baseDistanceKm = 4;
       perKmRate = 2.4;
-    } else if (vehicleType === 'tricycle') {
+    } else if (vehicleType === 'solo_ride' || vehicleType === 'tricycle') {
       baseFare = 15;
       baseDistanceKm = 1;
       perKmRate = 3.0;
@@ -254,7 +254,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
       if (!isAlongRoute) {
         showWarning(
           'Outside Jeepney Route Corridor',
-          `You cannot use the live tracker for "${selectedRoute.name}" because your current GPS location is not within this static route corridor. Live tracking in jeepneys requires you to be along the route corridor. For off-corridor trips, please select a Tricycle.`
+          `You cannot use the live tracker for "${selectedRoute.name}" because your current GPS location is not within this static route corridor. Live tracking in jeepneys requires you to be along the route corridor. For off-corridor trips, please select Solo Ride / Visitor.`
         );
         return;
       }
@@ -876,7 +876,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
                                     ? 'Standard open-air jeepney • ₱14.00 base + ₱2.00/km'
                                     : vt.value === 'modern'
                                     ? 'Air-conditioned modern PUV • ₱17.00 base + ₱2.40/km'
-                                    : 'Dagupan Tricycle • ₱15.00 base (1 km) + ₱3.00/km'}
+                                    : 'Dagupan Solo Ride / Visitor • ₱15.00 base (1 km) + ₱3.00/km'}
                                 </Text>
                               </View>
                               {isSel && (

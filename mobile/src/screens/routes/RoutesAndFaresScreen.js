@@ -29,8 +29,10 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
     ? Math.max(insets.top, StatusBar.currentHeight || 28)
     : insets.top;
 
-  // Default tab: 'routes' | 'tricycle' | 'fares'
-  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || 'routes');
+  // Default tab: 'routes' | 'solo_ride' | 'fares'
+  const [activeTab, setActiveTab] = useState(
+    route?.params?.initialTab === 'tricycle' ? 'solo_ride' : route?.params?.initialTab || 'routes'
+  );
   const [fareSubTab, setFareSubTab] = useState('calculator'); // 'calculator' | 'matrix'
   const [historyCount, setHistoryCount] = useState(0);
 
@@ -47,7 +49,7 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     if (route?.params?.initialTab) {
-      setActiveTab(route.params.initialTab);
+      setActiveTab(route.params.initialTab === 'tricycle' ? 'solo_ride' : route.params.initialTab);
     }
   }, [route?.params?.initialTab]);
 
@@ -106,11 +108,11 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
             </Text>
           </TouchableOpacity>
 
-          {/* TAB 2: TRICYCLE PINPOINT */}
+          {/* TAB 2: SOLO RIDE / VISITOR PINPOINT */}
           <TouchableOpacity
             style={[
               styles.segmentBtn,
-              activeTab === 'tricycle' && {
+              (activeTab === 'solo_ride' || activeTab === 'tricycle') && {
                 backgroundColor: '#D97706',
                 shadowColor: '#D97706',
                 shadowOpacity: 0.25,
@@ -118,24 +120,24 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
                 elevation: 2,
               },
             ]}
-            onPress={() => setActiveTab('tricycle')}
+            onPress={() => setActiveTab('solo_ride')}
             activeOpacity={0.8}
           >
             <MaterialCommunityIcons
-              name="moped"
+              name="account-arrow-right"
               size={16}
-              color={activeTab === 'tricycle' ? '#FFFFFF' : colors.textSecondary}
+              color={(activeTab === 'solo_ride' || activeTab === 'tricycle') ? '#FFFFFF' : colors.textSecondary}
             />
             <Text
               style={[
                 styles.segmentText,
-                { color: activeTab === 'tricycle' ? '#FFFFFF' : colors.textSecondary },
+                { color: (activeTab === 'solo_ride' || activeTab === 'tricycle') ? '#FFFFFF' : colors.textSecondary },
               ]}
               numberOfLines={1}
               adjustsFontSizeToFit
-              minimumFontScale={0.8}
+              minimumFontScale={0.75}
             >
-              Tricycle
+              Solo / Visitor
             </Text>
           </TouchableOpacity>
 
@@ -197,7 +199,7 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
           <RouteMapScreen navigation={navigation} />
         )}
 
-        {activeTab === 'tricycle' && (
+        {(activeTab === 'solo_ride' || activeTab === 'tricycle') && (
           <PinpointFareScreen navigation={navigation} />
         )}
 

@@ -187,8 +187,8 @@ const HomeMapWidget = ({ navigation, height = 240 }) => {
 
   /* ---- Terminal pins ---- */
   var terminals = ${terminalsJson};
-  var typeEmojis = {bus:'🚌',jeepney:'🚐',tricycle:'🛺',multimodal:'🏢'};
-  var typeColors = {bus:'#3b82f6',jeepney:'#22c55e',tricycle:'#f59e0b',multimodal:'#8B5CF6'};
+  var typeEmojis = {bus:'🚌',jeepney:'🚐',solo_ride:'🚗',tricycle:'🚗',multimodal:'🏢'};
+  var typeColors = {bus:'#3b82f6',jeepney:'#22c55e',solo_ride:'#f59e0b',tricycle:'#f59e0b',multimodal:'#8B5CF6'};
   terminals.forEach(function(t){
     if(!t.lat||!t.lng) return;
     var em = typeEmojis[t.type]||'📍';

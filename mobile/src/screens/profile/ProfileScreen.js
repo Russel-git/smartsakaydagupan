@@ -145,7 +145,7 @@ const ProfileScreen = ({ navigation }) => {
             <MaterialCommunityIcons name="history" size={22} color={colors.primary} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.linkText, { color: colors.textPrimary }]}>My Ride History</Text>
-              <Text style={{ fontSize: 11, color: colors.textMuted }}>View completed jeepney and tricycle trips & receipts</Text>
+              <Text style={{ fontSize: 11, color: colors.textMuted }}>View completed jeepney and solo ride / visitor trips & receipts</Text>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textMuted} />
           </TouchableOpacity>

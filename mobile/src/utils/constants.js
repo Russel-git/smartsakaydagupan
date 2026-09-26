@@ -175,7 +175,7 @@ export const COMPLAINT_STATUS = {
 export const VEHICLE_TYPES = [
   { value: 'traditional', label: 'Traditional Jeepney', icon: 'bus' },
   { value: 'modern', label: 'Modern Jeepney', icon: 'bus-articulated-front' },
-  { value: 'tricycle', label: 'Dagupan Tricycle', icon: 'rickshaw' },
+  { value: 'solo_ride', label: 'Solo Ride / Visitor', icon: 'account-arrow-right' },
 ];
 
 export const DISCOUNT_TYPES = [
