@@ -23,6 +23,7 @@ import RouteDetailScreen from '../screens/map/RouteDetailScreen';
 import FareMatrixScreen from '../screens/fare/FareMatrixScreen';
 import PinpointFareScreen from '../screens/fare/PinpointFareScreen';
 import RideTrackerScreen from '../screens/ride/RideTrackerScreen';
+import RideHistoryScreen from '../screens/ride/RideHistoryScreen';
 import AssistantScreen from '../screens/assistant/AssistantScreen';
 import WeatherScreen from '../screens/weather/WeatherScreen';
 import ComplaintsListScreen from '../screens/complaints/ComplaintsListScreen';
@@ -73,14 +74,9 @@ const RoutesAndFaresStack = () => (
     <Stack.Screen name="RoutesAndFaresMain" component={RoutesAndFaresScreen} />
     <Stack.Screen name="RouteDetail" component={RouteDetailScreen} options={{ headerShown: true, title: 'Route Details' }} />
     <Stack.Screen name="FareMatrix" component={FareMatrixScreen} options={{ headerShown: true, title: 'Fare Matrix' }} />
-  </Stack.Navigator>
-);
-
-// Live Ride Tracker Stack
-const RideStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="RideTracker" component={RideTrackerScreen} />
-    <Stack.Screen name="PinpointFare" component={PinpointFareScreen} options={{ headerShown: true, title: 'Pinpoint Trip & Fair Fare' }} />
+    <Stack.Screen name="RideHistory" component={RideHistoryScreen} options={{ headerShown: true, title: 'Ride History' }} />
+    <Stack.Screen name="RideTracker" component={RideTrackerScreen} options={{ headerShown: true, title: 'Jeepney Live Tracker' }} />
+    <Stack.Screen name="PinpointFare" component={PinpointFareScreen} options={{ headerShown: true, title: 'Tricycle Pinpoint' }} />
   </Stack.Navigator>
 );
 
@@ -88,6 +84,7 @@ const RideStack = () => (
 const MoreStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Profile" component={ProfileScreen} />
+    <Stack.Screen name="RideHistory" component={RideHistoryScreen} options={{ headerShown: true, title: 'Ride History' }} />
     <Stack.Screen name="ComplaintsList" component={ComplaintsListScreen} options={{ headerShown: true, title: 'My Complaints' }} />
     <Stack.Screen name="SubmitComplaint" component={SubmitComplaintScreen} options={{ headerShown: true, title: 'Report Complaint' }} />
     <Stack.Screen name="ComplaintDetail" component={ComplaintDetailScreen} options={{ headerShown: true, title: 'Complaint Details' }} />
@@ -120,7 +117,6 @@ const GuestTabs = () => {
           const icons = {
             Home: 'home',
             RoutesAndFares: 'map-marker-radius',
-            Ride: 'steering',
             Assistant: 'robot',
             Account: 'account-outline',
           };
@@ -133,11 +129,6 @@ const GuestTabs = () => {
         name="RoutesAndFares"
         component={RoutesAndFaresStack}
         options={{ title: 'Routes & Fares' }}
-      />
-      <Tab.Screen
-        name="Ride"
-        component={RideStack}
-        options={{ title: 'Ride' }}
       />
       <Tab.Screen name="Assistant" component={AssistantScreen} />
       <Tab.Screen name="Account" component={GuestProfileScreen} />
@@ -168,7 +159,6 @@ const MainTabs = () => {
           const icons = {
             Home: 'home',
             RoutesAndFares: 'map-marker-radius',
-            Ride: 'steering',
             Assistant: 'robot',
             More: 'menu',
           };
@@ -186,11 +176,6 @@ const MainTabs = () => {
         name="RoutesAndFares"
         component={RoutesAndFaresStack}
         options={{ title: 'Routes & Fares' }}
-      />
-      <Tab.Screen
-        name="Ride"
-        component={RideStack}
-        options={{ title: 'Ride' }}
       />
       <Tab.Screen name="Assistant" component={AssistantScreen} />
       <Tab.Screen name="More" component={MoreStack} />

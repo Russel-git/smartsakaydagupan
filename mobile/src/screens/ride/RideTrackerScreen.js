@@ -41,6 +41,21 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
+// Check if commuter location is along a static route corridor (within threshold km)
+const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.45) => {
+  if (!routePath || !Array.isArray(routePath) || routePath.length === 0) return true;
+  for (let i = 0; i < routePath.length; i++) {
+    const p = routePath[i];
+    const rLat = Array.isArray(p) ? p[0] : p.lat;
+    const rLng = Array.isArray(p) ? p[1] : p.lng;
+    if (rLat && rLng) {
+      const d = calculateDistanceKm(ptLat, ptLng, rLat, rLng);
+      if (d !== null && d <= thresholdKm) return true;
+    }
+  }
+  return false;
+};
+
 const RideTrackerScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
   const { isGuest } = useAuth();
@@ -58,8 +73,8 @@ const RideTrackerScreen = ({ route, navigation }) => {
   });
   const webViewRef = useRef(null);
 
-  // View Tab: 'pinpoint' | 'tracker' | 'history'
-  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || 'pinpoint');
+  // View Tab: 'tracker' | 'history'
+  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || 'tracker');
   const [rideHistory, setRideHistory] = useState([]);
 
   useEffect(() => {
@@ -233,6 +248,18 @@ const RideTrackerScreen = ({ route, navigation }) => {
       return;
     }
 
+    // Geofence corridor check: commute must be along selected Jeepney route corridor
+    if (selectedRoute?.path && Array.isArray(selectedRoute.path) && selectedRoute.path.length > 0) {
+      const isAlongRoute = isPointNearRoute(currentLocation.lat, currentLocation.lng, selectedRoute.path, 0.45);
+      if (!isAlongRoute) {
+        showWarning(
+          'Outside Jeepney Route Corridor',
+          `You cannot use the live tracker for "${selectedRoute.name}" because your current GPS location is not within this static route corridor. Live tracking in jeepneys requires you to be along the route corridor. For off-corridor trips, please select a Tricycle.`
+        );
+        return;
+      }
+    }
+
     setStartLocation(currentLocation);
     lastLocationRef.current = currentLocation;
     setDistanceTraveledKm(0);
@@ -363,7 +390,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
     const updated = await saveRideToHistory(completedRide);
     if (updated) setRideHistory(updated);
     showSuccess(
-      'Ride Completed!',
+      "You've successfully arrived!",
       `Official fare calculated: ₱${liveFareData.finalFare}. Saved to ride history.`
     );
   };
@@ -587,29 +614,6 @@ const RideTrackerScreen = ({ route, navigation }) => {
         <TouchableOpacity
           style={[
             styles.tabItem,
-            activeTab === 'pinpoint' && { borderBottomColor: colors.primary, borderBottomWidth: 3 },
-          ]}
-          onPress={() => setActiveTab('pinpoint')}
-        >
-          <MaterialCommunityIcons
-            name="crosshairs-gps"
-            size={18}
-            color={activeTab === 'pinpoint' ? colors.primary : colors.textSecondary}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              { color: activeTab === 'pinpoint' ? colors.primary : colors.textSecondary },
-              activeTab === 'pinpoint' && { fontWeight: '700' },
-            ]}
-          >
-            Pinpoint Trip
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.tabItem,
             activeTab === 'tracker' && { borderBottomColor: colors.primary, borderBottomWidth: 3 },
           ]}
           onPress={() => setActiveTab('tracker')}
@@ -626,7 +630,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
               activeTab === 'tracker' && { fontWeight: '700' },
             ]}
           >
-            Live Tracker
+            Live Jeepney Tracker
           </Text>
         </TouchableOpacity>
 
@@ -656,18 +660,6 @@ const RideTrackerScreen = ({ route, navigation }) => {
           </Text>
         </TouchableOpacity>
       </View>
-
-      {/* TAB 0: PINPOINT TRIP & FAIR FARE */}
-      {activeTab === 'pinpoint' && (
-        <PinpointFareScreen
-          navigation={navigation}
-          onStartRide={({ route: matchedRoute, vehicleType: vType }) => {
-            if (matchedRoute) setSelectedRoute(matchedRoute);
-            if (vType) setVehicleType(vType);
-            setActiveTab('tracker');
-          }}
-        />
-      )}
 
       {/* TAB 1: LIVE TRACKER VIEW */}
       {activeTab === 'tracker' && (
@@ -1063,7 +1055,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
                   <View style={styles.completedHeader}>
                     <MaterialCommunityIcons name="check-decagram" size={32} color="#16A34A" />
                     <Text style={[styles.completedTitle, { color: colors.textPrimary }]}>
-                      Ride Summary & Receipt
+                      You've successfully arrived!
                     </Text>
                   </View>
 

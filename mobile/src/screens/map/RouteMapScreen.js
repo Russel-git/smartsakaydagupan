@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useFeedback } from '../../contexts/FeedbackContext';
 import { Card, LoadingSpinner } from '../../components/common/SharedComponents';
 import { routesAPI } from '../../api/services';
 import { FONTS, SPACING, RADIUS } from '../../utils/constants';
@@ -26,8 +27,24 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   return Math.round(R * c * 10) / 10;
 };
 
+// Check if commuter location is near any point on a static route path
+const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.45) => {
+  if (!routePath || !Array.isArray(routePath) || routePath.length === 0) return true;
+  for (let i = 0; i < routePath.length; i++) {
+    const p = routePath[i];
+    const rLat = Array.isArray(p) ? p[0] : p.lat;
+    const rLng = Array.isArray(p) ? p[1] : p.lng;
+    if (rLat && rLng) {
+      const d = calculateDistanceKm(ptLat, ptLng, rLat, rLng);
+      if (d !== null && d <= thresholdKm) return true;
+    }
+  }
+  return false;
+};
+
 const RouteMapScreen = ({ navigation }) => {
   const { colors } = useTheme();
+  const { showWarning } = useFeedback();
   const webViewRef = useRef(null);
   const [routes, setRoutes] = useState([]);
   const [busTerminals, setBusTerminals] = useState([]);
@@ -205,6 +222,28 @@ const RouteMapScreen = ({ navigation }) => {
   // Trigger re-centering on commuter location
   const handleRecenter = () => {
     setRecenterCount((c) => c + 1);
+  };
+
+  // Launch Live Tracker with route corridor geofence validation
+  const handleTrackJeepney = (routeItem) => {
+    if (!routeItem) return;
+
+    // Check if commuter location is along the static route corridor
+    if (routeItem.path && Array.isArray(routeItem.path) && routeItem.path.length > 0) {
+      const near = isPointNearRoute(commuterLocation.lat, commuterLocation.lng, routeItem.path, 0.45);
+      if (!near) {
+        showWarning(
+          'Outside Route Corridor',
+          `You cannot use the live tracker for "${routeItem.name}" because your current location is not along this jeepney route corridor. Live tracking is strictly restricted to passengers along the route. For door-to-door trips, please use Tricycle Pinpoint.`
+        );
+        return;
+      }
+    }
+
+    navigation.navigate('RideTracker', {
+      selectedRoute: routeItem,
+      initialTab: 'tracker',
+    });
   };
 
   // Generate HTML for the embedded Leaflet Map
@@ -486,77 +525,57 @@ const RouteMapScreen = ({ navigation }) => {
             }
           }
 
-          // 4. Render Dagupan Transit Terminals & Hubs
-          if (activeTab === 'buses') {
-            if (busTerminals.length === 0) {
-              var emptyNotice = L.control({ position: 'topright' });
-              emptyNotice.onAdd = function() {
-                var div = L.DomUtil.create('div', 'empty-terminals-notice');
-                div.style.background = 'rgba(15, 23, 42, 0.92)';
-                div.style.border = '1px solid rgba(56, 189, 248, 0.3)';
-                div.style.color = '#94a3b8';
-                div.style.padding = '8px 12px';
-                div.style.borderRadius = '8px';
-                div.style.fontSize = '11px';
-                div.style.maxWidth = '220px';
-                div.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
-                div.innerHTML = '📍 <strong>No Terminals Set Yet</strong><br/>Terminals pinpointed by the admin will display here.';
-                return div;
-              };
-              emptyNotice.addTo(map);
+          // 4. Render Dagupan Transit Terminals & Hubs directly on Jeepney Routes map
+          busTerminals.forEach(function(t) {
+            var typeEmoji = '🚌';
+            var badgeColor = '#3B82F6';
+            var badgeLabel = 'BUS TERMINAL';
+            if (t.type === 'jeepney') {
+              typeEmoji = '🚐';
+              badgeColor = '#10B981';
+              badgeLabel = 'JEEPNEY STAGING HUB';
+            } else if (t.type === 'tricycle') {
+              typeEmoji = '🛺';
+              badgeColor = '#F59E0B';
+              badgeLabel = 'TRICYCLE TODA HUB';
+            } else if (t.type === 'multimodal') {
+              typeEmoji = '🏢';
+              badgeColor = '#8B5CF6';
+              badgeLabel = 'MULTIMODAL TRANSIT HUB';
             }
 
-            busTerminals.forEach(function(t) {
-              var typeEmoji = '🚌';
-              var badgeColor = '#3B82F6';
-              var badgeLabel = 'BUS TERMINAL';
-              if (t.type === 'jeepney') {
-                typeEmoji = '🚐';
-                badgeColor = '#10B981';
-                badgeLabel = 'JEEPNEY STAGING HUB';
-              } else if (t.type === 'tricycle') {
-                typeEmoji = '🛺';
-                badgeColor = '#F59E0B';
-                badgeLabel = 'TRICYCLE TODA HUB';
-              } else if (t.type === 'multimodal') {
-                typeEmoji = '🏢';
-                badgeColor = '#8B5CF6';
-                badgeLabel = 'MULTIMODAL TRANSIT HUB';
-              }
-
-              var termIcon = L.divIcon({
-                className: 'terminal-pin',
-                html: '<div style="background:' + badgeColor + '; color:white; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; border:2px solid white; box-shadow:0 3px 8px rgba(0,0,0,0.4);">' + typeEmoji + '</div>',
-                iconSize: [32, 32],
-                iconAnchor: [16, 16]
-              });
-
-              var distHtml = (t.distanceKm !== undefined && t.distanceKm !== null)
-                ? '<div style="font-size:11px; color:' + badgeColor + '; font-weight:700; margin-top:3px;">📍 ' + t.distanceKm + ' km from your current location</div>'
-                : '';
-              var destHtml = (t.destinations && t.destinations.length > 0)
-                ? '<div style="font-size:11px; color:#475569; margin-top:3px;"><strong>Routes:</strong> ' + t.destinations.slice(0, 4).join(', ') + '</div>'
-                : '';
-              var contactHtml = t.contactNumber
-                ? '<div style="font-size:11px; margin-top:3px; color:#16a34a; font-weight:600;">📞 ' + t.contactNumber + '</div>'
-                : '';
-
-              L.marker([t.lat, t.lng], { icon: termIcon })
-                .bindPopup(
-                  '<div style="font-family:-apple-system, BlinkMacSystemFont, sans-serif; min-width: 210px;">' +
-                  '<div style="background:' + badgeColor + '; color:white; padding:2px 7px; border-radius:3px; font-size:9px; font-weight:800; display:inline-block; letter-spacing:0.5px;">' + badgeLabel + '</div>' +
-                  '<h4 style="margin:5px 0 2px 0; font-size:14px; color:#0f172a;">' + t.name + '</h4>' +
-                  (t.company ? '<div style="font-size:11px; color:#64748b; font-weight:600;">' + t.company + '</div>' : '') +
-                  '<div style="font-size:11px; color:#334155; margin-top:3px;">📍 ' + t.address + '</div>' +
-                  '<div style="font-size:11px; color:#64748b; margin-top:2px;">🕒 ' + (t.operatingHours || '24/7') + '</div>' +
-                  distHtml +
-                  contactHtml +
-                  destHtml +
-                  '</div>'
-                )
-                .addTo(map);
+            var termIcon = L.divIcon({
+              className: 'terminal-pin',
+              html: '<div style="background:' + badgeColor + '; color:white; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; border:2px solid white; box-shadow:0 3px 8px rgba(0,0,0,0.4);">' + typeEmoji + '</div>',
+              iconSize: [28, 28],
+              iconAnchor: [14, 14]
             });
-          }
+
+            var distHtml = (t.distanceKm !== undefined && t.distanceKm !== null)
+              ? '<div style="font-size:11px; color:' + badgeColor + '; font-weight:700; margin-top:3px;">📍 ' + t.distanceKm + ' km from your current location</div>'
+              : '';
+            var destHtml = (t.destinations && t.destinations.length > 0)
+              ? '<div style="font-size:11px; color:#475569; margin-top:3px;"><strong>Routes:</strong> ' + t.destinations.slice(0, 4).join(', ') + '</div>'
+              : '';
+            var contactHtml = t.contactNumber
+              ? '<div style="font-size:11px; margin-top:3px; color:#16a34a; font-weight:600;">📞 ' + t.contactNumber + '</div>'
+              : '';
+
+            L.marker([t.lat, t.lng], { icon: termIcon })
+              .bindPopup(
+                '<div style="font-family:-apple-system, BlinkMacSystemFont, sans-serif; min-width: 210px;">' +
+                '<div style="background:' + badgeColor + '; color:white; padding:2px 7px; border-radius:3px; font-size:9px; font-weight:800; display:inline-block; letter-spacing:0.5px;">' + badgeLabel + '</div>' +
+                '<h4 style="margin:5px 0 2px 0; font-size:14px; color:#0f172a;">' + t.name + '</h4>' +
+                (t.company ? '<div style="font-size:11px; color:#64748b; font-weight:600;">' + t.company + '</div>' : '') +
+                '<div style="font-size:11px; color:#334155; margin-top:3px;">📍 ' + t.address + '</div>' +
+                '<div style="font-size:11px; color:#64748b; margin-top:2px;">🕒 ' + (t.operatingHours || '24/7') + '</div>' +
+                distHtml +
+                contactHtml +
+                destHtml +
+                '</div>'
+              )
+              .addTo(map);
+          });
         </script>
       </body>
       </html>
@@ -588,34 +607,23 @@ const RouteMapScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Primary Switcher: Jeepney Routes vs Transport Terminals */}
-      <View style={[styles.tabSwitcher, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'jeepneys' && { backgroundColor: colors.primary }]}
-          onPress={() => { setActiveTab('jeepneys'); setSelectedItem(null); }}
-        >
-          <MaterialCommunityIcons 
-            name="van-passenger" 
-            size={18} 
-            color={activeTab === 'jeepneys' ? '#ffffff' : colors.textSecondary} 
-          />
-          <Text style={[styles.tabBtnText, { color: activeTab === 'jeepneys' ? '#ffffff' : colors.textSecondary }]}>
-            Jeepney Routes ({routes.length})
+      {/* Sub-Header Bar: Terminals visible notice + Tricycle Pinpoint action */}
+      <View style={[styles.subBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View style={styles.hubIndicator}>
+          <MaterialCommunityIcons name="map-marker-multiple" size={15} color={colors.primary} />
+          <Text style={[styles.hubIndicatorText, { color: colors.textSecondary }]}>
+            Terminals & Hubs visible on map
           </Text>
-        </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'buses' && { backgroundColor: colors.primary }]}
-          onPress={() => { setActiveTab('buses'); setSelectedItem(null); }}
+          style={[styles.tricycleQuickBtn, { backgroundColor: '#F59E0B15', borderColor: '#F59E0B40' }]}
+          onPress={() => navigation.navigate('PinpointFare')}
+          activeOpacity={0.8}
         >
-          <MaterialCommunityIcons 
-            name="domain" 
-            size={18} 
-            color={activeTab === 'buses' ? '#ffffff' : colors.textSecondary} 
-          />
-          <Text style={[styles.tabBtnText, { color: activeTab === 'buses' ? '#ffffff' : colors.textSecondary }]}>
-            Terminals & Hubs ({busTerminals.length})
-          </Text>
+          <MaterialCommunityIcons name="moped" size={15} color="#D97706" />
+          <Text style={styles.tricycleQuickBtnText}>Tricycle Pinpoint</Text>
+          <MaterialCommunityIcons name="chevron-right" size={14} color="#D97706" />
         </TouchableOpacity>
       </View>
 
@@ -663,206 +671,127 @@ const RouteMapScreen = ({ navigation }) => {
       </View>
 
       {/* Category Filter for Jeepney Routes */}
-      {activeTab === 'jeepneys' && (
-        <View style={styles.filterRow}>
-          {['all', 'city', 'intercity'].map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: selectedCategory === cat ? colors.primary : colors.surface,
-                  borderColor: selectedCategory === cat ? colors.primary : colors.border,
-                },
-              ]}
-              onPress={() => setSelectedCategory(cat)}
+      <View style={styles.filterRow}>
+        {['all', 'city', 'intercity'].map((cat) => (
+          <TouchableOpacity
+            key={cat}
+            style={[
+              styles.filterChip,
+              {
+                backgroundColor: selectedCategory === cat ? colors.primary : colors.surface,
+                borderColor: selectedCategory === cat ? colors.primary : colors.border,
+              },
+            ]}
+            onPress={() => setSelectedCategory(cat)}
+          >
+            <Text
+              style={{
+                color: selectedCategory === cat ? '#FFFFFF' : colors.textPrimary,
+                fontWeight: '600',
+                fontSize: FONTS.sizes.xs,
+                textTransform: 'capitalize',
+              }}
             >
-              <Text
-                style={{
-                  color: selectedCategory === cat ? '#FFFFFF' : colors.textPrimary,
-                  fontWeight: '600',
-                  fontSize: FONTS.sizes.xs,
-                  textTransform: 'capitalize',
-                }}
+              {cat === 'all' ? 'All Static Routes' : `${cat} Corridors`}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Content List: Static Jeepney Corridors */}
+      <FlatList
+        data={filteredRoutes}
+        keyExtractor={(item) => item._id}
+        contentContainerStyle={styles.listContent}
+        renderItem={({ item }) => {
+          const isSelected = selectedItem?._id === item._id;
+          const hasGpxPath = item.path && item.path.length > 0;
+
+          return (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setSelectedItem(isSelected ? null : item)}
+            >
+              <Card
+                style={[
+                  styles.itemCard,
+                  isSelected && { borderColor: colors.primary, borderWidth: 2 },
+                ]}
               >
-                {cat === 'all' ? 'All Static Routes' : `${cat} Corridors`}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      {/* Content List: Static Jeepney Corridors OR Bus Terminals */}
-      {activeTab === 'jeepneys' ? (
-        <FlatList
-          data={filteredRoutes}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => {
-            const isSelected = selectedItem?._id === item._id;
-            const hasGpxPath = item.path && item.path.length > 0;
-
-            return (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setSelectedItem(isSelected ? null : item)}
-              >
-                <Card
-                  style={[
-                    styles.itemCard,
-                    isSelected && { borderColor: colors.primary, borderWidth: 2 },
-                  ]}
-                >
-                  <View style={styles.cardHeader}>
-                    <View style={[styles.categoryBadge, { backgroundColor: item.category === 'city' ? '#DBEAFE' : '#FEF3C7' }]}>
-                      <Text style={{ color: item.category === 'city' ? '#2563EB' : '#D97706', fontSize: FONTS.sizes.xs, fontWeight: '700' }}>
-                        {item.category.toUpperCase()} JEEPNEY • {item.isLoop !== false ? 'LOOP' : 'CORRIDOR'}
-                      </Text>
-                    </View>
-                    <Text style={[styles.distanceBadge, { color: colors.textMuted }]}>~{item.distanceKm} km</Text>
-                  </View>
-
-                  <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{item.name}</Text>
-
-                  {/* Static Route Corridor */}
-                  <View style={styles.corridorContainer}>
-                    <MaterialCommunityIcons name="transit-connection-variant" size={16} color={colors.primary} />
-                    <Text style={[styles.corridorText, { color: colors.textSecondary }]} numberOfLines={2}>
-                      {item.corridor || item.description || 'Static Dagupan transit corridor'}
-                    </Text>
-                  </View>
-
-                  {/* Footer with badges and View Details */}
-                  <View style={styles.cardFooterRow}>
-                    <View style={styles.metaBadge}>
-                      <MaterialCommunityIcons name="clock-outline" size={13} color={colors.textMuted} />
-                      <Text style={[styles.metaBadgeText, { color: colors.textMuted }]}>
-                        {item.operatingHours?.start || '04:00'} - {item.operatingHours?.end || '21:00'}
-                      </Text>
-                    </View>
-
-                    {hasGpxPath && (
-                      <View style={[styles.metaBadge, { backgroundColor: '#ECFDF5' }]}>
-                        <MaterialCommunityIcons name="map-marker-path" size={13} color="#10B981" />
-                        <Text style={[styles.metaBadgeText, { color: '#059669', fontWeight: '700' }]}>
-                          GPX Track Active
-                        </Text>
-                      </View>
-                    )}
-
-                    <TouchableOpacity
-                      style={styles.detailBtn}
-                      onPress={() => navigation.navigate('RouteDetail', { route: item })}
-                    >
-                      <Text style={[styles.detailBtnText, { color: colors.primary }]}>Details</Text>
-                      <MaterialCommunityIcons name="chevron-right" size={16} color={colors.primary} />
-                    </TouchableOpacity>
-                  </View>
-                </Card>
-              </TouchableOpacity>
-            );
-          }}
-        />
-      ) : (
-        <FlatList
-          data={terminalsWithLiveDistance}
-          keyExtractor={(item) => item._id || item.id || Math.random().toString()}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => {
-            const isBus = item.type === 'bus' || !item.type;
-            const isJeepney = item.type === 'jeepney';
-            const isTricycle = item.type === 'tricycle';
-            const isMultimodal = item.type === 'multimodal';
-
-            let typeColor = '#3B82F6';
-            let typeBadgeBg = '#DBEAFE';
-            let typeLabel = 'PROVINCIAL BUS TERMINAL';
-            if (isJeepney) {
-              typeColor = '#10B981';
-              typeBadgeBg = '#D1FAE5';
-              typeLabel = 'JEEPNEY STAGING HUB';
-            } else if (isTricycle) {
-              typeColor = '#F59E0B';
-              typeBadgeBg = '#FEF3C7';
-              typeLabel = 'TRICYCLE TODA TERMINAL';
-            } else if (isMultimodal) {
-              typeColor = '#8B5CF6';
-              typeBadgeBg = '#EDE9FE';
-              typeLabel = 'MULTIMODAL TRANSIT HUB';
-            }
-
-            return (
-              <Card style={[styles.itemCard, { borderLeftWidth: 4, borderLeftColor: typeColor }]}>
                 <View style={styles.cardHeader}>
-                  <View style={[styles.categoryBadge, { backgroundColor: typeBadgeBg }]}>
-                    <Text style={{ color: typeColor, fontSize: FONTS.sizes.xs, fontWeight: '700' }}>
-                      {typeLabel}
+                  <View style={[styles.categoryBadge, { backgroundColor: item.category === 'city' ? '#DBEAFE' : '#FEF3C7' }]}>
+                    <Text style={{ color: item.category === 'city' ? '#2563EB' : '#D97706', fontSize: FONTS.sizes.xs, fontWeight: '700' }}>
+                      {item.category.toUpperCase()} JEEPNEY • {item.isLoop !== false ? 'LOOP' : 'CORRIDOR'}
                     </Text>
                   </View>
-                  {item.distanceKm !== undefined && item.distanceKm !== null && (
-                    <Text style={[styles.distanceBadge, { color: typeColor, fontWeight: '700' }]}>
-                      {item.distanceKm} km from you
-                    </Text>
-                  )}
+                  <Text style={[styles.distanceBadge, { color: colors.textMuted }]}>~{item.distanceKm} km</Text>
                 </View>
 
                 <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{item.name}</Text>
-                {item.company ? (
-                  <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: -3, marginBottom: 4, fontWeight: '600' }}>
-                    {item.company}
-                  </Text>
-                ) : null}
-                <Text style={[styles.terminalAddress, { color: colors.textSecondary }]}>
-                  📍 {item.address}
-                </Text>
 
-                <View style={styles.terminalMetaRow}>
-                  <Text style={[styles.terminalMetaText, { color: colors.textMuted }]}>
-                    🕒 {item.operatingHours || '24/7'}
+                {/* Static Route Corridor */}
+                <View style={styles.corridorContainer}>
+                  <MaterialCommunityIcons name="transit-connection-variant" size={16} color={colors.primary} />
+                  <Text style={[styles.corridorText, { color: colors.textSecondary }]} numberOfLines={2}>
+                    {item.corridor || item.description || 'Static Dagupan transit corridor'}
                   </Text>
-                  {item.contactNumber ? (
-                    <Text style={[styles.terminalMetaText, { color: colors.primary, fontWeight: '600' }]}>
-                      📞 {item.contactNumber}
-                    </Text>
-                  ) : null}
                 </View>
 
-                {item.destinations && item.destinations.length > 0 && (
-                  <View style={styles.destinationsBox}>
-                    <Text style={[styles.destinationsLabel, { color: colors.textMuted }]}>
-                      {isBus ? 'Major Bus Destinations:' : 'Connecting Routes / Areas:'}
-                    </Text>
-                    <Text style={[styles.destinationsText, { color: colors.textPrimary }]}>
-                      {item.destinations.join(' • ')}
+                {/* Badges Row */}
+                <View style={styles.metaRow}>
+                  <View style={styles.metaBadge}>
+                    <MaterialCommunityIcons name="clock-outline" size={13} color={colors.textMuted} />
+                    <Text style={[styles.metaBadgeText, { color: colors.textMuted }]}>
+                      {item.operatingHours?.start || '04:00'} - {item.operatingHours?.end || '21:00'}
                     </Text>
                   </View>
-                )}
 
-                {item.amenities && item.amenities.length > 0 && (
-                  <View style={styles.amenitiesRow}>
-                    {item.amenities.slice(0, 3).map((amenity, idx) => (
-                      <View key={idx} style={[styles.amenityChip, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                        <Text style={[styles.amenityText, { color: colors.textSecondary }]}>✓ {amenity}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
+                  {hasGpxPath && (
+                    <View style={[styles.metaBadge, { backgroundColor: '#ECFDF5' }]}>
+                      <MaterialCommunityIcons name="map-marker-path" size={13} color="#10B981" />
+                      <Text style={[styles.metaBadgeText, { color: '#059669', fontWeight: '700' }]}>
+                        GPX Track Active
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Card Actions: Track Jeepney (with geofence check) & View Details */}
+                <View style={styles.cardActionsRow}>
+                  <TouchableOpacity
+                    style={[styles.trackBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => handleTrackJeepney(item)}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialCommunityIcons name="crosshairs-gps" size={15} color="#FFFFFF" />
+                    <Text style={styles.trackBtnText}>Track Jeepney</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.detailBtn, { borderColor: colors.border }]}
+                    onPress={() => navigation.navigate('RouteDetail', { route: item })}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.detailBtnText, { color: colors.primary }]}>Details</Text>
+                    <MaterialCommunityIcons name="chevron-right" size={15} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
               </Card>
-            );
-          }}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48, paddingHorizontal: 24 }}>
-              <MaterialCommunityIcons name="map-marker-radius-outline" size={48} color={colors.textMuted} style={{ marginBottom: 12, opacity: 0.6 }} />
-              <Text style={{ fontSize: FONTS.sizes.md, fontWeight: '700', color: colors.textPrimary, textAlign: 'center', marginBottom: 6 }}>
-                No Terminals Added Yet
-              </Text>
-              <Text style={{ fontSize: FONTS.sizes.xs, color: colors.textMuted, textAlign: 'center', lineHeight: 18, maxWidth: 300 }}>
-                Terminals pinpointed and set by the administrator will immediately display here and on the live Dagupan commuter map.
-              </Text>
-            </View>
-          }
-        />
-      )}
+            </TouchableOpacity>
+          );
+        }}
+        ListEmptyComponent={
+          <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48, paddingHorizontal: 24 }}>
+            <MaterialCommunityIcons name="van-passenger" size={48} color={colors.textMuted} style={{ marginBottom: 12, opacity: 0.6 }} />
+            <Text style={{ fontSize: FONTS.sizes.md, fontWeight: '700', color: colors.textPrimary, textAlign: 'center', marginBottom: 6 }}>
+              No Routes Found
+            </Text>
+            <Text style={{ fontSize: FONTS.sizes.xs, color: colors.textMuted, textAlign: 'center', lineHeight: 18, maxWidth: 300 }}>
+              No jeepney routes match this filter category in Dagupan City.
+            </Text>
+          </View>
+        }
+      />
     </View>
   );
 };
@@ -892,27 +821,37 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(56, 189, 248, 0.25)',
   },
   recenterHeaderText: { fontSize: FONTS.sizes.xs, fontFamily: 'monospace', color: '#38BDF8', fontWeight: '600' },
-  tabSwitcher: {
+  subBar: {
     flexDirection: 'row',
-    marginHorizontal: SPACING.lg,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.xs,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    overflow: 'hidden',
-    padding: 3,
-    gap: 4,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
   },
-  tabBtn: {
-    flex: 1,
+  hubIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
-    paddingVertical: 8,
-    borderRadius: RADIUS.sm,
   },
-  tabBtnText: { fontSize: FONTS.sizes.xs, fontWeight: '700' },
+  hubIndicatorText: {
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '600',
+  },
+  tricycleQuickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  tricycleQuickBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#D97706',
+  },
   mapContainer: {
     height: SCREEN_HEIGHT * 0.32,
     marginHorizontal: SPACING.lg,
@@ -954,14 +893,34 @@ const styles = StyleSheet.create({
     flex: 1,
     fontWeight: '500',
   },
-  cardFooterRow: {
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
+    marginVertical: 4,
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
+    borderTopColor: 'rgba(0,0,0,0.06)',
+  },
+  trackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
+  },
+  trackBtnText: {
+    color: '#FFFFFF',
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '700',
   },
   metaBadge: {
     flexDirection: 'row',
@@ -976,11 +935,15 @@ const styles = StyleSheet.create({
   detailBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
   },
   detailBtnText: {
     fontSize: FONTS.sizes.xs,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   terminalAddress: { fontSize: FONTS.sizes.xs, marginBottom: 6 },
   terminalMetaRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },

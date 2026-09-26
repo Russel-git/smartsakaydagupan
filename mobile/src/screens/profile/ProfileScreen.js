@@ -141,6 +141,15 @@ const ProfileScreen = ({ navigation }) => {
 
         {/* Quick Links */}
         <Card>
+          <TouchableOpacity style={styles.linkRow} onPress={() => navigation.navigate('RideHistory')}>
+            <MaterialCommunityIcons name="history" size={22} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.linkText, { color: colors.textPrimary }]}>My Ride History</Text>
+              <Text style={{ fontSize: 11, color: colors.textMuted }}>View completed jeepney and tricycle trips & receipts</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textMuted} />
+          </TouchableOpacity>
+          <Divider />
           <TouchableOpacity style={styles.linkRow} onPress={() => navigation.navigate('SubmitComplaint')}>
             <MaterialCommunityIcons name="clipboard-alert-outline" size={22} color="#EF4444" />
             <View style={{ flex: 1 }}>

@@ -87,6 +87,20 @@ const GuestProfileScreen = ({ navigation }) => {
 
         <TouchableOpacity
           style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 10 }]}
+          onPress={() => navigation.navigate('RoutesAndFares', { screen: 'RideHistory' })}
+        >
+          <View style={[styles.menuIcon, { backgroundColor: colors.primary + '20' }]}>
+            <MaterialCommunityIcons name="history" size={20} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Local Ride History</Text>
+            <Text style={[styles.menuSublabel, { color: colors.textMuted }]}>View recent completed trips and calculated fares</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 10 }]}
           onPress={() => exitGuestMode('Register')}
         >
           <View style={[styles.menuIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
