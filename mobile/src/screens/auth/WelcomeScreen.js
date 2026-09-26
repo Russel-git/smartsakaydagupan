@@ -88,7 +88,7 @@ const WelcomeScreen = ({ navigation }) => {
               },
             ]}
           >
-            {/* Top Header: Live Network Status + Settings */}
+            {/* Top Header: Live Network Status */}
             <View style={styles.landingTopRow}>
               <View style={[styles.liveNetworkPill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#EED7CC' }]}>
                 <View style={styles.liveGreenDot} />
@@ -96,15 +96,6 @@ const WelcomeScreen = ({ navigation }) => {
                   LIVE NETWORK • DAGUPAN
                 </Text>
               </View>
-
-              <TouchableOpacity
-                style={[styles.settingsCircleBtn, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#EED7CC' }]}
-                onPress={() => navigation.navigate('Weather')}
-                activeOpacity={0.8}
-                accessibilityLabel="Transit Weather and Advisories"
-              >
-                <MaterialCommunityIcons name="cog-outline" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
             </View>
 
             {/* Center Content: Logo, Brand Typography & Feature Badges */}
@@ -440,15 +431,6 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '800',
     letterSpacing: 0.5,
-  },
-  settingsCircleBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...SHADOWS.xs,
   },
   landingCenterContent: {
     alignItems: 'center',
