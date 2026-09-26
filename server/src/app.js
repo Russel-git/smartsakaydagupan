@@ -32,11 +32,11 @@ app.use(cors({
     ? true
     : process.env.ALLOWED_ORIGINS?.split(',') || [],
   credentials: true,
-});
+}));
 // Enforce HTTPS in Render/Tunnel environments
 app.use(httpsRedirect);
 
-}));
+
 
 // Rate limiting
 app.use(generalLimiter);

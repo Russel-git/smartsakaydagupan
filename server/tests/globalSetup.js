@@ -6,6 +6,8 @@ const os = require('os');
 const CONFIG_FILE = path.join(os.tmpdir(), 'smartsakay-test-mongo-uri');
 
 module.exports = async function globalSetup() {
+  process.env.NODE_ENV = 'test';
+  process.env.MONGOMS_MD5_CHECK = '0';
   const mongoServer = await MongoMemoryServer.create({
     binary: { version: '7.0.20' },
   });
