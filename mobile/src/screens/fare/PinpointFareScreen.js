@@ -17,6 +17,7 @@ import { WebView } from 'react-native-webview';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useFeedback } from '../../contexts/FeedbackContext';
 import { Card } from '../../components/common/SharedComponents';
+import ConfirmDialogModal from '../../components/common/ConfirmDialogModal';
 import { faresAPI, routesAPI } from '../../api/services';
 import { saveRideToHistory } from '../../utils/storage';
 import { FONTS, SPACING, RADIUS, SHADOWS } from '../../utils/constants';
@@ -99,9 +100,22 @@ const PinpointFareScreen = ({ navigation }) => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [distanceTraveledKm, setDistanceTraveledKm] = useState(0);
   const [arrivalModalVisible, setArrivalModalVisible] = useState(false);
+  const [stopConfirmVisible, setStopConfirmVisible] = useState(false);
+  const [currentGpsPos, setCurrentGpsPos] = useState(origin);
+  const [lastCompletedRide, setLastCompletedRide] = useState(null);
   const timerIntervalRef = useRef(null);
   const lastLocationRef = useRef(null);
   const watchSubscriptionRef = useRef(null);
+
+  // Live remaining distance to destination (updates as commuter moves)
+  const remainingDistToDestKm = useMemo(() => {
+    const loc = currentGpsPos || origin;
+    if (!loc || !destination) return effectiveDistanceKm;
+    return calculateDistanceKm(loc.lat, loc.lng, destination.lat, destination.lng);
+  }, [currentGpsPos, origin, destination, effectiveDistanceKm]);
+
+  // Destination arrival lock check: within 150 meters (0.15 km)
+  const isNearDestination = remainingDistToDestKm <= 0.15;
 
   // Request GPS Permission & Initial Location
   const requestLocation = async () => {
@@ -117,6 +131,7 @@ const PinpointFareScreen = ({ navigation }) => {
               isGPS: true,
             };
             setOrigin(coords);
+            setCurrentGpsPos(coords);
             setPermissionStatus('granted');
             setGpsLoading(false);
             showInfo('GPS Updated', 'Recenetred map to your current location.');
@@ -142,6 +157,7 @@ const PinpointFareScreen = ({ navigation }) => {
             isGPS: true,
           };
           setOrigin(coords);
+          setCurrentGpsPos(coords);
           showInfo('GPS Updated', 'Recenetred map to your current location.');
         } else {
           setPermissionStatus('denied');
@@ -267,6 +283,7 @@ const PinpointFareScreen = ({ navigation }) => {
     setTrackingState('tracking');
     setDistanceTraveledKm(0);
     setElapsedSeconds(0);
+    setCurrentGpsPos(origin);
     lastLocationRef.current = origin;
 
     showInfo('Tracking Started', `Live Tricycle meter active towards ${destination.name}.`);
@@ -298,6 +315,7 @@ const PinpointFareScreen = ({ navigation }) => {
   };
 
   const handleNextPosition = (nextPos) => {
+    setCurrentGpsPos(nextPos);
     if (lastLocationRef.current) {
       const step = calculateDistanceKm(
         lastLocationRef.current.lat,
@@ -320,13 +338,51 @@ const PinpointFareScreen = ({ navigation }) => {
     }
   };
 
+  // Stop ride early & drop off before original pinpoint destination
+  const handleStopRideEarly = async () => {
+    setStopConfirmVisible(false);
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    if (watchSubscriptionRef.current && typeof watchSubscriptionRef.current.remove === 'function') {
+      watchSubscriptionRef.current.remove();
+    }
+
+    // Calculate actual distance traveled (or default minimum 0.5km)
+    const actualDistKm = Math.max(0.4, distanceTraveledKm > 0.05 ? distanceTraveledKm : 0.8);
+    // Base fare: ₱15 for 1st km, +₱3/km succeeding
+    const baseFare = 15;
+    const ratePerKm = 3;
+    let regFare = baseFare;
+    if (actualDistKm > 1) {
+      regFare = Math.round(baseFare + (actualDistKm - 1) * ratePerKm);
+    }
+    const finalFare = isDiscounted ? Math.round(regFare * 0.80) : regFare;
+
+    const completedRide = {
+      id: `ride_tri_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      routeName: `Tricycle to ${destination.name} (Early Drop-Off)`,
+      destination: `Early Drop-off near ${currentGpsPos?.name || 'Current Stop'}`,
+      vehicleType: 'tricycle',
+      fare: finalFare,
+      regularFare: regFare,
+      discount: isDiscounted ? 'discounted' : 'none',
+      distanceKm: parseFloat(actualDistKm.toFixed(2)),
+      durationSecs: elapsedSeconds || 60,
+    };
+
+    setLastCompletedRide(completedRide);
+    await saveRideToHistory(completedRide);
+    setTrackingState('arrived');
+    setArrivalModalVisible(true);
+    showSuccess('Ride Ended', `Dropped off early. Fair fare: ₱${finalFare}.`);
+  };
+
+  // Arrived at destination
   const handleArrival = async () => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     if (watchSubscriptionRef.current && typeof watchSubscriptionRef.current.remove === 'function') {
       watchSubscriptionRef.current.remove();
     }
-    setTrackingState('arrived');
-    setArrivalModalVisible(true);
 
     // Save to Ride History
     const completedRide = {
@@ -341,7 +397,10 @@ const PinpointFareScreen = ({ navigation }) => {
       distanceKm: Math.max(effectiveDistanceKm, distanceTraveledKm),
       durationSecs: elapsedSeconds || roadDurationMins * 60,
     };
+    setLastCompletedRide(completedRide);
     await saveRideToHistory(completedRide);
+    setTrackingState('arrived');
+    setArrivalModalVisible(true);
   };
 
   const generateLeafletHtml = () => {
@@ -618,13 +677,15 @@ const PinpointFareScreen = ({ navigation }) => {
               You've successfully arrived!
             </Text>
             <Text style={[styles.arrivalSubtitle, { color: colors.textSecondary }]}>
-              You have reached your destination at {destination.name}.
+              {lastCompletedRide?.destination
+                ? `You completed your ride at ${lastCompletedRide.destination}.`
+                : `You have reached your destination at ${destination.name}.`}
             </Text>
 
             <View style={[styles.arrivalReceiptCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
               <Text style={[styles.receiptLabel, { color: colors.textMuted }]}>FAIR FARE TO PAY</Text>
               <Text style={[styles.receiptFareBig, { color: colors.primary }]}>
-                {formatPeso(computedFare.finalFare)}
+                {formatPeso(lastCompletedRide?.fare || computedFare.finalFare)}
               </Text>
               {isDiscounted && (
                 <Text style={styles.receiptDiscountText}>Includes 20% Mandatory Discount</Text>
@@ -636,7 +697,7 @@ const PinpointFareScreen = ({ navigation }) => {
                 <View style={styles.arrivalMetaCol}>
                   <Text style={[styles.arrivalMetaLabel, { color: colors.textMuted }]}>Distance</Text>
                   <Text style={[styles.arrivalMetaVal, { color: colors.textPrimary }]}>
-                    {effectiveDistanceKm} km
+                    {lastCompletedRide?.distanceKm || effectiveDistanceKm} km
                   </Text>
                 </View>
                 <View style={styles.arrivalMetaCol}>
@@ -678,6 +739,19 @@ const PinpointFareScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Early Drop-Off Stop Ride Confirmation Modal */}
+      <ConfirmDialogModal
+        visible={stopConfirmVisible}
+        onClose={() => setStopConfirmVisible(false)}
+        onConfirm={handleStopRideEarly}
+        title="Stop Ride & Drop Off Here?"
+        message={`Are you dropping off early before reaching ${destination.name}? This will complete your commute and calculate the fair fare for the ${distanceTraveledKm > 0 ? distanceTraveledKm.toFixed(2) : 'actual'} km traveled.`}
+        confirmText="Yes, Drop Off Here"
+        cancelText="Continue Riding"
+        type="warning"
+        icon="stop-circle-outline"
+      />
 
       {/* Popular Destination Quick Chips */}
       <View style={[styles.quickChipsSection, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
@@ -881,14 +955,76 @@ const PinpointFareScreen = ({ navigation }) => {
               Destination: <Text style={{ fontWeight: '700', color: colors.textPrimary }}>{destination.name}</Text>
             </Text>
 
-            <TouchableOpacity
-              style={styles.arriveBtn}
-              onPress={handleArrival}
-              activeOpacity={0.88}
+            {/* Proximity & Distance Status Card */}
+            <View
+              style={[
+                styles.proximityCard,
+                {
+                  backgroundColor: isNearDestination ? 'rgba(22, 163, 74, 0.1)' : 'rgba(217, 119, 6, 0.08)',
+                  borderColor: isNearDestination ? '#16A34A' : '#D9770640',
+                },
+              ]}
             >
-              <MaterialCommunityIcons name="check-circle" size={20} color="#FFFFFF" />
-              <Text style={styles.arriveBtnText}>Arrived at Destination</Text>
-            </TouchableOpacity>
+              <MaterialCommunityIcons
+                name={isNearDestination ? 'check-circle' : 'map-marker-distance'}
+                size={20}
+                color={isNearDestination ? '#16A34A' : '#D97706'}
+              />
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[
+                    styles.proximityStatusTitle,
+                    { color: isNearDestination ? '#16A34A' : colors.textPrimary },
+                  ]}
+                >
+                  {isNearDestination
+                    ? 'Within Destination Area (< 150m)'
+                    : `Remaining: ~${remainingDistToDestKm.toFixed(2)} km to destination`}
+                </Text>
+                <Text style={[styles.proximityStatusSub, { color: colors.textMuted }]}>
+                  Traveled: {distanceTraveledKm.toFixed(2)} km • Live Tariff: {formatPeso(computedFare.finalFare)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Action Buttons: Stop Ride Early vs Arrived at Destination */}
+            <View style={styles.trackingBtnRow}>
+              {/* STOP BUTTON: Always pressable to drop off early */}
+              <TouchableOpacity
+                style={[styles.stopRideBtn, { borderColor: '#EF4444' }]}
+                onPress={() => setStopConfirmVisible(true)}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="stop-circle-outline" size={18} color="#DC2626" />
+                <Text style={styles.stopRideBtnText}>Stop Ride & Drop Off</Text>
+              </TouchableOpacity>
+
+              {/* ARRIVE BUTTON: Disabled/Locked until arrived within 150m of destination */}
+              <TouchableOpacity
+                style={[
+                  styles.arriveBtn,
+                  !isNearDestination && styles.arriveBtnDisabled,
+                ]}
+                onPress={handleArrival}
+                disabled={!isNearDestination}
+                activeOpacity={0.88}
+              >
+                <MaterialCommunityIcons
+                  name={isNearDestination ? 'check-circle' : 'lock-outline'}
+                  size={18}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.arriveBtnText}>
+                  {isNearDestination ? 'Arrived at Destination' : 'Arrived (Locked)'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {!isNearDestination && (
+              <Text style={[styles.lockedWarningText, { color: colors.textMuted }]}>
+                🔒 "Arrived" button is locked until you reach {destination.name}. If you are dropping off early, tap "Stop Ride & Drop Off".
+              </Text>
+            )}
           </View>
         )}
 
@@ -1159,7 +1295,45 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 12,
   },
+  proximityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  proximityStatusTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  proximityStatusSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  trackingBtnRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  stopRideBtn: {
+    flex: 1,
+    backgroundColor: '#FEF2F2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+  },
+  stopRideBtnText: {
+    color: '#DC2626',
+    fontSize: 12,
+    fontWeight: '800',
+  },
   arriveBtn: {
+    flex: 1,
     backgroundColor: '#16A34A',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1168,10 +1342,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: RADIUS.md,
   },
+  arriveBtnDisabled: {
+    backgroundColor: '#94A3B8',
+    opacity: 0.65,
+  },
   arriveBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
+  },
+  lockedWarningText: {
+    fontSize: 11,
+    marginTop: 8,
+    lineHeight: 15,
   },
   overchargeCard: {
     flexDirection: 'row',

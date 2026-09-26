@@ -185,16 +185,6 @@ const HomeMapWidget = ({ navigation, height = 240 }) => {
     }
   });
 
-  /* ---- Downtown hub pin ---- */
-  L.marker([16.0433,120.3342],{
-    icon:L.divIcon({
-      className:'',
-      html:'<div style="background:#f97316;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">📍</div>',
-      iconSize:[28,28],iconAnchor:[14,14]
-    }),zIndexOffset:1500
-  }).bindPopup('<b>Downtown Dagupan — Central Hub</b><br><small>All jeepney routes converge here</small>')
-    .addTo(map);
-
   /* ---- Terminal pins ---- */
   var terminals = ${terminalsJson};
   var typeEmojis = {bus:'🚌',jeepney:'🚐',tricycle:'🛺',multimodal:'🏢'};

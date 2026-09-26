@@ -4,9 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
+  Platform,
   StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FONTS, SPACING, RADIUS } from '../../utils/constants';
@@ -19,6 +20,15 @@ import FareMatrixScreen from '../fare/FareMatrixScreen';
 
 const RoutesAndFaresScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  // Cross-device top inset calculation:
+  // On Android, use the maximum of insets.top and StatusBar.currentHeight to guarantee
+  // that content is pushed below punch-hole cameras, notches, and status icons.
+  const topInset = Platform.OS === 'android'
+    ? Math.max(insets.top, StatusBar.currentHeight || 28)
+    : insets.top;
+
   // Default tab: 'routes' | 'tricycle' | 'fares'
   const [activeTab, setActiveTab] = useState(route?.params?.initialTab || 'routes');
   const [fareSubTab, setFareSubTab] = useState('calculator'); // 'calculator' | 'matrix'
@@ -42,11 +52,26 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
   }, [route?.params?.initialTab]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={colors.isDark ? 'light-content' : 'dark-content'} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar
+        barStyle={colors.isDark ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent={Platform.OS === 'android'}
+      />
 
       {/* Top Navigation Bar: 3 Modes + Ride History Action */}
-      <View style={[styles.topBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.topBar,
+          {
+            backgroundColor: colors.surface,
+            borderBottomColor: colors.border,
+            paddingTop: topInset + (Platform.OS === 'ios' ? 4 : 8),
+            paddingLeft: Math.max(insets.left, SPACING.md),
+            paddingRight: Math.max(insets.right, SPACING.md),
+          },
+        ]}
+      >
         <View style={[styles.segmentContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
           {/* TAB 1: JEEPNEY ROUTES & HUBS */}
           <TouchableOpacity
@@ -74,6 +99,8 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
                 { color: activeTab === 'routes' ? '#FFFFFF' : colors.textSecondary },
               ]}
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
             >
               Jeepneys
             </Text>
@@ -105,6 +132,8 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
                 { color: activeTab === 'tricycle' ? '#FFFFFF' : colors.textSecondary },
               ]}
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
             >
               Tricycle
             </Text>
@@ -136,6 +165,8 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
                 { color: activeTab === 'fares' ? '#FFFFFF' : colors.textSecondary },
               ]}
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
             >
               Fares
             </Text>
@@ -220,7 +251,7 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
           </View>
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -231,8 +262,7 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    paddingBottom: SPACING.sm + 2,
     borderBottomWidth: 1,
     gap: 8,
   },
@@ -245,15 +275,17 @@ const styles = StyleSheet.create({
   },
   segmentBtn: {
     flex: 1,
+    minHeight: 38,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingVertical: 7,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
     borderRadius: RADIUS.full,
   },
   segmentText: {
-    fontSize: FONTS.sizes.xs + 1,
+    fontSize: 12,
     fontWeight: '700',
   },
   historyBtn: {

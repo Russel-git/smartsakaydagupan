@@ -5,7 +5,6 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  SafeAreaView,
   RefreshControl,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -123,7 +122,7 @@ const RideHistoryScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ConfirmDialogModal
         visible={clearModalVisible}
         title="Clear Ride History"
@@ -185,7 +184,7 @@ const RideHistoryScreen = ({ navigation }) => {
           refreshControl={<RefreshControl refreshing={loading} onRefresh={loadHistory} colors={[colors.primary]} />}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 

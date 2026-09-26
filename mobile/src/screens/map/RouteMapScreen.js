@@ -515,17 +515,6 @@ const RouteMapScreen = ({ navigation }) => {
               }
             });
 
-            // Central Downtown Dagupan Hub Pin
-            var downtownIcon = L.divIcon({
-              className: 'downtown-pin',
-              html: '<div style="background:#2563EB; color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:bold; border:2px solid white; box-shadow:0 2px 8px rgba(0,0,0,0.5);">📍</div>',
-              iconSize: [30, 30],
-              iconAnchor: [15, 15]
-            });
-            L.marker([16.0433, 120.3342], { icon: downtownIcon, zIndexOffset: 1500 })
-              .bindPopup('<div style="min-width:200px; font-family:-apple-system, BlinkMacSystemFont, sans-serif;"><strong style="color:#2563EB; font-size:13px;">📍 Downtown Dagupan (Central Hub)</strong><br/><div style="font-size:11px; color:#334155; margin-top:3px; font-weight:600;">Main Boarding Area & Staging</div><div style="font-size:11px; color:#64748b; margin-top:2px;">All Dagupan City jeepney routes converge and can be boarded here in Downtown.</div></div>')
-              .addTo(map);
-
             if (selectedBounds) {
               map.fitBounds(selectedBounds, { padding: [40, 40] });
             }
