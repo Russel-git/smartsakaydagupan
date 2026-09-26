@@ -53,6 +53,11 @@ export const complaintsAPI = {
   getAllComplaints: (params) => apiClient.get('/complaints', { params }),
   updateComplaintStatus: (id, data) => apiClient.put(`/complaints/${id}/status`, data),
   addAdminNotes: (id, data) => apiClient.put(`/complaints/${id}/notes`, data),
+  updateMyComplaint: (id, data) => apiClient.put(`/complaints/my/${id}`, data),
+  archiveMyComplaint: (id) => apiClient.put(`/complaints/my/${id}/archive`),
+  unarchiveMyComplaint: (id) => apiClient.put(`/complaints/my/${id}/unarchive`),
+  deleteMyComplaint: (id, data) => apiClient.delete(`/complaints/my/${id}`, { data }),
+  undoMyComplaint: (id) => apiClient.put(`/complaints/my/${id}/undo`),
 };
 
 export const assistantAPI = {

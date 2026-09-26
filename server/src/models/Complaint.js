@@ -45,21 +45,14 @@ const complaintSchema = new mongoose.Schema(
     lguTerminatedAt: { type: Date, default: null },
     lguTerminationNotes: { type: String, default: '' },
 
+    // Archive & Undo Tracking
+    isArchived: { type: Boolean, default: false },
+    archivedAt: { type: Date, default: null },
+    previousStatus: { type: String, default: 'pending' },
+
     // Deletion Tracking
-    deletionReason: {
-      type: String,
-      enum: [
-        'Spam / False Information',
-        'Duplicate Complaint',
-        'Inappropriate / Abusive Content',
-        'Insufficient Evidence / Details',
-        'Resolved Informally',
-        'Other',
-        '',
-      ],
-      default: '',
-    },
-    deletionNotes: { type: String, default: '' },
+    deletionReason: { type: String, default: '', trim: true },
+    deletionNotes: { type: String, default: '', trim: true },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     deletedAt: { type: Date, default: null },
 

@@ -69,6 +69,21 @@ const addAdminNotesSchema = Joi.object({
   adminNotes: Joi.string().trim().min(1).max(2000).required(),
 });
 
+const updateCommuterComplaintSchema = Joi.object({
+  category: Joi.string()
+    .valid('overcharging', 'reckless_driving', 'harassment', 'route_deviation', 'vehicle_condition', 'other'),
+  subject: Joi.string().trim().min(5).max(200),
+  description: Joi.string().trim().min(10).max(2000),
+  routeId: Joi.string().allow(null, ''),
+  vehiclePlateNumber: Joi.string().allow('').max(20),
+  location: Joi.object({
+    lat: Joi.number().min(-90).max(90),
+    lng: Joi.number().min(-180).max(180),
+    address: Joi.string().allow(''),
+  }),
+  attachments: Joi.array().items(Joi.string()).max(3),
+});
+
 module.exports = {
   createComplaintSchema,
   updateComplaintStatusSchema,
@@ -77,4 +92,5 @@ module.exports = {
   lguTerminateSchema,
   endorseComplaintSchema,
   addAdminNotesSchema,
+  updateCommuterComplaintSchema,
 };

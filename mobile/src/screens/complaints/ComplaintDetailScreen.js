@@ -12,7 +12,10 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useFeedback } from '../../contexts/FeedbackContext';
 import { Card, StatusBadge, Divider, LoadingSpinner } from '../../components/common/SharedComponents';
+import ConfirmDialogModal from '../../components/common/ConfirmDialogModal';
+import EditComplaintModal from './EditComplaintModal';
 import { complaintsAPI } from '../../api/services';
 import { FONTS, SPACING, RADIUS, SHADOWS, COMPLAINT_STATUS, COMPLAINT_CATEGORIES } from '../../utils/constants';
 import { formatDate, formatDateTime } from '../../utils/helpers';
@@ -22,11 +25,23 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
   const complaintId = navRoute.params?.complaintId || initialComplaint?._id;
 
   const { colors, isDark } = useTheme();
+  const { showSuccess, showError, showWarning } = useFeedback();
+
   const [complaint, setComplaint] = useState(initialComplaint || null);
   const [loading, setLoading] = useState(!initialComplaint);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
-  const [copiedNotice, setCopiedNotice] = useState(false);
+
+  // Modals state
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'danger',
+    confirmText: 'Confirm',
+    onConfirm: () => {},
+  });
 
   const fetchFreshComplaint = async () => {
     if (!complaintId) return;
@@ -65,6 +80,57 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
     }
   };
 
+  // Management actions: Edit, Archive, Unarchive, Delete & Undo
+  const handleArchive = async () => {
+    try {
+      await complaintsAPI.archiveMyComplaint(complaint._id);
+      showSuccess('Report Archived', 'Report moved to archive history.');
+      fetchFreshComplaint();
+    } catch (err) {
+      showError('Archive Failed', err.response?.data?.message || 'Could not archive.');
+    }
+  };
+
+  const handleUnarchive = async () => {
+    try {
+      await complaintsAPI.unarchiveMyComplaint(complaint._id);
+      showSuccess('Report Restored', 'Report restored to active history.');
+      fetchFreshComplaint();
+    } catch (err) {
+      showError('Unarchive Failed', err.response?.data?.message || 'Could not unarchive.');
+    }
+  };
+
+  const promptDelete = () => {
+    setConfirmDialog({
+      visible: true,
+      type: 'danger',
+      title: 'Delete / Cancel Report?',
+      message: 'Are you sure you want to remove this report? You can restore it at any time from the Trash history.',
+      confirmText: 'Delete Report',
+      onConfirm: async () => {
+        setConfirmDialog((p) => ({ ...p, visible: false }));
+        try {
+          await complaintsAPI.deleteMyComplaint(complaint._id);
+          showSuccess('Report Deleted', 'Report moved to Trash history.');
+          fetchFreshComplaint();
+        } catch (err) {
+          showError('Delete Failed', err.response?.data?.message || 'Could not delete.');
+        }
+      },
+    });
+  };
+
+  const handleUndo = async () => {
+    try {
+      await complaintsAPI.undoMyComplaint(complaint._id);
+      showSuccess('Action Undone', 'Report restored successfully!');
+      fetchFreshComplaint();
+    } catch (err) {
+      showError('Undo Failed', err.response?.data?.message || 'Could not restore report.');
+    }
+  };
+
   if (loading && !complaint) {
     return <LoadingSpinner text="Fetching official case timeline..." />;
   }
@@ -87,6 +153,11 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
     );
   }
 
+  const isArchived = Boolean(complaint.isArchived);
+  const isDeleted = complaint.status === 'deleted';
+  const isInProgress = ['pending', 'under_review'].includes(complaint.status);
+  const canEdit = isInProgress && !isArchived && !isDeleted;
+
   const status = COMPLAINT_STATUS[complaint.status] || {
     label: complaint.status,
     color: '#64748B',
@@ -96,13 +167,7 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
   const hasPhotos = complaint.attachments && complaint.attachments.length > 0;
 
   // Timeline calculation
-  // Stage 1: Submitted (always done)
-  // Stage 2: Verified by admin/operator (done if status != 'pending')
-  // Stage 3: Endorsed to LGU (done if endorsed_to_lgu, action_taken, terminated, resolved)
-  // Stage 4: LGU Action Taken (done if action_taken, terminated, resolved)
-  // Stage 5: Terminated / Resolved (done if terminated, resolved)
-
-  const isVerified = complaint.status !== 'pending';
+  const isVerified = complaint.status !== 'pending' && !isDeleted;
   const isEndorsed = ['endorsed_to_lgu', 'action_taken', 'terminated', 'resolved'].includes(complaint.status);
   const isActionTaken = ['action_taken', 'terminated', 'resolved'].includes(complaint.status);
   const isClosed = ['terminated', 'resolved', 'dismissed'].includes(complaint.status);
@@ -161,6 +226,25 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
       }
     >
+      {/* Edit Modal */}
+      <EditComplaintModal
+        visible={editModalVisible}
+        complaint={complaint}
+        onClose={() => setEditModalVisible(false)}
+        onSuccess={() => fetchFreshComplaint()}
+      />
+
+      {/* Confirmation Dialog */}
+      <ConfirmDialogModal
+        visible={confirmDialog.visible}
+        type={confirmDialog.type}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        onClose={() => setConfirmDialog((p) => ({ ...p, visible: false }))}
+        onConfirm={confirmDialog.onConfirm}
+      />
+
       <View style={styles.content}>
         {/* Top Case Identity Card */}
         <Card style={styles.caseHeroCard}>
@@ -177,14 +261,132 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
           </View>
 
           <View style={styles.statusRow}>
-            <StatusBadge
-              label={status.label}
-              color={status.color}
-              bgColor={status.bgColor}
-            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {isArchived && (
+                <View style={styles.archiveBadge}>
+                  <MaterialCommunityIcons name="archive" size={11} color="#D97706" />
+                  <Text style={styles.archiveBadgeText}>Archived</Text>
+                </View>
+              )}
+              {isDeleted && (
+                <View style={styles.deletedBadge}>
+                  <MaterialCommunityIcons name="trash-can" size={11} color="#EF4444" />
+                  <Text style={styles.deletedBadgeText}>Deleted</Text>
+                </View>
+              )}
+              <StatusBadge
+                label={isDeleted ? 'Deleted' : isArchived ? 'Archived' : status.label}
+                color={isDeleted ? '#EF4444' : isArchived ? '#F59E0B' : status.color}
+                bgColor={isDeleted ? 'rgba(239, 68, 68, 0.15)' : isArchived ? 'rgba(245, 158, 11, 0.15)' : status.bgColor}
+              />
+            </View>
             <Text style={[styles.heroDate, { color: colors.textMuted }]}>
               Filed {formatDate(complaint.createdAt)}
             </Text>
+          </View>
+        </Card>
+
+        {/* Commuter Management Toolbar & State Rules Notice */}
+        <Card style={styles.manageCard}>
+          {isDeleted ? (
+            <View style={[styles.stateNoticeBanner, { backgroundColor: '#FEF2F2', borderColor: '#F87171' }]}>
+              <MaterialCommunityIcons name="trash-can-outline" size={22} color="#EF4444" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.stateNoticeTitle, { color: '#B91C1C' }]}>Report Removed (In Trash)</Text>
+                <Text style={[styles.stateNoticeDesc, { color: '#991B1B' }]}>
+                  This report has been deleted and cannot be edited. You can restore it anytime with full progress intact.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.manageBtn, { backgroundColor: '#10B981', borderColor: '#059669' }]}
+                onPress={handleUndo}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="undo-variant" size={16} color="#FFFFFF" />
+                <Text style={[styles.manageBtnText, { color: '#FFFFFF' }]}>Restore</Text>
+              </TouchableOpacity>
+            </View>
+          ) : isArchived ? (
+            <View style={[styles.stateNoticeBanner, { backgroundColor: '#FFFBEB', borderColor: '#FCD34D' }]}>
+              <MaterialCommunityIcons name="archive-outline" size={22} color="#F59E0B" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.stateNoticeTitle, { color: '#92400E' }]}>Archived Report</Text>
+                <Text style={[styles.stateNoticeDesc, { color: '#B45309' }]}>
+                  This case is archived and cannot be edited. Unarchive it to enable active tracking and editing.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.manageBtn, { backgroundColor: '#F59E0B', borderColor: '#D97706' }]}
+                onPress={handleUnarchive}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="archive-arrow-up-outline" size={16} color="#FFFFFF" />
+                <Text style={[styles.manageBtnText, { color: '#FFFFFF' }]}>Unarchive</Text>
+              </TouchableOpacity>
+            </View>
+          ) : canEdit ? (
+            <View style={[styles.stateNoticeBanner, { backgroundColor: 'rgba(2, 132, 199, 0.08)', borderColor: 'rgba(2, 132, 199, 0.25)' }]}>
+              <MaterialCommunityIcons name="pencil-circle-outline" size={22} color="#0284C7" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.stateNoticeTitle, { color: '#0284C7' }]}>Case is In Progress (Editable)</Text>
+                <Text style={[styles.stateNoticeDesc, { color: isDark ? '#BAE6FD' : '#0369A1' }]}>
+                  You can edit the report details or plate number if you made a mistake before LGU takes action.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.manageBtn, { backgroundColor: '#0284C7', borderColor: '#0369A1' }]}
+                onPress={() => setEditModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="pencil" size={15} color="#FFFFFF" />
+                <Text style={[styles.manageBtnText, { color: '#FFFFFF' }]}>Edit Report</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={[styles.stateNoticeBanner, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC', borderColor: colors.border }]}>
+              <MaterialCommunityIcons name="lock-outline" size={20} color={colors.textMuted} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.stateNoticeTitle, { color: colors.textPrimary }]}>Case Verified / Locked</Text>
+                <Text style={[styles.stateNoticeDesc, { color: colors.textSecondary }]}>
+                  Report details are locked for legal/official investigation integrity.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Sub Action Buttons (Archive & Delete) */}
+          <View style={styles.manageButtonsRow}>
+            {!isDeleted && (
+              isArchived ? (
+                <TouchableOpacity
+                  style={[styles.subActionBtn, { borderColor: 'rgba(239, 68, 68, 0.3)' }]}
+                  onPress={promptDelete}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons name="trash-can-outline" size={15} color="#EF4444" />
+                  <Text style={[styles.subActionText, { color: '#EF4444' }]}>Delete to Trash</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[styles.subActionBtn, { borderColor: colors.border }]}
+                    onPress={handleArchive}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name="archive-outline" size={15} color={colors.textSecondary} />
+                    <Text style={[styles.subActionText, { color: colors.textSecondary }]}>Archive Case</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.subActionBtn, { borderColor: 'rgba(239, 68, 68, 0.3)' }]}
+                    onPress={promptDelete}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name="trash-can-outline" size={15} color="#EF4444" />
+                    <Text style={[styles.subActionText, { color: '#EF4444' }]}>Delete / Cancel</Text>
+                  </TouchableOpacity>
+                </>
+              )
+            )}
           </View>
         </Card>
 
@@ -486,7 +688,7 @@ const styles = StyleSheet.create({
   caseHeroCard: {
     padding: 16,
     borderRadius: RADIUS.lg,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   caseHeroTop: {
     flexDirection: 'row',
@@ -519,8 +721,91 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(150, 150, 150, 0.2)',
   },
+  archiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  archiveBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  deletedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  deletedBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#EF4444',
+  },
   heroDate: {
     fontSize: 12,
+  },
+  manageCard: {
+    padding: 12,
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING.lg,
+  },
+  stateNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 10,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+  },
+  stateNoticeTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  stateNoticeDesc: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  manageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+  },
+  manageBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  manageButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 10,
+    justifyContent: 'flex-end',
+  },
+  subActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+  },
+  subActionText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   sectionHeaderRow: {
     flexDirection: 'row',

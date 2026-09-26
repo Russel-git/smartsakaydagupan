@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,54 +7,95 @@ import {
   TouchableOpacity,
   RefreshControl,
   TextInput,
+  Animated,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useFeedback } from '../../contexts/FeedbackContext';
 import { Card, LoadingSpinner, EmptyState, StatusBadge } from '../../components/common/SharedComponents';
+import ConfirmDialogModal from '../../components/common/ConfirmDialogModal';
+import EditComplaintModal from './EditComplaintModal';
 import { complaintsAPI } from '../../api/services';
 import { FONTS, SPACING, RADIUS, SHADOWS, COMPLAINT_STATUS, COMPLAINT_CATEGORIES } from '../../utils/constants';
 import { formatDate, formatDateTime } from '../../utils/helpers';
 
 const FILTER_TABS = [
-  { id: 'all', label: 'All Reports' },
-  { id: 'active', label: 'In Progress' },
-  { id: 'action', label: 'Action Taken' },
-  { id: 'resolved', label: 'Resolved' },
+  { id: 'all', label: 'All History', icon: 'history' },
+  { id: 'active', label: 'In Progress', icon: 'clock-outline' },
+  { id: 'resolved', label: 'Resolved', icon: 'check-circle-outline' },
+  { id: 'archived', label: 'Archived', icon: 'archive-outline' },
+  { id: 'deleted', label: 'Trash', icon: 'trash-can-outline' },
 ];
 
-const getStepProgress = (status) => {
-  switch (status) {
+const getStepProgress = (complaint) => {
+  if (complaint.status === 'deleted') {
+    return { step: 0, label: 'Report Deleted / Cancelled', percent: 0, color: '#EF4444' };
+  }
+  if (complaint.isArchived) {
+    return { step: 0, label: 'Report Archived', percent: 100, color: '#F59E0B' };
+  }
+  switch (complaint.status) {
     case 'pending':
-      return { step: 1, label: 'Report Received', percent: 25 };
+      return { step: 1, label: 'Report Received (In Progress)', percent: 25, color: '#3B82F6' };
     case 'under_review':
-      return { step: 2, label: 'Under Operator Review', percent: 50 };
+      return { step: 2, label: 'Under Operator Review (In Progress)', percent: 50, color: '#0284C7' };
     case 'endorsed_to_lgu':
-      return { step: 3, label: 'Endorsed to Dagupan LGU', percent: 75 };
+      return { step: 3, label: 'Endorsed to Dagupan LGU', percent: 75, color: '#0284C7' };
     case 'action_taken':
-      return { step: 4, label: 'Official Action Taken', percent: 90 };
+      return { step: 4, label: 'Official Action Taken', percent: 90, color: '#059669' };
     case 'terminated':
     case 'resolved':
-      return { step: 4, label: 'Case Resolved & Closed', percent: 100 };
+      return { step: 4, label: 'Case Resolved & Closed', percent: 100, color: '#10B981' };
     case 'dismissed':
-      return { step: 4, label: 'Dismissed', percent: 100 };
+      return { step: 4, label: 'Dismissed', percent: 100, color: '#6B7280' };
     default:
-      return { step: 1, label: 'Report Received', percent: 25 };
+      return { step: 1, label: 'Report Received', percent: 25, color: '#3B82F6' };
   }
 };
 
 const ComplaintsListScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
+  const { showSuccess, showError, showWarning } = useFeedback();
+
   const [complaints, setComplaints] = useState([]);
+  const [counts, setCounts] = useState({ all: 0, active: 0, resolved: 0, archived: 0, deleted: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const loadComplaints = async () => {
+  // Modals state
+  const [editModalData, setEditModalData] = useState({ visible: false, complaint: null });
+  const [confirmDialog, setConfirmDialog] = useState({
+    visible: false,
+    type: 'danger',
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    onConfirm: () => {},
+  });
+
+  // Undo Snack Banner state
+  const [undoBanner, setUndoBanner] = useState({
+    visible: false,
+    message: '',
+    complaintId: null,
+    actionType: '', // 'deleted' | 'archived'
+  });
+  const undoTimeoutRef = useRef(null);
+
+  const loadComplaints = async (tabToLoad = activeTab) => {
     try {
-      const { data } = await complaintsAPI.getMyComplaints();
+      const { data } = await complaintsAPI.getMyComplaints({
+        tab: tabToLoad,
+        search: searchQuery.trim() || undefined,
+      });
+
       const list = data?.data || data?.complaints || [];
       setComplaints(list);
+      if (data?.counts) {
+        setCounts(data.counts);
+      }
     } catch (e) {
       console.log('Failed to load complaints:', e.message);
     } finally {
@@ -63,68 +104,140 @@ const ComplaintsListScreen = ({ navigation }) => {
   };
 
   useEffect(() => {
-    loadComplaints();
-  }, []);
+    loadComplaints(activeTab);
+  }, [activeTab]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadComplaints();
+    await loadComplaints(activeTab);
     setRefreshing(false);
   };
 
-  // Metrics computation
-  const metrics = useMemo(() => {
-    const total = complaints.length;
-    const active = complaints.filter((c) =>
-      ['pending', 'under_review', 'endorsed_to_lgu'].includes(c.status)
-    ).length;
-    const actionTaken = complaints.filter((c) => c.status === 'action_taken').length;
-    const resolved = complaints.filter((c) =>
-      ['terminated', 'resolved'].includes(c.status)
-    ).length;
-    return { total, active, actionTaken, resolved };
-  }, [complaints]);
+  const handleSearchSubmit = () => {
+    loadComplaints(activeTab);
+  };
 
-  // Filtered and searched list
-  const filteredComplaints = useMemo(() => {
-    return complaints.filter((item) => {
-      // Tab filter
-      if (activeTab === 'active') {
-        if (!['pending', 'under_review', 'endorsed_to_lgu'].includes(item.status)) return false;
-      } else if (activeTab === 'action') {
-        if (item.status !== 'action_taken') return false;
-      } else if (activeTab === 'resolved') {
-        if (!['terminated', 'resolved'].includes(item.status)) return false;
-      }
-
-      // Search filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        const matchSubject = item.subject?.toLowerCase().includes(query);
-        const matchCase = item.lguCaseNumber?.toLowerCase().includes(query);
-        const matchPlate = item.vehiclePlateNumber?.toLowerCase().includes(query);
-        const matchCategory = item.category?.toLowerCase().includes(query);
-        if (!matchSubject && !matchCase && !matchPlate && !matchCategory) return false;
-      }
-
-      return true;
+  const triggerUndoBanner = (complaintId, message, actionType) => {
+    if (undoTimeoutRef.current) {
+      clearTimeout(undoTimeoutRef.current);
+    }
+    setUndoBanner({
+      visible: true,
+      message,
+      complaintId,
+      actionType,
     });
-  }, [complaints, activeTab, searchQuery]);
+    undoTimeoutRef.current = setTimeout(() => {
+      setUndoBanner((prev) => ({ ...prev, visible: false }));
+    }, 6000);
+  };
+
+  // Action handlers
+  const handleUndo = async (complaintId) => {
+    const idToUndo = complaintId || undoBanner.complaintId;
+    if (!idToUndo) return;
+
+    if (undoTimeoutRef.current) {
+      clearTimeout(undoTimeoutRef.current);
+    }
+    setUndoBanner((prev) => ({ ...prev, visible: false }));
+
+    try {
+      const { data } = await complaintsAPI.undoMyComplaint(idToUndo);
+      showSuccess('Action Undone', data.message || 'Report restored successfully!');
+      loadComplaints(activeTab);
+    } catch (err) {
+      showError('Undo Failed', err.response?.data?.message || 'Could not undo action.');
+    }
+  };
+
+  const handleArchive = async (item) => {
+    try {
+      await complaintsAPI.archiveMyComplaint(item._id);
+      showSuccess('Report Archived', 'Report moved to archive history.');
+      triggerUndoBanner(item._id, 'Report was archived.', 'archived');
+      loadComplaints(activeTab);
+    } catch (err) {
+      showError('Archive Failed', err.response?.data?.message || 'Could not archive report.');
+    }
+  };
+
+  const handleUnarchive = async (item) => {
+    try {
+      await complaintsAPI.unarchiveMyComplaint(item._id);
+      showSuccess('Report Unarchived', 'Report restored to active history.');
+      loadComplaints(activeTab);
+    } catch (err) {
+      showError('Unarchive Failed', err.response?.data?.message || 'Could not unarchive report.');
+    }
+  };
+
+  const promptDelete = (item) => {
+    setConfirmDialog({
+      visible: true,
+      type: 'danger',
+      title: 'Delete / Cancel Report?',
+      message: `Are you sure you want to remove report "${item.subject}"? You can undo or restore it at any time from the Trash tab.`,
+      confirmText: 'Delete Report',
+      onConfirm: async () => {
+        setConfirmDialog((p) => ({ ...p, visible: false }));
+        try {
+          await complaintsAPI.deleteMyComplaint(item._id);
+          showSuccess('Report Deleted', 'Report moved to Trash history.');
+          triggerUndoBanner(item._id, 'Report was deleted.', 'deleted');
+          loadComplaints(activeTab);
+        } catch (err) {
+          showError('Delete Failed', err.response?.data?.message || 'Could not delete report.');
+        }
+      },
+    });
+  };
+
+  const filteredComplaints = useMemo(() => {
+    if (!searchQuery.trim()) return complaints;
+    const query = searchQuery.toLowerCase().trim();
+    return complaints.filter((item) => {
+      const matchSubject = item.subject?.toLowerCase().includes(query);
+      const matchCase = item.lguCaseNumber?.toLowerCase().includes(query);
+      const matchPlate = item.vehiclePlateNumber?.toLowerCase().includes(query);
+      const matchCategory = item.category?.toLowerCase().includes(query);
+      return matchSubject || matchCase || matchPlate || matchCategory;
+    });
+  }, [complaints, searchQuery]);
 
   if (loading) {
-    return <LoadingSpinner text="Loading your report monitor..." />;
+    return <LoadingSpinner text="Loading complaints history..." />;
   }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Edit Complaint Modal */}
+      <EditComplaintModal
+        visible={editModalData.visible}
+        complaint={editModalData.complaint}
+        onClose={() => setEditModalData({ visible: false, complaint: null })}
+        onSuccess={() => loadComplaints(activeTab)}
+      />
+
+      {/* Confirmation Dialog */}
+      <ConfirmDialogModal
+        visible={confirmDialog.visible}
+        type={confirmDialog.type}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        onClose={() => setConfirmDialog((p) => ({ ...p, visible: false }))}
+        onConfirm={confirmDialog.onConfirm}
+      />
+
       {/* Top Header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-            Report Monitor
+            Complaints History & Monitor
           </Text>
           <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-            Track Dagupan LGU investigation & resolution status
+            Review past grievances, edit in-progress cases & restore updates
           </Text>
         </View>
         <TouchableOpacity
@@ -140,16 +253,20 @@ const ComplaintsListScreen = ({ navigation }) => {
       {/* KPI Status Summary Cards */}
       <View style={styles.metricsRow}>
         <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.metricValue, { color: colors.textPrimary }]}>{metrics.total}</Text>
-          <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Total Filed</Text>
+          <Text style={[styles.metricValue, { color: colors.textPrimary }]}>{counts.all || 0}</Text>
+          <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Total Active</Text>
         </View>
         <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.metricValue, { color: '#0284c7' }]}>{metrics.active}</Text>
+          <Text style={[styles.metricValue, { color: '#0284c7' }]}>{counts.active || 0}</Text>
           <Text style={[styles.metricLabel, { color: colors.textMuted }]}>In Progress</Text>
         </View>
         <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.metricValue, { color: '#059669' }]}>{metrics.actionTaken + metrics.resolved}</Text>
-          <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Action/Resolved</Text>
+          <Text style={[styles.metricValue, { color: '#059669' }]}>{counts.resolved || 0}</Text>
+          <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Resolved</Text>
+        </View>
+        <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.metricValue, { color: '#F59E0B' }]}>{counts.archived || 0}</Text>
+          <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Archived</Text>
         </View>
       </View>
 
@@ -159,10 +276,12 @@ const ComplaintsListScreen = ({ navigation }) => {
           <MaterialCommunityIcons name="magnify" size={20} color={colors.textMuted} />
           <TextInput
             style={[styles.searchInput, { color: colors.textPrimary }]}
-            placeholder="Search by case #, plate number, or subject..."
+            placeholder="Search history by case #, plate, or subject..."
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
+            onSubmitEditing={handleSearchSubmit}
+            returnKeyType="search"
             clearButtonMode="while-editing"
           />
           {Boolean(searchQuery) ? (
@@ -183,6 +302,8 @@ const ComplaintsListScreen = ({ navigation }) => {
           contentContainerStyle={styles.tabsContent}
           renderItem={({ item }) => {
             const isSelected = activeTab === item.id;
+            const countForTab = counts[item.id] !== undefined ? counts[item.id] : null;
+
             return (
               <TouchableOpacity
                 style={[
@@ -195,6 +316,12 @@ const ComplaintsListScreen = ({ navigation }) => {
                 onPress={() => setActiveTab(item.id)}
                 activeOpacity={0.8}
               >
+                <MaterialCommunityIcons
+                  name={item.icon}
+                  size={14}
+                  color={isSelected ? '#FFFFFF' : colors.textSecondary}
+                  style={{ marginRight: 4 }}
+                />
                 <Text
                   style={[
                     styles.tabChipText,
@@ -205,12 +332,29 @@ const ComplaintsListScreen = ({ navigation }) => {
                   ]}
                 >
                   {item.label}
+                  {countForTab !== null ? ` (${countForTab})` : ''}
                 </Text>
               </TouchableOpacity>
             );
           }}
         />
       </View>
+
+      {/* Floating Undo Snackbar Banner */}
+      {undoBanner.visible && (
+        <View style={styles.undoFloatingBar}>
+          <MaterialCommunityIcons name="information" size={18} color="#FFFFFF" />
+          <Text style={styles.undoFloatingText}>{undoBanner.message}</Text>
+          <TouchableOpacity
+            style={styles.undoFloatingBtn}
+            onPress={() => handleUndo(undoBanner.complaintId)}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="undo" size={16} color="#FBBF24" />
+            <Text style={styles.undoFloatingBtnText}>UNDO</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Complaints List */}
       <FlatList
@@ -222,12 +366,28 @@ const ComplaintsListScreen = ({ navigation }) => {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <EmptyState
-            icon="clipboard-search-outline"
-            title={Boolean(searchQuery) ? 'No matching reports' : 'No reports in this category'}
+            icon={
+              activeTab === 'archived'
+                ? 'archive-outline'
+                : activeTab === 'deleted'
+                ? 'trash-can-outline'
+                : 'clipboard-search-outline'
+            }
+            title={
+              activeTab === 'archived'
+                ? 'No archived reports'
+                : activeTab === 'deleted'
+                ? 'Trash is empty'
+                : Boolean(searchQuery)
+                ? 'No matching reports'
+                : 'No reports found'
+            }
             message={
-              Boolean(searchQuery)
-                ? 'Try searching with a different case number, plate, or subject.'
-                : 'Reports you submit to Dagupan LGU will appear here with live updates.'
+              activeTab === 'archived'
+                ? 'Reports you archive to clean up your dashboard will appear here.'
+                : activeTab === 'deleted'
+                ? 'Cancelled or deleted reports will be kept here with full undo capability.'
+                : 'Your complaint history and official Dagupan LGU status will be displayed here.'
             }
           />
         }
@@ -238,30 +398,18 @@ const ComplaintsListScreen = ({ navigation }) => {
             bgColor: 'rgba(100, 116, 139, 0.15)',
           };
           const cat = COMPLAINT_CATEGORIES.find((c) => c.value === item.category);
-          const progress = getStepProgress(item.status);
+          const progress = getStepProgress(item);
 
-          // Latest investigation snippet
-          let latestNote = '';
-          if (item.lguTerminationNotes) {
-            latestNote = `Closed: ${item.lguTerminationNotes}`;
-          } else if (item.lguActionNotes) {
-            latestNote = `Action: ${item.lguActionNotes}`;
-          } else if (item.adminNotes) {
-            latestNote = `Operator: ${item.adminNotes}`;
-          } else if (item.lguCaseNumber) {
-            latestNote = `Case escalated to Dagupan POSO for official inquiry.`;
-          } else {
-            latestNote = `Awaiting transport dispatch verification.`;
-          }
+          // Rules evaluation
+          const isInProgress = ['pending', 'under_review'].includes(item.status);
+          const isArchived = Boolean(item.isArchived);
+          const isDeleted = item.status === 'deleted';
+          const canEdit = isInProgress && !isArchived && !isDeleted;
 
           return (
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ComplaintDetail', { complaint: item, complaintId: item._id })}
-              activeOpacity={0.88}
-              style={{ marginBottom: SPACING.md }}
-            >
+            <View style={{ marginBottom: SPACING.md }}>
               <Card style={styles.cardOverride}>
-                {/* Case Bar */}
+                {/* Header Case Tag & Status */}
                 <View style={styles.cardHeaderRow}>
                   {Boolean(item.lguCaseNumber) ? (
                     <View style={styles.caseTag}>
@@ -271,21 +419,40 @@ const ComplaintsListScreen = ({ navigation }) => {
                   ) : (
                     <View style={[styles.caseTag, { backgroundColor: 'rgba(100, 116, 139, 0.12)' }]}>
                       <MaterialCommunityIcons name="clock-outline" size={14} color={colors.textMuted} />
-                      <Text style={[styles.caseTagText, { color: colors.textMuted }]}>Pending LGU Case #</Text>
+                      <Text style={[styles.caseTagText, { color: colors.textMuted }]}>Pending Case #</Text>
                     </View>
                   )}
 
-                  <StatusBadge
-                    label={status.label}
-                    color={status.color}
-                    bgColor={status.bgColor}
-                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {isArchived && (
+                      <View style={styles.archivePill}>
+                        <MaterialCommunityIcons name="archive" size={11} color="#F59E0B" />
+                        <Text style={styles.archivePillText}>Archived</Text>
+                      </View>
+                    )}
+                    {isDeleted && (
+                      <View style={styles.deletedPill}>
+                        <MaterialCommunityIcons name="trash-can" size={11} color="#EF4444" />
+                        <Text style={styles.deletedPillText}>Deleted</Text>
+                      </View>
+                    )}
+                    <StatusBadge
+                      label={isDeleted ? 'Deleted' : isArchived ? 'Archived' : status.label}
+                      color={isDeleted ? '#EF4444' : isArchived ? '#F59E0B' : status.color}
+                      bgColor={isDeleted ? 'rgba(239, 68, 68, 0.15)' : isArchived ? 'rgba(245, 158, 11, 0.15)' : status.bgColor}
+                    />
+                  </View>
                 </View>
 
                 {/* Subject & Category */}
-                <Text style={[styles.cardSubject, { color: colors.textPrimary }]} numberOfLines={2}>
-                  {item.subject}
-                </Text>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('ComplaintDetail', { complaint: item, complaintId: item._id })}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.cardSubject, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {item.subject}
+                  </Text>
+                </TouchableOpacity>
 
                 <View style={styles.cardMetaRow}>
                   <View style={styles.catPill}>
@@ -307,62 +474,134 @@ const ComplaintsListScreen = ({ navigation }) => {
                   </Text>
                 </View>
 
-                {/* Visual Step Progress Bar */}
-                <View style={styles.progressContainer}>
-                  <View style={styles.progressLabelRow}>
-                    <Text style={[styles.progressStatusText, { color: colors.textPrimary }]}>
-                      Step {progress.step} of 4: {progress.label}
-                    </Text>
-                    <Text style={[styles.progressPercentText, { color: colors.primary }]}>
-                      {progress.percent}%
-                    </Text>
-                  </View>
-
-                  <View style={[styles.progressBarTrack, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}>
-                    <View
-                      style={[
-                        styles.progressBarFill,
-                        {
-                          width: `${progress.percent}%`,
-                          backgroundColor:
-                            progress.percent === 100
-                              ? '#10B981'
-                              : progress.percent >= 75
-                              ? '#0284C7'
-                              : colors.primary,
-                        },
-                      ]}
-                    />
-                  </View>
-                </View>
-
-                {/* Latest Update Snippet */}
-                <View style={[styles.latestNoteBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC' }]}>
+                {/* Step / Status Note */}
+                <View
+                  style={[
+                    styles.statusNoticeBox,
+                    {
+                      backgroundColor: isDeleted
+                        ? 'rgba(239, 68, 68, 0.08)'
+                        : isArchived
+                        ? 'rgba(245, 158, 11, 0.08)'
+                        : isDark
+                        ? 'rgba(255,255,255,0.04)'
+                        : '#F8FAFC',
+                      borderColor: isDeleted
+                        ? 'rgba(239, 68, 68, 0.2)'
+                        : isArchived
+                        ? 'rgba(245, 158, 11, 0.2)'
+                        : colors.border,
+                    },
+                  ]}
+                >
                   <MaterialCommunityIcons
-                    name={item.lguActionNotes ? 'bullhorn' : 'information-outline'}
+                    name={isDeleted ? 'alert-circle' : isArchived ? 'archive-outline' : canEdit ? 'pencil-circle' : 'shield-account'}
                     size={16}
-                    color={item.lguActionNotes ? '#10B981' : colors.textMuted}
+                    color={isDeleted ? '#EF4444' : isArchived ? '#F59E0B' : canEdit ? '#0284C7' : colors.primary}
                   />
                   <Text
                     style={[
-                      styles.latestNoteText,
-                      { color: item.lguActionNotes ? (isDark ? '#34D399' : '#047857') : colors.textSecondary },
+                      styles.statusNoticeText,
+                      {
+                        color: isDeleted
+                          ? '#EF4444'
+                          : isArchived
+                          ? '#D97706'
+                          : colors.textSecondary,
+                      },
                     ]}
                     numberOfLines={2}
                   >
-                    {latestNote}
+                    {isDeleted
+                      ? 'Removed report (Read-only). Tap Undo / Restore to re-activate this report.'
+                      : isArchived
+                      ? 'Archived report (Read-only). Unarchive to edit or manage active tracking.'
+                      : canEdit
+                      ? 'In Progress: You can edit or correct details before Dagupan LGU takes action.'
+                      : item.lguActionNotes
+                      ? `LGU Action: ${item.lguActionNotes}`
+                      : `Escalated to Dagupan POSO for administrative review.`}
                   </Text>
                 </View>
 
-                {/* Footer Action Row */}
-                <View style={styles.cardFooter}>
-                  <Text style={[styles.trackLinkText, { color: colors.primary }]}>
-                    View Investigation Timeline & Evidence
-                  </Text>
-                  <MaterialCommunityIcons name="chevron-right" size={18} color={colors.primary} />
+                {/* Action Bar (Edit, Archive, Delete, Undo) */}
+                <View style={styles.actionsBar}>
+                  {/* EDIT BUTTON (Only allowed when In Progress and not archived/deleted) */}
+                  {canEdit ? (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { borderColor: '#0284C7', backgroundColor: 'rgba(2, 132, 199, 0.08)' }]}
+                      onPress={() => setEditModalData({ visible: true, complaint: item })}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name="pencil-outline" size={15} color="#0284C7" />
+                      <Text style={[styles.actionBtnText, { color: '#0284C7' }]}>Edit</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={[styles.actionBtn, styles.disabledActionBtn]}>
+                      <MaterialCommunityIcons name="pencil-off-outline" size={14} color={colors.textMuted} />
+                      <Text style={[styles.actionBtnText, { color: colors.textMuted }]}>Locked</Text>
+                    </View>
+                  )}
+
+                  {/* ARCHIVE / UNARCHIVE BUTTON */}
+                  {!isDeleted && (
+                    isArchived ? (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { borderColor: '#F59E0B', backgroundColor: 'rgba(245, 158, 11, 0.08)' }]}
+                        onPress={() => handleUnarchive(item)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialCommunityIcons name="archive-arrow-up-outline" size={15} color="#F59E0B" />
+                        <Text style={[styles.actionBtnText, { color: '#F59E0B' }]}>Unarchive</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { borderColor: colors.border }]}
+                        onPress={() => handleArchive(item)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialCommunityIcons name="archive-outline" size={15} color={colors.textSecondary} />
+                        <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>Archive</Text>
+                      </TouchableOpacity>
+                    )
+                  )}
+
+                  {/* DELETE / CANCEL BUTTON */}
+                  {!isDeleted ? (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { borderColor: 'rgba(239, 68, 68, 0.3)' }]}
+                      onPress={() => promptDelete(item)}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name="trash-can-outline" size={15} color="#EF4444" />
+                      <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Delete</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {/* UNDO / RESTORE BUTTON (For deleted reports) */}
+                  {isDeleted ? (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}
+                      onPress={() => handleUndo(item._id)}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name="undo-variant" size={16} color="#10B981" />
+                      <Text style={[styles.actionBtnText, { color: '#10B981', fontWeight: '800' }]}>Undo / Restore</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {/* VIEW DETAILS LINK */}
+                  <TouchableOpacity
+                    style={[styles.viewDetailsBtn, { marginLeft: 'auto' }]}
+                    onPress={() => navigation.navigate('ComplaintDetail', { complaint: item, complaintId: item._id })}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.viewDetailsText, { color: colors.primary }]}>Timeline</Text>
+                    <MaterialCommunityIcons name="chevron-right" size={16} color={colors.primary} />
+                  </TouchableOpacity>
                 </View>
               </Card>
-            </TouchableOpacity>
+            </View>
           );
         }}
       />
@@ -407,26 +646,26 @@ const styles = StyleSheet.create({
   metricsRow: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.xl,
-    gap: 10,
+    gap: 8,
     marginTop: SPACING.sm,
     marginBottom: SPACING.md,
   },
   metricCard: {
     flex: 1,
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 6,
     borderRadius: RADIUS.md,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   metricValue: {
-    fontSize: FONTS.sizes.lg,
+    fontSize: FONTS.sizes.md,
     fontWeight: '800',
   },
   metricLabel: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 9,
+    fontWeight: '700',
     marginTop: 2,
     textTransform: 'uppercase',
   },
@@ -456,7 +695,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tabChip: {
-    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: RADIUS.full,
     borderWidth: 1,
@@ -464,9 +705,48 @@ const styles = StyleSheet.create({
   tabChipText: {
     fontSize: FONTS.sizes.xs,
   },
+  undoFloatingBar: {
+    position: 'absolute',
+    bottom: 24,
+    left: 20,
+    right: 20,
+    backgroundColor: '#0F172A',
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 999,
+    ...SHADOWS.lg,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  undoFloatingText: {
+    color: '#F8FAFC',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  undoFloatingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#FBBF24',
+  },
+  undoFloatingBtnText: {
+    color: '#FBBF24',
+    fontSize: 11,
+    fontWeight: '800',
+  },
   listContent: {
     paddingHorizontal: SPACING.xl,
-    paddingBottom: 40,
+    paddingBottom: 60,
   },
   cardOverride: {
     padding: 14,
@@ -492,6 +772,34 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0284c7',
   },
+  archivePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  archivePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  deletedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  deletedPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#EF4444',
+  },
   cardSubject: {
     fontSize: FONTS.sizes.md,
     fontWeight: '700',
@@ -503,7 +811,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   catPill: {
     flexDirection: 'row',
@@ -533,55 +841,53 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginLeft: 'auto',
   },
-  progressContainer: {
-    marginBottom: 10,
-  },
-  progressLabelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  progressStatusText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  progressPercentText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  progressBarTrack: {
-    height: 6,
-    borderRadius: RADIUS.full,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: RADIUS.full,
-  },
-  latestNoteBox: {
+  statusNoticeBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 10,
+    padding: 8,
     borderRadius: RADIUS.md,
+    borderWidth: 1,
     marginBottom: 10,
   },
-  latestNoteText: {
+  statusNoticeText: {
     flex: 1,
     fontSize: 11,
     lineHeight: 16,
   },
-  cardFooter: {
+  actionsBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(150, 150, 150, 0.2)',
-    paddingTop: 8,
+    paddingTop: 10,
   },
-  trackLinkText: {
-    fontSize: 12,
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+  },
+  disabledActionBtn: {
+    borderColor: 'transparent',
+    opacity: 0.6,
+  },
+  actionBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  viewDetailsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 5,
+  },
+  viewDetailsText: {
+    fontSize: 11,
     fontWeight: '700',
   },
 });

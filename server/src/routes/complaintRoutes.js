@@ -12,6 +12,7 @@ const {
   lguActionSchema,
   lguTerminateSchema,
   addAdminNotesSchema,
+  updateCommuterComplaintSchema,
 } = require('../validators/complaintValidator');
 
 router.use(authMiddleware);
@@ -20,6 +21,11 @@ router.use(authMiddleware);
 router.post('/upload-photo', rbac('commuter'), uploadEvidence.single('photo'), complaintController.uploadEvidencePhoto);
 router.post('/', rbac('commuter'), validate(createComplaintSchema), complaintController.createComplaint);
 router.get('/my', rbac('commuter'), complaintController.getMyComplaints);
+router.put('/my/:id', rbac('commuter'), validate(updateCommuterComplaintSchema), complaintController.updateMyComplaint);
+router.put('/my/:id/archive', rbac('commuter'), complaintController.archiveMyComplaint);
+router.put('/my/:id/unarchive', rbac('commuter'), complaintController.unarchiveMyComplaint);
+router.delete('/my/:id', rbac('commuter'), complaintController.deleteMyComplaint);
+router.put('/my/:id/undo', rbac('commuter'), complaintController.undoMyComplaint);
 router.get('/:id', rbac('commuter', 'admin', 'lgu', 'superadmin'), complaintController.getComplaintById);
 
 // Staff / Operator / LGU routes
