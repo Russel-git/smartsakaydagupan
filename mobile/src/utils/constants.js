@@ -166,8 +166,12 @@ export const COMPLAINT_CATEGORIES = [
 export const COMPLAINT_STATUS = {
   pending: { label: 'Pending', color: COLORS.warning, bgColor: COLORS.warningLight },
   under_review: { label: 'Under Review', color: COLORS.info, bgColor: COLORS.infoLight },
+  endorsed_to_lgu: { label: 'Endorsed to LGU', color: '#0284c7', bgColor: 'rgba(2, 132, 199, 0.15)' },
+  action_taken: { label: 'Action Taken by LGU', color: '#059669', bgColor: 'rgba(5, 150, 105, 0.15)' },
+  terminated: { label: 'Terminated / Resolved', color: COLORS.success, bgColor: COLORS.successLight },
   resolved: { label: 'Resolved', color: COLORS.success, bgColor: COLORS.successLight },
   dismissed: { label: 'Dismissed', color: COLORS.error, bgColor: COLORS.errorLight },
+  deleted: { label: 'Discarded', color: COLORS.error, bgColor: COLORS.errorLight },
 };
 
 export const VEHICLE_TYPES = [

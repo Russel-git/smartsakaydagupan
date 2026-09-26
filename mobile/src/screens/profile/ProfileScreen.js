@@ -22,9 +22,22 @@ const ProfileScreen = ({ navigation }) => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleSave = async () => {
+    const lettersRegex = /^[A-Za-z][A-Za-z\s.'’\-]*[A-Za-z.]$/;
+    const first = form.firstName.trim();
+    const last = form.lastName.trim();
+
+    if (!first || !lettersRegex.test(first) || first.length < 2 || first.length > 25) {
+      showError('Invalid Name', "First name can only contain letters, spaces, and characters: . ' - (2-25 characters)");
+      return;
+    }
+    if (!last || !lettersRegex.test(last) || last.length < 2 || last.length > 25) {
+      showError('Invalid Name', "Last name can only contain letters, spaces, and characters: . ' - (2-25 characters)");
+      return;
+    }
+
     setLoading(true);
     try {
-      await usersAPI.updateProfile({ firstName: form.firstName, lastName: form.lastName });
+      await usersAPI.updateProfile({ firstName: first, lastName: last });
       await refreshProfile();
       setEditing(false);
       showSuccess('Profile Updated!', 'Your commuter account details were saved.');

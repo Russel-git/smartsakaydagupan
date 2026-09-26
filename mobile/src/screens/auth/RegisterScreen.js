@@ -64,26 +64,26 @@ const RegisterScreen = ({ navigation }) => {
     const e = {};
     const cleanFirst = form.firstName.trim();
     const cleanLast = form.lastName.trim();
-    const lettersRegex = /^[A-Za-z]+(\s[A-Za-z]+)*$/;
+    const lettersRegex = /^[A-Za-z][A-Za-z\s.'’\-]*[A-Za-z.]$/;
 
     if (!cleanFirst) {
       e.firstName = 'First name is required';
     } else if (!lettersRegex.test(cleanFirst)) {
-      e.firstName = 'First name can only contain letters';
+      e.firstName = "First name can only contain letters, spaces, and characters: . ' -";
     } else if (cleanFirst.length < 2) {
       e.firstName = 'First name must be at least 2 characters';
-    } else if (cleanFirst.length > 16) {
-      e.firstName = 'First name cannot exceed 16 characters';
+    } else if (cleanFirst.length > 25) {
+      e.firstName = 'First name cannot exceed 25 characters';
     }
 
     if (!cleanLast) {
       e.lastName = 'Last name is required';
     } else if (!lettersRegex.test(cleanLast)) {
-      e.lastName = 'Last name can only contain letters';
+      e.lastName = "Last name can only contain letters, spaces, and characters: . ' -";
     } else if (cleanLast.length < 2) {
       e.lastName = 'Last name must be at least 2 characters';
-    } else if (cleanLast.length > 16) {
-      e.lastName = 'Last name cannot exceed 16 characters';
+    } else if (cleanLast.length > 25) {
+      e.lastName = 'Last name cannot exceed 25 characters';
     }
 
     if (form.suffix && form.suffix.trim().length > 10) {
