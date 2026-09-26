@@ -30,9 +30,8 @@ const userSchema = new mongoose.Schema(
       default: '',
     },
     role: {
-
       type: String,
-      enum: ['guest', 'commuter', 'admin'],
+      enum: ['superadmin', 'admin', 'lgu', 'commuter', 'guest'],
       default: 'commuter',
     },
     isVerified: {
@@ -50,6 +49,14 @@ const userSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lockUntil: {
+      type: Date,
+      default: null,
     },
     refreshToken: {
       type: String,

@@ -10,16 +10,16 @@ const registerSchema = Joi.object({
     'string.pattern.base': 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
     'any.required': 'Password is required',
   }),
-  firstName: Joi.string().trim().min(2).max(16).pattern(/^[A-Za-z]+(\s[A-Za-z]+)*$/).required().messages({
+  firstName: Joi.string().trim().min(2).max(25).pattern(/^[A-Za-z][A-Za-z\s.'’\-]*[A-Za-z.]$/).required().messages({
     'string.min': 'First name must be at least 2 characters',
-    'string.max': 'First name cannot exceed 16 characters',
-    'string.pattern.base': 'First name can only contain letters',
+    'string.max': 'First name cannot exceed 25 characters',
+    'string.pattern.base': "First name can only contain letters, spaces, and characters: . ' -",
     'any.required': 'First name is required',
   }),
-  lastName: Joi.string().trim().min(2).max(16).pattern(/^[A-Za-z]+(\s[A-Za-z]+)*$/).required().messages({
+  lastName: Joi.string().trim().min(2).max(25).pattern(/^[A-Za-z][A-Za-z\s.'’\-]*[A-Za-z.]$/).required().messages({
     'string.min': 'Last name must be at least 2 characters',
-    'string.max': 'Last name cannot exceed 16 characters',
-    'string.pattern.base': 'Last name can only contain letters',
+    'string.max': 'Last name cannot exceed 25 characters',
+    'string.pattern.base': "Last name can only contain letters, spaces, and characters: . ' -",
     'any.required': 'Last name is required',
   }),
   suffix: Joi.string().trim().max(10).allow('', null).optional().messages({
@@ -75,8 +75,16 @@ const changePasswordSchema = Joi.object({
 });
 
 const updateProfileSchema = Joi.object({
-  firstName: Joi.string().trim().min(2).max(16).pattern(/^[A-Za-z]+(\s[A-Za-z]+)*$/),
-  lastName: Joi.string().trim().min(2).max(16).pattern(/^[A-Za-z]+(\s[A-Za-z]+)*$/),
+  firstName: Joi.string().trim().min(2).max(25).pattern(/^[A-Za-z][A-Za-z\s.'’\-]*[A-Za-z.]$/).messages({
+    'string.min': 'First name must be at least 2 characters',
+    'string.max': 'First name cannot exceed 25 characters',
+    'string.pattern.base': "First name can only contain letters, spaces, and characters: . ' -",
+  }),
+  lastName: Joi.string().trim().min(2).max(25).pattern(/^[A-Za-z][A-Za-z\s.'’\-]*[A-Za-z.]$/).messages({
+    'string.min': 'Last name must be at least 2 characters',
+    'string.max': 'Last name cannot exceed 25 characters',
+    'string.pattern.base': "Last name can only contain letters, spaces, and characters: . ' -",
+  }),
   suffix: Joi.string().trim().max(10).allow('', null),
   profilePhoto: Joi.string().allow('', null),
 }).min(1);
