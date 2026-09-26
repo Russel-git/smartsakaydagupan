@@ -14,12 +14,11 @@ import { FONTS, SPACING, RADIUS } from '../../utils/constants';
 import RouteMapScreen from '../map/RouteMapScreen';
 import FareCalculatorScreen from '../fare/FareCalculatorScreen';
 import FareMatrixScreen from '../fare/FareMatrixScreen';
-import PinpointFareScreen from '../fare/PinpointFareScreen';
 
 const RoutesAndFaresScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
-  // Default to 'pinpoint' or 'routes' if specified
-  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || 'pinpoint');
+  // Default to 'routes', or 'fares' if specified
+  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || 'routes');
   const [fareSubTab, setFareSubTab] = useState('calculator'); // 'calculator' | 'matrix'
 
   useEffect(() => {
@@ -36,36 +35,6 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
           <TouchableOpacity
             style={[
               styles.segmentBtn,
-              activeTab === 'pinpoint' && {
-                backgroundColor: colors.primary,
-                shadowColor: colors.primary,
-                shadowOpacity: 0.25,
-                shadowRadius: 4,
-                elevation: 2,
-              },
-            ]}
-            onPress={() => setActiveTab('pinpoint')}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons
-              name="crosshairs-gps"
-              size={17}
-              color={activeTab === 'pinpoint' ? '#FFFFFF' : colors.textSecondary}
-            />
-            <Text
-              style={[
-                styles.segmentText,
-                { color: activeTab === 'pinpoint' ? '#FFFFFF' : colors.textSecondary },
-              ]}
-              numberOfLines={1}
-            >
-              Pinpoint Fare
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.segmentBtn,
               activeTab === 'routes' && {
                 backgroundColor: colors.primary,
                 shadowColor: colors.primary,
@@ -79,7 +48,7 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
           >
             <MaterialCommunityIcons
               name="map-marker-radius"
-              size={17}
+              size={18}
               color={activeTab === 'routes' ? '#FFFFFF' : colors.textSecondary}
             />
             <Text
@@ -87,9 +56,8 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
                 styles.segmentText,
                 { color: activeTab === 'routes' ? '#FFFFFF' : colors.textSecondary },
               ]}
-              numberOfLines={1}
             >
-              Routes
+              Route Maps
             </Text>
           </TouchableOpacity>
 
@@ -109,7 +77,7 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
           >
             <MaterialCommunityIcons
               name="calculator"
-              size={17}
+              size={18}
               color={activeTab === 'fares' ? '#FFFFFF' : colors.textSecondary}
             />
             <Text
@@ -117,9 +85,8 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
                 styles.segmentText,
                 { color: activeTab === 'fares' ? '#FFFFFF' : colors.textSecondary },
               ]}
-              numberOfLines={1}
             >
-              Matrix
+              Fares & Matrix
             </Text>
           </TouchableOpacity>
         </View>
@@ -127,9 +94,7 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
 
       {/* Main Content Area */}
       <View style={styles.body}>
-        {activeTab === 'pinpoint' ? (
-          <PinpointFareScreen navigation={navigation} />
-        ) : activeTab === 'routes' ? (
+        {activeTab === 'routes' ? (
           <RouteMapScreen navigation={navigation} />
         ) : (
           <View style={styles.fareContainer}>

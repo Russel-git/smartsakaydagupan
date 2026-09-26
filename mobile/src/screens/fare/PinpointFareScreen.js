@@ -41,10 +41,10 @@ const POPULAR_DESTINATIONS = [
   { name: 'Caranglaan Commercial', lat: 16.0380, lng: 120.3580, icon: 'storefront' },
 ];
 
-// Haversine distance in km
+// Haversine straight-line distance fallback in km
 const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
-  const R = 6371; // Earth's radius in km
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -58,7 +58,7 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
 };
 
 // Check if a coordinate is near any point on a route path
-const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.4) => {
+const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.45) => {
   if (!routePath || !Array.isArray(routePath) || routePath.length === 0) return false;
   for (let i = 0; i < routePath.length; i++) {
     const p = routePath[i];
@@ -72,7 +72,7 @@ const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.4) => {
   return false;
 };
 
-const PinpointFareScreen = ({ navigation }) => {
+const PinpointFareScreen = ({ navigation, onStartRide }) => {
   const { colors, isDark } = useTheme();
   const { showSuccess, showWarning, showError } = useFeedback();
   const webViewRef = useRef(null);
@@ -94,6 +94,12 @@ const PinpointFareScreen = ({ navigation }) => {
   // Location Permission State
   const [permissionStatus, setPermissionStatus] = useState('checking'); // 'checking' | 'granted' | 'denied'
   const [gpsLoading, setGpsLoading] = useState(false);
+
+  // Road Routing State (OSRM road-aligned data)
+  const [roadDistanceKm, setRoadDistanceKm] = useState(2.4);
+  const [roadDurationMins, setRoadDurationMins] = useState(8);
+  const [roadSummary, setRoadSummary] = useState('Finding fastest road route...');
+  const [isRouting, setIsRouting] = useState(false);
 
   // Active Fares & Routes from Backend
   const [routes, setRoutes] = useState([]);
@@ -183,16 +189,12 @@ const PinpointFareScreen = ({ navigation }) => {
     fetchData();
   }, []);
 
-  // Calculate Distance (km)
-  const distanceKm = useMemo(() => {
-    return calculateDistanceKm(origin.lat, origin.lng, destination.lat, destination.lng);
-  }, [origin, destination]);
-
-  // Estimated Travel Time in minutes (~18 km/h city average in Dagupan)
-  const estimatedTimeMins = useMemo(() => {
-    if (!distanceKm || distanceKm <= 0) return 3;
-    return Math.max(3, Math.round((distanceKm / 18) * 60));
-  }, [distanceKm]);
+  // Use road distance if available, otherwise Haversine fallback
+  const effectiveDistanceKm = useMemo(() => {
+    if (roadDistanceKm && roadDistanceKm > 0) return roadDistanceKm;
+    const direct = calculateDistanceKm(origin.lat, origin.lng, destination.lat, destination.lng);
+    return Math.round(direct * 1.25 * 10) / 10;
+  }, [roadDistanceKm, origin, destination]);
 
   // Route Corridor Intelligence: Check if origin & destination are along any Dagupan jeepney route
   const routeIntelligence = useMemo(() => {
@@ -209,12 +211,23 @@ const PinpointFareScreen = ({ navigation }) => {
     return { isOnRoute: false, matchingRoute: null };
   }, [routes, origin, destination]);
 
-  // Calculate Fares dynamically based on distance for all 3 vehicle types
+  // If corridor status changes, auto-select the best vehicle
+  useEffect(() => {
+    if (routeIntelligence.isOnRoute) {
+      if (selectedVehicle === 'tricycle') {
+        setSelectedVehicle('traditional');
+      }
+    } else {
+      setSelectedVehicle('tricycle');
+    }
+  }, [routeIntelligence.isOnRoute]);
+
+  // Calculate Fares dynamically based on exact road distance for all 3 vehicle types
   const computedFares = useMemo(() => {
-    const dist = distanceKm;
+    const dist = effectiveDistanceKm;
 
     // 1. Tricycle (Dagupan TFRB Ordinance)
-    // Default: Base ₱15 for 1st km, ₱3/km thereafter
+    // Base ₱15 for 1st km, ₱3/km thereafter
     const triConf = activeFares.tricycle || { baseFare: 15, baseDistanceKm: 1, perKmRate: 3 };
     const triBase = triConf.baseFare;
     const triBaseDist = triConf.baseDistanceKm;
@@ -224,7 +237,7 @@ const PinpointFareScreen = ({ navigation }) => {
     const triDisc = Math.round(triReg * 0.8);
 
     // 2. Traditional Jeepney (LTFRB)
-    // Default: Base ₱14 for 1st 4 km, ₱2/km thereafter
+    // Base ₱14 for 1st 4 km, ₱2/km thereafter
     const tradConf = activeFares.traditional || { baseFare: 14, baseDistanceKm: 4, perKmRate: 2 };
     const tradBase = tradConf.baseFare;
     const tradBaseDist = tradConf.baseDistanceKm;
@@ -234,7 +247,7 @@ const PinpointFareScreen = ({ navigation }) => {
     const tradDisc = Math.round(tradReg * 0.8);
 
     // 3. Modern Jeepney (LTFRB)
-    // Default: Base ₱17 for 1st 4 km, ₱2.40/km thereafter
+    // Base ₱17 for 1st 4 km, ₱2.40/km thereafter
     const modConf = activeFares.modern || { baseFare: 17, baseDistanceKm: 4, perKmRate: 2.4 };
     const modBase = modConf.baseFare;
     const modBaseDist = modConf.baseDistanceKm;
@@ -248,89 +261,101 @@ const PinpointFareScreen = ({ navigation }) => {
         regular: triReg,
         discounted: triDisc,
         baseFare: triBase,
-        baseDistanceKm: triBaseDist,
-        perKmRate: triPerKm,
-        extraCost: triExtra,
+        baseDist: triBaseDist,
+        perKm: triPerKm,
+        extraKm: dist > triBaseDist ? Math.round((dist - triBaseDist) * 10) / 10 : 0,
       },
       traditional: {
         regular: tradReg,
         discounted: tradDisc,
         baseFare: tradBase,
-        baseDistanceKm: tradBaseDist,
-        perKmRate: tradPerKm,
-        extraCost: tradExtra,
+        baseDist: tradBaseDist,
+        perKm: tradPerKm,
+        extraKm: dist > tradBaseDist ? Math.round((dist - tradBaseDist) * 10) / 10 : 0,
       },
       modern: {
         regular: modReg,
         discounted: modDisc,
         baseFare: modBase,
-        baseDistanceKm: modBaseDist,
-        perKmRate: modPerKm,
-        extraCost: modExtra,
+        baseDist: modBaseDist,
+        perKm: modPerKm,
+        extraKm: dist > modBaseDist ? Math.round((dist - modBaseDist) * 10) / 10 : 0,
       },
     };
-  }, [distanceKm, activeFares]);
+  }, [effectiveDistanceKm, activeFares]);
 
-  // Selected vehicle fare
-  const currentFareData = computedFares[selectedVehicle] || computedFares.tricycle;
-  const currentPrice = isDiscounted ? currentFareData.discounted : currentFareData.regular;
-
-  // Handle map click event received from WebView
-  const handlePinpointUpdate = (lat, lng, name = null) => {
-    // Check if near any popular landmark
-    let matchedName = name;
-    if (!matchedName) {
-      const near = POPULAR_DESTINATIONS.find(
-        (p) => calculateDistanceKm(lat, lng, p.lat, p.lng) <= 0.3
-      );
-      matchedName = near ? near.name : `Pinpoint (${lat.toFixed(4)}°, ${lng.toFixed(4)}°)`;
+  // Handle message from Leaflet Web / WebView
+  const handleMapEvent = (data) => {
+    if (!data) return;
+    if (data.type === 'ROUTE_CALCULATED') {
+      setIsRouting(false);
+      setDestination((prev) => ({
+        ...prev,
+        lat: data.lat,
+        lng: data.lng,
+        name: data.summary ? `Near ${data.summary.split('➔')[0].trim()}` : prev.name,
+      }));
+      if (data.distanceKm) setRoadDistanceKm(data.distanceKm);
+      if (data.durationMins) setRoadDurationMins(data.durationMins);
+      if (data.summary) setRoadSummary(data.summary);
+    } else if (data.type === 'PINPOINT_DESTINATION') {
+      setIsRouting(false);
+      setDestination((prev) => ({
+        ...prev,
+        lat: data.lat,
+        lng: data.lng,
+      }));
+      // Haversine fallback distance
+      const d = calculateDistanceKm(origin.lat, origin.lng, data.lat, data.lng);
+      setRoadDistanceKm(Math.round(d * 1.25 * 10) / 10);
+      setRoadDurationMins(Math.max(2, Math.round((d / 18) * 60)));
+    } else if (data.type === 'ROUTING_STARTED') {
+      setIsRouting(true);
     }
-
-    setDestination({
-      lat,
-      lng,
-      name: matchedName,
-    });
   };
 
-  // Web postMessage listener
+  // Listen to web postMessage
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const handleWindowMsg = (e) => {
         try {
           const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-          if (data && data.type === 'PINPOINT_DESTINATION') {
-            handlePinpointUpdate(data.lat, data.lng);
-          }
+          handleMapEvent(data);
         } catch (_) {}
       };
       window.addEventListener('message', handleWindowMsg);
       return () => window.removeEventListener('message', handleWindowMsg);
     }
-  }, []);
+  }, [origin]);
 
-  // Send destination to Leaflet map
+  // Send destination to Leaflet map from landmark chips
   const selectLandmark = (item) => {
     setDestination({
       lat: item.lat,
       lng: item.lng,
       name: item.name,
     });
-    // Post to webview to re-center
+    setIsRouting(true);
+    // Post to webview to re-calculate and re-center
     const script = `if (window.setDestinationFromApp) { window.setDestinationFromApp(${item.lat}, ${item.lng}); }`;
     if (webViewRef.current && Platform.OS !== 'web') {
       webViewRef.current.injectJavaScript(script);
+    } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const iframe = document.getElementById('pinpoint-fare-map');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(JSON.stringify({ type: 'SET_DESTINATION', lat: item.lat, lng: item.lng }), '*');
+      }
     }
   };
 
-  // Generate Leaflet Interactive Map HTML
+  // Generate Leaflet Interactive Map HTML with Real Road Routing (OSRM)
   const generateLeafletHtml = () => {
     const oLat = origin.lat;
     const oLng = origin.lng;
     const dLat = destination.lat;
     const dLng = destination.lng;
 
-    // Serialize routes for visual reference
+    // Serialize routes for visual corridor reference
     const routesData = routes.map((r) => ({
       name: r.name,
       color: r.category === 'city' ? '#3B82F6' : '#10B981',
@@ -381,22 +406,23 @@ const PinpointFareScreen = ({ navigation }) => {
 
           /* Destination Pin */
           .dest-pin {
-            width: 36px;
-            height: 36px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             background: #EF4444;
             color: #ffffff;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
+            font-size: 20px;
             border: 3px solid #ffffff;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.5);
-            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+            cursor: grab;
             transition: transform 0.15s ease;
           }
-          .dest-pin:hover {
-            transform: scale(1.1);
+          .dest-pin:active {
+            cursor: grabbing;
+            transform: scale(1.15);
           }
           
           /* Banner hint */
@@ -405,21 +431,41 @@ const PinpointFareScreen = ({ navigation }) => {
             top: 10px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(15, 23, 42, 0.85);
+            background: rgba(15, 23, 42, 0.90);
             color: #ffffff;
-            padding: 5px 12px;
+            padding: 6px 14px;
             border-radius: 20px;
             font-size: 11px;
             font-weight: 700;
             z-index: 1000;
             pointer-events: none;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+          }
+          .route-status-pill {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            background: rgba(15, 23, 42, 0.90);
+            color: #38BDF8;
+            padding: 5px 12px;
+            border-radius: 14px;
+            font-size: 11px;
+            font-weight: 700;
+            z-index: 1000;
+            pointer-events: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
           }
         </style>
       </head>
       <body>
         <div id="map"></div>
-        <div class="map-tap-hint">📍 Tap anywhere to pinpoint destination</div>
+        <div class="map-tap-hint" id="status-hint">📍 Tap or drag red pin to find best road route</div>
+        <div class="route-status-pill" id="route-meta">🛣️ Aligning to Dagupan roads...</div>
+
         <script>
           function postToApp(data) {
             var str = JSON.stringify(data);
@@ -443,19 +489,19 @@ const PinpointFareScreen = ({ navigation }) => {
             attribution: '&copy; OpenStreetMap'
           }).addTo(map);
 
-          // Draw Jeepney corridor paths in faint transparent lines
+          // Draw Dagupan Jeepney corridor routes as soft guide lines
           routes.forEach(function(r) {
             if (r.path && r.path.length > 0) {
               L.polyline(r.path, {
                 color: r.color,
                 weight: 3,
-                opacity: 0.35,
-                dashArray: '4, 6'
+                opacity: 0.25,
+                dashArray: '3, 6'
               }).addTo(map);
             }
           });
 
-          // Origin Marker
+          // Origin Marker (green pulsating)
           var originIcon = L.divIcon({
             className: 'origin-marker',
             html: '<div class="origin-beacon"><div class="origin-pulse"></div><div class="origin-core"></div></div>',
@@ -463,440 +509,576 @@ const PinpointFareScreen = ({ navigation }) => {
             iconAnchor: [16, 16]
           });
           var originMarker = L.marker([oLat, oLng], { icon: originIcon }).addTo(map)
-            .bindPopup('<b>Starting Location</b><br/>Your current position');
+            .bindPopup('<b>Starting Location</b><br/>Your GPS position');
 
-          // Destination Marker (Draggable)
+          // Destination Marker (red draggable pin)
           var destIcon = L.divIcon({
             className: 'dest-marker',
             html: '<div class="dest-pin">📍</div>',
-            iconSize: [36, 36],
-            iconAnchor: [18, 18]
+            iconSize: [38, 38],
+            iconAnchor: [19, 19]
           });
           var destMarker = L.marker([dLat, dLng], { icon: destIcon, draggable: true }).addTo(map)
-            .bindPopup('<b>Pinpoint Destination</b><br/>Drag or tap map to move');
+            .bindPopup('<b>Destination</b><br/>Drag or tap map to re-route');
 
-          // Connecting Polyline
-          var routeLine = L.polyline([[oLat, oLng], [dLat, dLng]], {
-            color: '#0284C7',
-            weight: 4,
-            opacity: 0.85,
-            dashArray: '6, 8'
-          }).addTo(map);
+          // Road route polyline layers (NO straight dashes)
+          var currentGlowLayer = null;
+          var currentRouteLayer = null;
 
-          function updateConnector() {
-            var dPos = destMarker.getLatLng();
-            routeLine.setLatLngs([[oLat, oLng], [dPos.lat, dPos.lng]]);
+          // Road routing engine via OSRM
+          async function updateRoadRoute(destLatitude, destLongitude) {
+            dLat = destLatitude;
+            dLng = destLongitude;
+            destMarker.setLatLng([dLat, dLng]);
+
+            var hintEl = document.getElementById('status-hint');
+            var metaEl = document.getElementById('route-meta');
+            if (hintEl) hintEl.innerHTML = '⚡ Finding fastest road route...';
+            if (metaEl) metaEl.innerHTML = 'Calculating road alignment...';
+
+            postToApp({ type: 'ROUTING_STARTED', lat: dLat, lng: dLng });
+
+            try {
+              var url = 'https://router.project-osrm.org/route/v1/driving/' + oLng + ',' + oLat + ';' + dLng + ',' + dLat + '?overview=full&geometries=geojson&steps=true';
+              var res = await fetch(url);
+              var data = await res.json();
+
+              if (data && data.routes && data.routes.length > 0) {
+                var best = data.routes[0];
+                var latLngs = best.geometry.coordinates.map(function(c) {
+                  return [c[1], c[0]]; // OSRM is [lng, lat], Leaflet is [lat, lng]
+                });
+
+                // Clear any previous route layers
+                if (currentGlowLayer) map.removeLayer(currentGlowLayer);
+                if (currentRouteLayer) map.removeLayer(currentRouteLayer);
+
+                // 1. Draw glowing road casing (gives a professional navigation neon glow)
+                currentGlowLayer = L.polyline(latLngs, {
+                  color: '#0284C7',
+                  weight: 9,
+                  opacity: 0.35,
+                  lineCap: 'round',
+                  lineJoin: 'round'
+                }).addTo(map);
+
+                // 2. Draw solid road alignment (traces exact streets of Dagupan)
+                currentRouteLayer = L.polyline(latLngs, {
+                  color: '#0284C7',
+                  weight: 5,
+                  opacity: 0.95,
+                  lineCap: 'round',
+                  lineJoin: 'round'
+                }).addTo(map);
+
+                // Fit bounds smoothly to encompass the full road route
+                map.fitBounds(L.latLngBounds(latLngs), { padding: [45, 45], maxZoom: 16 });
+
+                var distKm = Math.round((best.distance / 1000) * 10) / 10;
+                var durMins = Math.max(1, Math.round(best.duration / 60));
+                var streetNames = [];
+                if (best.legs && best.legs[0] && best.legs[0].steps) {
+                  best.legs[0].steps.forEach(function(s) {
+                    if (s.name && s.name.trim() !== '' && streetNames.indexOf(s.name) === -1) {
+                      streetNames.push(s.name);
+                    }
+                  });
+                }
+                var summary = streetNames.slice(0, 3).join(' ➔ ');
+
+                if (hintEl) hintEl.innerHTML = '📍 Best Route: ' + distKm + ' km • ~' + durMins + ' mins';
+                if (metaEl) metaEl.innerHTML = summary ? ('🛣️ ' + summary) : ('🛣️ Fastest road aligned');
+
+                postToApp({
+                  type: 'ROUTE_CALCULATED',
+                  lat: dLat,
+                  lng: dLng,
+                  distanceKm: distKm,
+                  durationMins: durMins,
+                  summary: summary || 'Fastest street route',
+                  coordinates: latLngs
+                });
+                return;
+              }
+            } catch (err) {
+              console.warn('Road routing error:', err);
+            }
+
+            // Fallback if offline
+            if (hintEl) hintEl.innerHTML = '📍 Destination Pinpoint Updated';
+            if (metaEl) metaEl.innerHTML = 'Direct distance calculated';
+            postToApp({ type: 'PINPOINT_DESTINATION', lat: dLat, lng: dLng });
           }
 
-          // On Dragging Destination Marker
-          destMarker.on('drag', updateConnector);
+          // Initial road route calculation
+          updateRoadRoute(dLat, dLng);
+
+          // On dragging destination marker
           destMarker.on('dragend', function() {
             var pos = destMarker.getLatLng();
-            updateConnector();
-            postToApp({ type: 'PINPOINT_DESTINATION', lat: pos.lat, lng: pos.lng });
+            updateRoadRoute(pos.lat, pos.lng);
           });
 
-          // On Map Tap / Click anywhere
+          // On map click anywhere in Dagupan
           map.on('click', function(e) {
-            var lat = e.latlng.lat;
-            var lng = e.latlng.lng;
-            destMarker.setLatLng([lat, lng]);
-            updateConnector();
-            postToApp({ type: 'PINPOINT_DESTINATION', lat: lat, lng: lng });
+            updateRoadRoute(e.latlng.lat, e.latlng.lng);
           });
 
-          // Exposed to parent window
+          // Exposed to React Native parent window / iframe
           window.setDestinationFromApp = function(lat, lng) {
-            destMarker.setLatLng([lat, lng]);
-            updateConnector();
-            map.panTo([(oLat + lat)/2, (oLng + lng)/2]);
+            updateRoadRoute(lat, lng);
           };
 
-          // Auto-fit bounds
-          map.fitBounds(L.latLngBounds([[oLat, oLng], [dLat, dLng]]), { padding: [40, 40] });
+          window.addEventListener('message', function(e) {
+            try {
+              var d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+              if (d && d.type === 'SET_DESTINATION') {
+                updateRoadRoute(d.lat, d.lng);
+              }
+            } catch (_) {}
+          });
         </script>
       </body>
       </html>
     `;
   };
 
+  const currentFareData = computedFares[selectedVehicle];
+  const finalFare = isDiscounted ? currentFareData.discounted : currentFareData.regular;
+
+  // Handle Start Live Ride Meter
+  const handleStartRideMeter = () => {
+    if (onStartRide) {
+      onStartRide({
+        route: routeIntelligence.matchingRoute,
+        vehicleType: selectedVehicle,
+        destination: destination.name,
+      });
+    } else {
+      navigation.navigate('Ride', {
+        initialTab: 'tracker',
+        selectedRoute: routeIntelligence.matchingRoute,
+        vehicleType: selectedVehicle,
+      });
+    }
+  };
+
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 50 }}>
-      {/* Top Banner / Location Permission Prompt */}
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={{ paddingBottom: SPACING.xxl }}
+    >
+      {/* Location Permission Notification / Status Bar */}
       {permissionStatus === 'denied' && (
-        <View style={styles.permissionWarningBanner}>
+        <View style={[styles.permissionBanner, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
           <MaterialCommunityIcons name="map-marker-alert" size={20} color="#D97706" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.permissionWarningTitle}>GPS Access Denied</Text>
-            <Text style={styles.permissionWarningText}>
-              Origin defaulted to Dagupan City Plaza. Tap below to enable live GPS.
+          <View style={{ flex: 1, marginLeft: 8 }}>
+            <Text style={[styles.permissionTitle, { color: '#92400E' }]}>Location Access Denied</Text>
+            <Text style={[styles.permissionDesc, { color: '#B45309' }]}>
+              Using Dagupan City Plaza as starting point. Tap to enable GPS for live distance.
             </Text>
           </View>
-          <TouchableOpacity style={styles.enableGpsBtn} onPress={requestLocation} disabled={gpsLoading}>
+          <TouchableOpacity
+            style={[styles.enableBtn, { backgroundColor: '#D97706' }]}
+            onPress={requestLocation}
+            disabled={gpsLoading}
+          >
             {gpsLoading ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={styles.enableGpsBtnText}>Enable GPS</Text>
+              <Text style={styles.enableBtnText}>Enable GPS</Text>
             )}
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Header Info */}
-      <View style={styles.headerArea}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Pinpoint & Fair Fare</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Tap destination anywhere in Dagupan • Auto-adjusting distance matrix
+      {/* Popular Destination Quick Chips */}
+      <View style={[styles.quickChipsSection, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View style={styles.chipHeaderRow}>
+          <MaterialCommunityIcons name="star-outline" size={16} color={colors.primary} />
+          <Text style={[styles.chipHeaderTitle, { color: colors.textSecondary }]}>
+            Popular Dagupan Destinations (1-Tap Pinpoint):
           </Text>
         </View>
-        <TouchableOpacity
-          style={[styles.recenterBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          onPress={requestLocation}
-          activeOpacity={0.7}
-        >
-          <MaterialCommunityIcons name="crosshairs-gps" size={16} color={origin.isGPS ? '#10B981' : colors.primary} />
-          <Text style={[styles.recenterBtnText, { color: colors.textPrimary }]}>
-            {origin.isGPS ? 'GPS Active' : 'Locate Me'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Quick Destination Chips */}
-      <View style={styles.chipsWrapper}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsContent}>
-          {POPULAR_DESTINATIONS.map((dest, idx) => {
-            const isSelected = destination.name === dest.name;
-            return (
-              <TouchableOpacity
-                key={idx}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+          {POPULAR_DESTINATIONS.map((dest, idx) => (
+            <TouchableOpacity
+              key={`dest-${idx}`}
+              style={[
+                styles.landmarkChip,
+                { backgroundColor: colors.background, borderColor: colors.border },
+                destination.name === dest.name && {
+                  borderColor: colors.primary,
+                  backgroundColor: colors.primary + '15',
+                },
+              ]}
+              onPress={() => selectLandmark(dest)}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name={dest.icon}
+                size={14}
+                color={destination.name === dest.name ? colors.primary : colors.textMuted}
+              />
+              <Text
                 style={[
-                  styles.landmarkChip,
-                  {
-                    backgroundColor: isSelected ? colors.primary : colors.surface,
-                    borderColor: isSelected ? colors.primary : colors.border,
-                  },
+                  styles.landmarkChipText,
+                  { color: destination.name === dest.name ? colors.primary : colors.textPrimary },
                 ]}
-                onPress={() => selectLandmark(dest)}
-                activeOpacity={0.8}
               >
-                <MaterialCommunityIcons
-                  name={dest.icon}
-                  size={14}
-                  color={isSelected ? '#FFFFFF' : colors.textSecondary}
-                />
-                <Text
-                  style={[
-                    styles.landmarkChipText,
-                    { color: isSelected ? '#FFFFFF' : colors.textPrimary, fontWeight: isSelected ? '700' : '500' },
-                  ]}
-                >
-                  {dest.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+                {dest.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
       </View>
 
-      {/* Interactive Leaflet Map Container */}
+      {/* Interactive Leaflet Map with Real Road Alignment */}
       <View style={styles.mapContainer}>
         {Platform.OS === 'web' ? (
           <iframe
-            key={`pinpoint-map-${origin.lat}-${origin.lng}-${destination.lat}-${destination.lng}`}
-            title="Dagupan Pinpoint Destination Map"
+            id="pinpoint-fare-map"
+            key={`map-${origin.lat}-${origin.lng}`}
+            title="Dagupan Road Route Map"
             srcDoc={generateLeafletHtml()}
             style={{ width: '100%', height: '100%', border: 'none' }}
           />
         ) : (
           <WebView
             ref={webViewRef}
-            key={`pinpoint-webview-${origin.lat}-${origin.lng}`}
+            key={`native-map-${origin.lat}-${origin.lng}`}
             originWhitelist={['*']}
             source={{ html: generateLeafletHtml() }}
             style={{ flex: 1, backgroundColor: '#0f172a' }}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            scrollEnabled={false}
             onMessage={(e) => {
               try {
                 const data = JSON.parse(e.nativeEvent.data);
-                if (data.type === 'PINPOINT_DESTINATION') {
-                  handlePinpointUpdate(data.lat, data.lng);
-                }
+                handleMapEvent(data);
               } catch (_) {}
             }}
           />
         )}
       </View>
 
-      <View style={styles.bodyContent}>
-        {/* Route / Distance Summary Header */}
-        <Card style={styles.tripMetricCard}>
-          <View style={styles.tripRow}>
-            {/* Origin */}
-            <View style={styles.tripPointCol}>
-              <View style={[styles.dotPill, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-                <MaterialCommunityIcons name="map-marker-radius" size={16} color="#10B981" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.tripPointLabel}>STARTING FROM</Text>
-                <Text style={[styles.tripPointName, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {origin.name}
-                </Text>
-              </View>
-            </View>
-
-            <MaterialCommunityIcons name="arrow-right-thin" size={24} color={colors.textMuted} style={{ alignSelf: 'center' }} />
-
-            {/* Destination */}
-            <View style={styles.tripPointCol}>
-              <View style={[styles.dotPill, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
-                <MaterialCommunityIcons name="pin" size={16} color="#EF4444" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.tripPointLabel}>PINPOINT DESTINATION</Text>
-                <Text style={[styles.tripPointName, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {destination.name}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.tripStatsRow}>
-            <View style={styles.statPill}>
-              <MaterialCommunityIcons name="map-marker-distance" size={16} color="#0284C7" />
-              <Text style={styles.statText}>
-                Distance: <Text style={{ fontWeight: '800', color: colors.textPrimary }}>{distanceKm} km</Text>
-              </Text>
-            </View>
-            <View style={styles.statPill}>
-              <MaterialCommunityIcons name="clock-outline" size={16} color="#059669" />
-              <Text style={styles.statText}>
-                Travel Time: <Text style={{ fontWeight: '800', color: colors.textPrimary }}>~{estimatedTimeMins} mins</Text>
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* Route Corridor Coverage Intelligence Badge */}
+      {/* Route Corridor Intelligence Banner */}
+      <View style={styles.contentPadding}>
         {routeIntelligence.isOnRoute ? (
-          <View style={[styles.corridorBadge, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5', borderColor: '#10B981' }]}>
-            <MaterialCommunityIcons name="check-circle" size={18} color="#10B981" />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.corridorTitle, { color: isDark ? '#6EE7B7' : '#047857' }]}>
-                On-Route Jeepney Corridor
+          <View style={[styles.corridorBanner, { backgroundColor: '#F0FDF4', borderColor: '#10B981' }]}>
+            <MaterialCommunityIcons name="check-decagram" size={24} color="#10B981" />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={[styles.corridorTitle, { color: '#065F46' }]}>
+                Along {routeIntelligence.matchingRoute.name} Corridor
               </Text>
-              <Text style={[styles.corridorDesc, { color: isDark ? '#A7F3D0' : '#065F46' }]}>
-                Served by: <Text style={{ fontWeight: '800' }}>{routeIntelligence.matchingRoute.name}</Text>. You can take a regular jeepney along this road.
+              <Text style={[styles.corridorDesc, { color: '#047857' }]}>
+                This trip is covered by official Dagupan jeepney routes. Jeepney ride recommended!
               </Text>
             </View>
           </View>
         ) : (
-          <View style={[styles.corridorBadge, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : '#FFFBEB', borderColor: '#F59E0B' }]}>
-            <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#F59E0B" />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.corridorTitle, { color: isDark ? '#FCD34D' : '#B45309' }]}>
-                Off Fixed Jeepney Route Corridor
+          <View style={[styles.corridorBanner, { backgroundColor: '#FFFBEB', borderColor: '#F59E0B' }]}>
+            <MaterialCommunityIcons name="information" size={24} color="#F59E0B" />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={[styles.corridorTitle, { color: '#92400E' }]}>
+                Off Fixed Jeepney Routes
               </Text>
-              <Text style={[styles.corridorDesc, { color: isDark ? '#FDE68A' : '#92400E' }]}>
-                This destination is off regular jeepney lines. Dagupan Tricycle or direct ride is recommended. Pay only the legal Fair Fare calculated below!
+              <Text style={[styles.corridorDesc, { color: '#B45309' }]}>
+                No direct jeepney traverses this exact road path. Direct point-to-point Tricycle recommended with City Ordinance fair fare.
               </Text>
             </View>
           </View>
         )}
 
-        {/* Vehicle Selection & Live Fair Fare Matrix */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Fair Fare Matrix Options</Text>
-          <TouchableOpacity
-            style={[
-              styles.discountToggle,
-              { backgroundColor: isDiscounted ? 'rgba(59, 130, 246, 0.15)' : colors.surface, borderColor: isDiscounted ? '#3B82F6' : colors.border },
-            ]}
-            onPress={() => setIsDiscounted(!isDiscounted)}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons
-              name={isDiscounted ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
-              size={16}
-              color={isDiscounted ? '#3B82F6' : colors.textMuted}
-            />
-            <Text style={[styles.discountToggleText, { color: isDiscounted ? '#3B82F6' : colors.textSecondary }]}>
-              20% Discount
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* Real-time Trip Metrics Card (Exact Road Distance & Time) */}
+        <Card style={[styles.metricsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.metricsHeader}>
+            <View>
+              <Text style={[styles.metricsHeading, { color: colors.textPrimary }]}>
+                Fastest Road Route & Metrics
+              </Text>
+              <Text style={[styles.metricsSubtitle, { color: colors.textMuted }]}>
+                Aligned to actual Dagupan road network
+              </Text>
+            </View>
+            {isRouting ? (
+              <View style={styles.routingBadge}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.routingBadgeText, { color: colors.primary }]}>Routing...</Text>
+              </View>
+            ) : (
+              <View style={[styles.routingBadge, { backgroundColor: '#10B98115', borderColor: '#10B98150', borderWidth: 1 }]}>
+                <MaterialCommunityIcons name="check-circle" size={14} color="#059669" />
+                <Text style={[styles.routingBadgeText, { color: '#059669' }]}>Road Aligned</Text>
+              </View>
+            )}
+          </View>
 
-        {/* 3 Vehicle Option Cards (Tricycle, Traditional Jeep, Modern Jeep) */}
-        <View style={styles.vehicleGrid}>
-          {/* TRICYCLE CARD */}
+          {/* Road Path Summary */}
+          {Boolean(roadSummary) && (
+            <View style={[styles.roadSummaryRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <MaterialCommunityIcons name="routes" size={16} color={colors.primary} />
+              <Text style={[styles.roadSummaryText, { color: colors.textSecondary }]} numberOfLines={1}>
+                {roadSummary}
+              </Text>
+            </View>
+          )}
+
+          {/* Metric Stats Row */}
+          <View style={styles.metricStatsRow}>
+            <View style={styles.metricItem}>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Road Distance</Text>
+              <Text style={[styles.metricValue, { color: colors.primary }]}>
+                {effectiveDistanceKm} km
+              </Text>
+            </View>
+            <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.metricItem}>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Driving Time</Text>
+              <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
+                ~{roadDurationMins} mins
+              </Text>
+            </View>
+            <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.metricItem}>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Starting GPS</Text>
+              <Text style={[styles.metricValueSmall, { color: origin.isGPS ? '#10B981' : colors.textSecondary }]}>
+                {origin.isGPS ? '🟢 Active GPS' : '📍 Dagupan Plaza'}
+              </Text>
+            </View>
+          </View>
+        </Card>
+
+        {/* Vehicle Mode Selector */}
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+          Select Public Transport Matrix:
+        </Text>
+        <View style={styles.vehicleRow}>
+          {/* Tricycle */}
           <TouchableOpacity
             style={[
               styles.vehicleCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: selectedVehicle === 'tricycle' ? '#F59E0B' : colors.border,
-                borderWidth: selectedVehicle === 'tricycle' ? 2 : 1,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              selectedVehicle === 'tricycle' && {
+                borderColor: colors.primary,
+                backgroundColor: colors.primary + '12',
+                borderWidth: 2,
               },
             ]}
             onPress={() => setSelectedVehicle('tricycle')}
-            activeOpacity={0.85}
+            activeOpacity={0.8}
           >
-            <View style={[styles.vehicleIconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-              <MaterialCommunityIcons name="rickshaw" size={24} color="#D97706" />
-            </View>
-            <Text style={[styles.vehicleCardName, { color: colors.textPrimary }]}>Dagupan Tricycle</Text>
-            <Text style={[styles.vehicleCardSub, { color: colors.textMuted }]}>
-              {!routeIntelligence.isOnRoute ? '★ Recommended' : 'Direct Door-to-Door'}
+            <MaterialCommunityIcons
+              name="moped"
+              size={24}
+              color={selectedVehicle === 'tricycle' ? colors.primary : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.vehicleName,
+                { color: selectedVehicle === 'tricycle' ? colors.primary : colors.textPrimary },
+              ]}
+            >
+              Tricycle
             </Text>
-            <Text style={[styles.vehicleCardPrice, { color: '#D97706' }]}>
+            <Text style={[styles.vehicleFarePrice, { color: colors.textPrimary }]}>
               {formatPeso(isDiscounted ? computedFares.tricycle.discounted : computedFares.tricycle.regular)}
             </Text>
-            <Text style={[styles.vehicleCardRate, { color: colors.textMuted }]}>
-              Base ₱{computedFares.tricycle.baseFare} (1 km) + ₱{computedFares.tricycle.perKmRate}/km
+            <Text style={[styles.vehicleNote, { color: colors.textMuted }]}>
+              TFRB City Tariff
             </Text>
           </TouchableOpacity>
 
-          {/* TRADITIONAL JEEP */}
+          {/* Traditional Jeepney */}
           <TouchableOpacity
             style={[
               styles.vehicleCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: selectedVehicle === 'traditional' ? '#0284C7' : colors.border,
-                borderWidth: selectedVehicle === 'traditional' ? 2 : 1,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              selectedVehicle === 'traditional' && {
+                borderColor: colors.primary,
+                backgroundColor: colors.primary + '12',
+                borderWidth: 2,
               },
             ]}
             onPress={() => setSelectedVehicle('traditional')}
-            activeOpacity={0.85}
+            activeOpacity={0.8}
           >
-            <View style={[styles.vehicleIconCircle, { backgroundColor: 'rgba(2, 132, 199, 0.15)' }]}>
-              <MaterialCommunityIcons name="bus" size={24} color="#0284C7" />
-            </View>
-            <Text style={[styles.vehicleCardName, { color: colors.textPrimary }]}>Traditional Jeep</Text>
-            <Text style={[styles.vehicleCardSub, { color: colors.textMuted }]}>LTFRB Regulated</Text>
-            <Text style={[styles.vehicleCardPrice, { color: '#0284C7' }]}>
+            <MaterialCommunityIcons
+              name="van-passenger"
+              size={24}
+              color={selectedVehicle === 'traditional' ? colors.primary : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.vehicleName,
+                { color: selectedVehicle === 'traditional' ? colors.primary : colors.textPrimary },
+              ]}
+            >
+              Jeepney
+            </Text>
+            <Text style={[styles.vehicleFarePrice, { color: colors.textPrimary }]}>
               {formatPeso(isDiscounted ? computedFares.traditional.discounted : computedFares.traditional.regular)}
             </Text>
-            <Text style={[styles.vehicleCardRate, { color: colors.textMuted }]}>
-              Base ₱{computedFares.traditional.baseFare} (4 km) + ₱{computedFares.traditional.perKmRate}/km
+            <Text style={[styles.vehicleNote, { color: colors.textMuted }]}>
+              Traditional
             </Text>
           </TouchableOpacity>
 
-          {/* MODERN JEEP */}
+          {/* Modern Jeepney */}
           <TouchableOpacity
             style={[
               styles.vehicleCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: selectedVehicle === 'modern' ? '#10B981' : colors.border,
-                borderWidth: selectedVehicle === 'modern' ? 2 : 1,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              selectedVehicle === 'modern' && {
+                borderColor: colors.primary,
+                backgroundColor: colors.primary + '12',
+                borderWidth: 2,
               },
             ]}
             onPress={() => setSelectedVehicle('modern')}
-            activeOpacity={0.85}
+            activeOpacity={0.8}
           >
-            <View style={[styles.vehicleIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-              <MaterialCommunityIcons name="bus-articulated-front" size={24} color="#10B981" />
-            </View>
-            <Text style={[styles.vehicleCardName, { color: colors.textPrimary }]}>Modern PUV</Text>
-            <Text style={[styles.vehicleCardSub, { color: colors.textMuted }]}>Air-conditioned</Text>
-            <Text style={[styles.vehicleCardPrice, { color: '#10B981' }]}>
+            <MaterialCommunityIcons
+              name="bus-side"
+              size={24}
+              color={selectedVehicle === 'modern' ? colors.primary : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.vehicleName,
+                { color: selectedVehicle === 'modern' ? colors.primary : colors.textPrimary },
+              ]}
+            >
+              Modern PUV
+            </Text>
+            <Text style={[styles.vehicleFarePrice, { color: colors.textPrimary }]}>
               {formatPeso(isDiscounted ? computedFares.modern.discounted : computedFares.modern.regular)}
             </Text>
-            <Text style={[styles.vehicleCardRate, { color: colors.textMuted }]}>
-              Base ₱{computedFares.modern.baseFare} (4 km) + ₱{computedFares.modern.perKmRate}/km
+            <Text style={[styles.vehicleNote, { color: colors.textMuted }]}>
+              Airconditioned
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Selected Fair Fare Detailed Receipt / Breakdown */}
-        <Card style={styles.breakdownCard}>
-          <View style={styles.breakdownHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.breakdownBadgeText}>OFFICIAL COMPUTED FAIR TARIFF</Text>
-              <Text style={[styles.breakdownVehicleTitle, { color: colors.textPrimary }]}>
-                {selectedVehicle === 'tricycle'
-                  ? 'Dagupan City Tricycle (TFRB Ordinance)'
-                  : selectedVehicle === 'traditional'
-                  ? 'Traditional Jeepney (LTFRB Regulated)'
-                  : 'Modern Aircon Jeepney (LTFRB Regulated)'}
+        {/* Discount Toggle Switch (20% Student/Senior/PWD) */}
+        <TouchableOpacity
+          style={[styles.discountCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => setIsDiscounted(!isDiscounted)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.discountLeft}>
+            <MaterialCommunityIcons
+              name="ticket-percent"
+              size={24}
+              color={isDiscounted ? '#10B981' : colors.textMuted}
+            />
+            <View style={{ marginLeft: 10 }}>
+              <Text style={[styles.discountTitle, { color: colors.textPrimary }]}>
+                20% Commuter Discount
+              </Text>
+              <Text style={[styles.discountSubtitle, { color: colors.textMuted }]}>
+                Students, Senior Citizens (RA 9994) & PWDs (RA 10754)
               </Text>
             </View>
-            <Text style={[styles.breakdownTotalAmount, { color: colors.primary }]}>
-              {formatPeso(currentPrice)}
+          </View>
+          <View style={[styles.discountToggle, isDiscounted && { backgroundColor: '#10B981' }]}>
+            <View style={[styles.discountKnob, isDiscounted && { alignSelf: 'flex-end' }]} />
+          </View>
+        </TouchableOpacity>
+
+        {/* Detailed Fair Fare Breakdown Card */}
+        <Card style={[styles.breakdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.breakdownHeader}>
+            <View>
+              <Text style={[styles.breakdownTitle, { color: colors.textPrimary }]}>
+                Official Fair Fare Computation
+              </Text>
+              <Text style={[styles.breakdownSubtitle, { color: colors.textMuted }]}>
+                {selectedVehicle === 'tricycle'
+                  ? 'Dagupan City TFRB Tricycle Ordinance'
+                  : selectedVehicle === 'traditional'
+                  ? 'LTFRB Region 1 Traditional PUJ Tariff'
+                  : 'LTFRB Modernized Public Utility Vehicle Tariff'}
+              </Text>
+            </View>
+            <Text style={[styles.totalAmount, { color: colors.primary }]}>
+              {formatPeso(finalFare)}
             </Text>
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-          {/* Math details */}
-          <View style={styles.mathRow}>
-            <Text style={[styles.mathLabel, { color: colors.textSecondary }]}>
-              Base Fare (First {currentFareData.baseDistanceKm} km):
+          {/* Breakdown Items */}
+          <View style={styles.breakdownRow}>
+            <Text style={[styles.breakdownLabel, { color: colors.textSecondary }]}>
+              Base Fare (First {currentFareData.baseDist} km):
             </Text>
-            <Text style={[styles.mathVal, { color: colors.textPrimary }]}>
+            <Text style={[styles.breakdownVal, { color: colors.textPrimary }]}>
               {formatPeso(currentFareData.baseFare)}
             </Text>
           </View>
 
-          <View style={styles.mathRow}>
-            <Text style={[styles.mathLabel, { color: colors.textSecondary }]}>
-              Extra Distance ({Math.max(0, (distanceKm - currentFareData.baseDistanceKm).toFixed(1))} km × ₱{currentFareData.perKmRate}):
+          <View style={styles.breakdownRow}>
+            <Text style={[styles.breakdownLabel, { color: colors.textSecondary }]}>
+              Extra Distance ({currentFareData.extraKm} km @ {formatPeso(currentFareData.perKm)}/km):
             </Text>
-            <Text style={[styles.mathVal, { color: colors.textPrimary }]}>
-              {formatPeso(currentFareData.extraCost)}
+            <Text style={[styles.breakdownVal, { color: colors.textPrimary }]}>
+              {formatPeso(currentFareData.regular - currentFareData.baseFare)}
+            </Text>
+          </View>
+
+          <View style={styles.breakdownRow}>
+            <Text style={[styles.breakdownLabel, { color: colors.textSecondary }]}>
+              Subtotal Regular Fare:
+            </Text>
+            <Text style={[styles.breakdownVal, { color: colors.textPrimary }]}>
+              {formatPeso(currentFareData.regular)}
             </Text>
           </View>
 
           {isDiscounted && (
-            <View style={styles.mathRow}>
-              <Text style={[styles.mathLabel, { color: '#3B82F6' }]}>
-                Mandatory 20% Discount (Student/Senior/PWD):
+            <View style={styles.breakdownRow}>
+              <Text style={[styles.breakdownLabel, { color: '#059669', fontWeight: '700' }]}>
+                Less 20% Mandatory Discount:
               </Text>
-              <Text style={[styles.mathVal, { color: '#3B82F6' }]}>
+              <Text style={[styles.breakdownVal, { color: '#059669', fontWeight: '700' }]}>
                 -{formatPeso(currentFareData.regular - currentFareData.discounted)}
               </Text>
             </View>
           )}
 
-          <View style={[styles.divider, { marginVertical: 6 }]} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-          <View style={styles.mathRow}>
-            <Text style={[styles.mathTotalLabel, { color: colors.textPrimary }]}>
-              Exact Fair Fare to Pay:
-            </Text>
-            <Text style={[styles.mathTotalVal, { color: colors.primary }]}>
-              {formatPeso(currentPrice)}
-            </Text>
-          </View>
-
-          {/* Anti-Overcharging Prompt */}
-          <View style={styles.antiOverchargeBox}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <MaterialCommunityIcons name="shield-alert-outline" size={16} color="#EF4444" />
-              <Text style={styles.antiOverchargeTitle}>Driver charging more than {formatPeso(currentPrice)}?</Text>
+          {/* Anti-Overcharging Legal Grievance Link */}
+          <View style={styles.overchargePrompt}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.overchargeNotice, { color: colors.textMuted }]}>
+                Did the driver demand more than {formatPeso(finalFare)}?
+              </Text>
             </View>
-            <Text style={styles.antiOverchargeBody}>
-              Charging above the official tariff is illegal under Dagupan City Ordinance. You can file an instant report.
-            </Text>
             <TouchableOpacity
-              style={styles.fileComplaintBtn}
+              style={styles.overchargeReportBtn}
               onPress={() => {
                 navigation.navigate('SubmitComplaint', {
                   category: 'overcharging',
-                  subject: `Overcharging trip to ${destination.name}`,
-                  description: `Trip from ${origin.name} to ${destination.name} (${distanceKm} km). Official Dagupan tariff is ${formatPeso(currentPrice)} for ${selectedVehicle}, but driver demanded more.`,
+                  subject: `Overcharging violation on trip to ${destination.name}`,
+                  description: `Driver overcharged fare for trip from ${origin.name} to ${destination.name} (${effectiveDistanceKm} km road distance). Official tariff is ${formatPeso(finalFare)} but driver demanded more.`,
                 });
               }}
-              activeOpacity={0.8}
             >
-              <MaterialCommunityIcons name="alert-octagon" size={15} color="#FFFFFF" />
-              <Text style={styles.fileComplaintBtnText}>Report Overcharging Violation</Text>
+              <MaterialCommunityIcons name="alert-octagon" size={16} color="#DC2626" />
+              <Text style={styles.overchargeReportText}>Report Overcharging</Text>
             </TouchableOpacity>
           </View>
         </Card>
+
+        {/* Action Button: Start Live Ride Meter */}
+        <TouchableOpacity
+          style={[styles.startRideBtn, { backgroundColor: colors.primary }]}
+          onPress={handleStartRideMeter}
+          activeOpacity={0.88}
+        >
+          <MaterialCommunityIcons name="steering" size={22} color="#FFFFFF" />
+          <Text style={styles.startRideBtnText}>Start Live Ride Meter</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -906,312 +1088,311 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  permissionWarningBanner: {
+  permissionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    padding: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#FCD34D',
   },
-  permissionWarningTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#92400E',
-  },
-  permissionWarningText: {
-    fontSize: 10,
-    color: '#B45309',
-  },
-  enableGpsBtn: {
-    backgroundColor: '#D97706',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: RADIUS.sm,
-  },
-  enableGpsBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
+  permissionTitle: {
+    fontSize: FONTS.sizes.sm,
     fontWeight: '700',
   },
-  headerArea: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.xs,
-  },
-  title: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: '800',
-  },
-  subtitle: {
+  permissionDesc: {
     fontSize: FONTS.sizes.xs,
     marginTop: 2,
   },
-  recenterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
+  enableBtn: {
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
+    borderRadius: RADIUS.md,
   },
-  recenterBtnText: {
-    fontSize: 11,
+  enableBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '700',
   },
-  chipsWrapper: {
-    marginTop: 8,
-    marginBottom: 10,
+  quickChipsSection: {
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
   },
-  chipsContent: {
-    paddingHorizontal: SPACING.xl,
+  chipHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    marginBottom: 6,
+    gap: 4,
+  },
+  chipHeaderTitle: {
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '700',
+  },
+  chipsScroll: {
+    paddingHorizontal: SPACING.md,
     gap: 8,
   },
   landmarkChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: RADIUS.full,
     borderWidth: 1,
+    gap: 6,
   },
   landmarkChipText: {
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '600',
   },
   mapContainer: {
     width: '100%',
-    height: 280,
-    backgroundColor: '#0F172A',
-    position: 'relative',
+    height: SCREEN_HEIGHT * 0.38,
+    backgroundColor: '#0f172a',
   },
-  bodyContent: {
-    padding: SPACING.xl,
+  contentPadding: {
+    padding: SPACING.md,
   },
-  tripMetricCard: {
-    padding: 14,
-    borderRadius: RADIUS.lg,
+  corridorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
     marginBottom: SPACING.md,
   },
-  tripRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-    marginBottom: 12,
-  },
-  tripPointCol: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  dotPill: {
-    width: 30,
-    height: 30,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tripPointLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.5,
-  },
-  tripPointName: {
-    fontSize: 12,
-    fontWeight: '800',
-    marginTop: 1,
-  },
-  tripStatsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(150, 150, 150, 0.2)',
-    paddingTop: 8,
-  },
-  statPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  statText: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  corridorBadge: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 12,
-    borderRadius: RADIUS.md,
-    borderWidth: 1.5,
-    marginBottom: SPACING.lg,
-  },
   corridorTitle: {
-    fontSize: 12,
+    fontSize: FONTS.sizes.sm,
     fontWeight: '800',
-    marginBottom: 2,
   },
   corridorDesc: {
-    fontSize: 11,
+    fontSize: FONTS.sizes.xs,
+    marginTop: 2,
     lineHeight: 16,
   },
-  sectionHeader: {
+  metricsCard: {
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    marginBottom: SPACING.md,
+    ...SHADOWS.sm,
+  },
+  metricsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
+    alignItems: 'flex-start',
+    marginBottom: 8,
   },
-  sectionTitle: {
-    fontSize: FONTS.sizes.md,
+  metricsHeading: {
+    fontSize: FONTS.sizes.sm,
     fontWeight: '800',
   },
-  discountToggle: {
+  metricsSubtitle: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  routingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: RADIUS.full,
-    borderWidth: 1,
   },
-  discountToggleText: {
+  routingBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  roadSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  roadSummaryText: {
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1,
+  },
+  metricStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  metricItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  metricDivider: {
+    width: 1,
+    height: 28,
+  },
+  metricLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+  },
+  metricValue: {
+    fontSize: FONTS.sizes.lg,
+    fontWeight: '900',
+  },
+  metricValueSmall: {
     fontSize: 11,
     fontWeight: '700',
   },
-  vehicleGrid: {
+  sectionTitle: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '800',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  vehicleRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: SPACING.lg,
+    gap: 10,
+    marginBottom: SPACING.md,
   },
   vehicleCard: {
     flex: 1,
-    padding: 10,
-    borderRadius: RADIUS.md,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    ...SHADOWS.sm,
+    ...SHADOWS.xs,
   },
-  vehicleIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
+  vehicleName: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
   },
-  vehicleCardName: {
-    fontSize: 11,
-    fontWeight: '800',
-    textAlign: 'center',
+  vehicleFarePrice: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: '900',
+    marginTop: 4,
   },
-  vehicleCardSub: {
+  vehicleNote: {
     fontSize: 9,
-    textAlign: 'center',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  discountCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    marginBottom: SPACING.md,
+    ...SHADOWS.xs,
+  },
+  discountLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  discountTitle: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '700',
+  },
+  discountSubtitle: {
+    fontSize: 10,
     marginTop: 1,
   },
-  vehicleCardPrice: {
-    fontSize: 16,
-    fontWeight: '900',
-    marginTop: 6,
+  discountToggle: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#94A3B8',
+    padding: 2,
+    justifyContent: 'center',
   },
-  vehicleCardRate: {
-    fontSize: 8,
-    marginTop: 3,
-    textAlign: 'center',
+  discountKnob: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
   },
   breakdownCard: {
-    padding: 16,
+    padding: SPACING.md,
     borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    marginBottom: SPACING.md,
+    ...SHADOWS.sm,
   },
   breakdownHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
-  breakdownBadgeText: {
-    fontSize: 9,
+  breakdownTitle: {
+    fontSize: FONTS.sizes.sm,
     fontWeight: '800',
-    color: '#0284C7',
-    letterSpacing: 0.5,
   },
-  breakdownVehicleTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    marginTop: 2,
+  breakdownSubtitle: {
+    fontSize: 11,
+    marginTop: 1,
   },
-  breakdownTotalAmount: {
-    fontSize: 22,
+  totalAmount: {
+    fontSize: FONTS.sizes.xl,
     fontWeight: '900',
   },
   divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(150, 150, 150, 0.2)',
+    height: 1,
     marginVertical: 10,
   },
-  mathRow: {
+  breakdownRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  mathLabel: {
-    fontSize: 11,
-  },
-  mathVal: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  mathTotalLabel: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  mathTotalVal: {
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  antiOverchargeBox: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#F87171',
-    borderRadius: RADIUS.md,
-    padding: 12,
-    marginTop: 14,
-  },
-  antiOverchargeTitle: {
+  breakdownLabel: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#B91C1C',
   },
-  antiOverchargeBody: {
-    fontSize: 10,
-    color: '#7F1D1D',
-    marginTop: 4,
-    lineHeight: 14,
+  breakdownVal: {
+    fontSize: 12,
+    fontWeight: '700',
   },
-  fileComplaintBtn: {
+  overchargePrompt: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: RADIUS.sm,
-    alignSelf: 'flex-start',
-    marginTop: 8,
+    justifyContent: 'space-between',
+    marginTop: 4,
   },
-  fileComplaintBtnText: {
-    color: '#FFFFFF',
+  overchargeNotice: {
     fontSize: 11,
-    fontWeight: '700',
+    fontStyle: 'italic',
+  },
+  overchargeReportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: RADIUS.md,
+    backgroundColor: 'rgba(220, 38, 38, 0.1)',
+  },
+  overchargeReportText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  startRideBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: RADIUS.lg,
+    ...SHADOWS.md,
+  },
+  startRideBtnText: {
+    color: '#FFFFFF',
+    fontSize: FONTS.sizes.md,
+    fontWeight: '800',
   },
 });
 

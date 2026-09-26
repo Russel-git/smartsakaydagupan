@@ -22,6 +22,7 @@ import ConfirmDialogModal from '../../components/common/ConfirmDialogModal';
 import { FONTS, SPACING, RADIUS, VEHICLE_TYPES, DISCOUNT_TYPES } from '../../utils/constants';
 import { formatPeso } from '../../utils/helpers';
 import { getRideHistory, saveRideToHistory, clearRideHistory } from '../../utils/storage';
+import PinpointFareScreen from '../fare/PinpointFareScreen';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -40,7 +41,7 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-const RideTrackerScreen = ({ navigation }) => {
+const RideTrackerScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
   const { isGuest } = useAuth();
   const { showSuccess, showInfo, showWarning } = useFeedback();
@@ -57,9 +58,15 @@ const RideTrackerScreen = ({ navigation }) => {
   });
   const webViewRef = useRef(null);
 
-  // View Tab: 'tracker' | 'history'
-  const [activeTab, setActiveTab] = useState('tracker');
+  // View Tab: 'pinpoint' | 'tracker' | 'history'
+  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || 'pinpoint');
   const [rideHistory, setRideHistory] = useState([]);
+
+  useEffect(() => {
+    if (route?.params?.initialTab) {
+      setActiveTab(route.params.initialTab);
+    }
+  }, [route?.params?.initialTab]);
 
   // Data & Selection state
   const [routes, setRoutes] = useState([]);
@@ -535,7 +542,9 @@ const RideTrackerScreen = ({ navigation }) => {
           <View>
             <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Live Ride Tracker</Text>
             <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-              {activeTab === 'history'
+              {activeTab === 'pinpoint'
+                ? 'Road-Aligned Route & Fair Fare'
+                : activeTab === 'history'
                 ? 'Your Past Trips & LTFRB Receipts'
                 : rideState === 'riding'
                 ? '🟢 Active Ride in Progress'
@@ -575,6 +584,29 @@ const RideTrackerScreen = ({ navigation }) => {
 
       {/* Segmented Switcher */}
       <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity
+          style={[
+            styles.tabItem,
+            activeTab === 'pinpoint' && { borderBottomColor: colors.primary, borderBottomWidth: 3 },
+          ]}
+          onPress={() => setActiveTab('pinpoint')}
+        >
+          <MaterialCommunityIcons
+            name="crosshairs-gps"
+            size={18}
+            color={activeTab === 'pinpoint' ? colors.primary : colors.textSecondary}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              { color: activeTab === 'pinpoint' ? colors.primary : colors.textSecondary },
+              activeTab === 'pinpoint' && { fontWeight: '700' },
+            ]}
+          >
+            Pinpoint Trip
+          </Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[
             styles.tabItem,
@@ -624,6 +656,18 @@ const RideTrackerScreen = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* TAB 0: PINPOINT TRIP & FAIR FARE */}
+      {activeTab === 'pinpoint' && (
+        <PinpointFareScreen
+          navigation={navigation}
+          onStartRide={({ route: matchedRoute, vehicleType: vType }) => {
+            if (matchedRoute) setSelectedRoute(matchedRoute);
+            if (vType) setVehicleType(vType);
+            setActiveTab('tracker');
+          }}
+        />
+      )}
 
       {/* TAB 1: LIVE TRACKER VIEW */}
       {activeTab === 'tracker' && (
