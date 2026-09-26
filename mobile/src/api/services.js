@@ -48,7 +48,7 @@ export const complaintsAPI = {
   uploadPhoto: (formData) => apiClient.post('/complaints/upload-photo', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
-  getMyComplaints: () => apiClient.get('/complaints/my'),
+  getMyComplaints: (params) => apiClient.get('/complaints/my', { params }),
   getComplaintById: (id) => apiClient.get(`/complaints/${id}`),
   getAllComplaints: (params) => apiClient.get('/complaints', { params }),
   updateComplaintStatus: (id, data) => apiClient.put(`/complaints/${id}/status`, data),

@@ -40,7 +40,7 @@ const uploadEvidencePhoto = async (req, res, next) => {
 
 const getMyComplaints = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, status } = req.query;
+    const { page = 1, limit = 50, status } = req.query;
     const filter = { userId: req.user._id, status: { $ne: 'deleted' } };
     if (status) filter.status = status;
     const total = await Complaint.countDocuments(filter);
@@ -242,6 +242,30 @@ const updateComplaintStatus = async (req, res, next) => {
 
     if (!complaint) return apiResponse.error(res, 'Complaint not found', 404);
 
+    if (complaint.userId) {
+      const statusLabels = {
+        pending: 'Pending',
+        under_review: 'Under Review',
+        endorsed_to_lgu: 'Endorsed to Dagupan LGU',
+        action_taken: 'Action Taken by LGU',
+        terminated: 'Resolved & Closed',
+        resolved: 'Resolved',
+        dismissed: 'Dismissed',
+      };
+      const label = statusLabels[status] || status;
+      await Notification.create({
+        userId: complaint.userId._id || complaint.userId,
+        title: `📋 Complaint Status: ${label}`,
+        message: `Your complaint "${complaint.subject}" was updated to ${label}.${adminNotes ? ` Note: ${adminNotes}` : ''}`,
+        type: 'complaint_update',
+        metadata: {
+          complaintId: complaint._id,
+          status: complaint.status,
+          lguCaseNumber: complaint.lguCaseNumber,
+        },
+      });
+    }
+
     return apiResponse.success(res, complaint, 'Complaint status updated successfully');
   } catch (error) { next(error); }
 };
@@ -258,6 +282,20 @@ const addAdminNotes = async (req, res, next) => {
       resourceId: complaint._id,
       details: { subject: complaint.subject, notes: adminNotes },
     });
+
+    if (complaint.userId) {
+      await Notification.create({
+        userId: complaint.userId,
+        title: '💬 Officer Note on Your Report',
+        message: `An update note was added to your report "${complaint.subject}": ${adminNotes}`,
+        type: 'complaint_update',
+        metadata: {
+          complaintId: complaint._id,
+          status: complaint.status,
+          lguCaseNumber: complaint.lguCaseNumber,
+        },
+      });
+    }
 
     return apiResponse.success(res, complaint, 'Admin notes added');
   } catch (error) { next(error); }

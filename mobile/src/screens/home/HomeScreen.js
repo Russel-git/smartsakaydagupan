@@ -4,11 +4,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
-import { Card, SectionHeader, Badge } from '../../components/common/SharedComponents';
+import { Card, SectionHeader, Badge, StatusBadge } from '../../components/common/SharedComponents';
 import AuthPromptModal from '../../components/common/AuthPromptModal';
 import HomeMapWidget from '../../components/common/HomeMapWidget';
-import { faresAPI, weatherAPI } from '../../api/services';
-import { FONTS, SPACING, RADIUS, SHADOWS } from '../../utils/constants';
+import { faresAPI, weatherAPI, complaintsAPI } from '../../api/services';
+import { FONTS, SPACING, RADIUS, SHADOWS, COMPLAINT_STATUS } from '../../utils/constants';
 import { formatPeso, getWeatherIcon } from '../../utils/helpers';
 
 const HomeScreen = ({ navigation }) => {
@@ -17,6 +17,7 @@ const HomeScreen = ({ navigation }) => {
   const { unreadCount } = useNotifications();
   const [fares, setFares] = useState([]);
   const [weather, setWeather] = useState(null);
+  const [activeComplaint, setActiveComplaint] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [promptModal, setPromptModal] = useState({
     visible: false,
@@ -36,14 +37,29 @@ const HomeScreen = ({ navigation }) => {
 
   const loadData = useCallback(async () => {
     try {
-      const [faresRes, weatherRes] = await Promise.allSettled([
+      const promises = [
         faresAPI.getActiveFares(),
         weatherAPI.getCurrentWeather(),
-      ]);
-      if (faresRes.status === 'fulfilled') setFares(faresRes.value.data.data || []);
-      if (weatherRes.status === 'fulfilled') setWeather(weatherRes.value.data.data || null);
+      ];
+      if (!isGuest) {
+        promises.push(complaintsAPI.getMyComplaints());
+      }
+      const results = await Promise.allSettled(promises);
+      const faresRes = results[0];
+      const weatherRes = results[1];
+      const complaintsRes = results[2];
+
+      if (faresRes?.status === 'fulfilled') setFares(faresRes.value.data.data || []);
+      if (weatherRes?.status === 'fulfilled') setWeather(weatherRes.value.data.data || null);
+      if (complaintsRes?.status === 'fulfilled') {
+        const list = complaintsRes.value.data?.data || complaintsRes.value.data?.complaints || [];
+        const active = list.find((c) =>
+          ['pending', 'under_review', 'endorsed_to_lgu', 'action_taken'].includes(c.status)
+        );
+        setActiveComplaint(active || null);
+      }
     } catch (e) { /* Silently fail */ }
-  }, []);
+  }, [isGuest]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -208,6 +224,50 @@ const HomeScreen = ({ navigation }) => {
             <Text style={[styles.quickSubtitle, { color: colors.textMuted }]}>Discount guide</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Active Report Live Monitor Card (if commuter has an ongoing complaint) */}
+        {!isGuest && Boolean(activeComplaint) ? (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ComplaintDetail', { complaint: activeComplaint, complaintId: activeComplaint._id })}
+            activeOpacity={0.88}
+            style={{ marginBottom: SPACING.md }}
+          >
+            <Card style={[styles.activeCaseCard, { backgroundColor: isDark ? 'rgba(2, 132, 199, 0.12)' : '#F0F9FF', borderColor: '#0284C7' }]}>
+              <View style={styles.activeCaseHeader}>
+                <View style={styles.activeCaseTag}>
+                  <MaterialCommunityIcons name="shield-search" size={16} color="#0284C7" />
+                  <Text style={styles.activeCaseTagText}>
+                    {activeComplaint.lguCaseNumber || 'Case In Progress'}
+                  </Text>
+                </View>
+                <StatusBadge
+                  label={COMPLAINT_STATUS[activeComplaint.status]?.label || activeComplaint.status}
+                  color={COMPLAINT_STATUS[activeComplaint.status]?.color}
+                  bgColor={COMPLAINT_STATUS[activeComplaint.status]?.bgColor}
+                />
+              </View>
+
+              <Text style={[styles.activeCaseTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                {activeComplaint.subject}
+              </Text>
+
+              <Text style={[styles.activeCaseSnippet, { color: isDark ? '#BAE6FD' : '#0369A1' }]} numberOfLines={2}>
+                {activeComplaint.lguActionNotes
+                  ? `🚨 POSO Action: ${activeComplaint.lguActionNotes}`
+                  : activeComplaint.lguCaseNumber
+                  ? `🏛️ Escalated to Dagupan POSO for administrative inquiry.`
+                  : activeComplaint.adminNotes
+                  ? `💬 Operator: ${activeComplaint.adminNotes}`
+                  : '⏳ Awaiting initial review by transport dispatch.'}
+              </Text>
+
+              <View style={styles.activeCaseFooter}>
+                <Text style={styles.activeCaseFooterLink}>Track Live Updates & Step Progress</Text>
+                <MaterialCommunityIcons name="arrow-right" size={16} color="#0284C7" />
+              </View>
+            </Card>
+          </TouchableOpacity>
+        ) : null}
 
         {/* Featured Grievance Desk Banner */}
         <Card style={[styles.complaintBanner, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.08)' : '#FEF2F2', borderColor: 'rgba(239, 68, 68, 0.25)' }]}>
@@ -435,6 +495,52 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
+  },
+  activeCaseCard: {
+    padding: 14,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    ...SHADOWS.sm,
+  },
+  activeCaseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  activeCaseTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  activeCaseTagText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0284C7',
+    fontFamily: 'monospace',
+  },
+  activeCaseTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  activeCaseSnippet: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  activeCaseFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(2, 132, 199, 0.3)',
+    paddingTop: 8,
+  },
+  activeCaseFooterLink: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
   },
 });
 

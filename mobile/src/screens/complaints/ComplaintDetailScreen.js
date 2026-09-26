@@ -1,105 +1,445 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Modal } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Image,
+  TouchableOpacity,
+  Modal,
+  RefreshControl,
+  Share,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Card, StatusBadge, Divider } from '../../components/common/SharedComponents';
-import { FONTS, SPACING, RADIUS, COMPLAINT_STATUS, COMPLAINT_CATEGORIES } from '../../utils/constants';
-import { formatDateTime } from '../../utils/helpers';
+import { Card, StatusBadge, Divider, LoadingSpinner } from '../../components/common/SharedComponents';
+import { complaintsAPI } from '../../api/services';
+import { FONTS, SPACING, RADIUS, SHADOWS, COMPLAINT_STATUS, COMPLAINT_CATEGORIES } from '../../utils/constants';
+import { formatDate, formatDateTime } from '../../utils/helpers';
 
-const ComplaintDetailScreen = ({ route: navRoute }) => {
-  const complaint = navRoute.params?.complaint;
-  const { colors } = useTheme();
+const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
+  const initialComplaint = navRoute.params?.complaint;
+  const complaintId = navRoute.params?.complaintId || initialComplaint?._id;
+
+  const { colors, isDark } = useTheme();
+  const [complaint, setComplaint] = useState(initialComplaint || null);
+  const [loading, setLoading] = useState(!initialComplaint);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [copiedNotice, setCopiedNotice] = useState(false);
 
-  if (!complaint) return null;
+  const fetchFreshComplaint = async () => {
+    if (!complaintId) return;
+    try {
+      const { data } = await complaintsAPI.getComplaintById(complaintId);
+      if (data?.data) {
+        setComplaint(data.data);
+      }
+    } catch (err) {
+      console.log('Error fetching fresh complaint:', err.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-  const status = COMPLAINT_STATUS[complaint.status];
+  useEffect(() => {
+    fetchFreshComplaint();
+  }, [complaintId]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchFreshComplaint();
+  };
+
+  const handleShareCase = async () => {
+    if (!complaint) return;
+    try {
+      const caseRef = complaint.lguCaseNumber || `SMARTSAKAY-${complaint._id.slice(-6).toUpperCase()}`;
+      await Share.share({
+        title: `Dagupan Transit Case ${caseRef}`,
+        message: `Dagupan City Transit Grievance Tracking\nCase Number: ${caseRef}\nSubject: ${complaint.subject}\nStatus: ${complaint.status}\nSubmitted: ${formatDate(complaint.createdAt)}`,
+      });
+    } catch (err) {
+      console.log('Share error:', err.message);
+    }
+  };
+
+  if (loading && !complaint) {
+    return <LoadingSpinner text="Fetching official case timeline..." />;
+  }
+
+  if (!complaint) {
+    return (
+      <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
+        <MaterialCommunityIcons name="alert-circle-outline" size={48} color={colors.textMuted} />
+        <Text style={[styles.notFoundTitle, { color: colors.textPrimary }]}>Case Record Not Found</Text>
+        <Text style={[styles.notFoundSubtitle, { color: colors.textMuted }]}>
+          This report may have been archived or is no longer accessible.
+        </Text>
+        <TouchableOpacity
+          style={[styles.backBtn, { backgroundColor: colors.primary }]}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backBtnText}>Return to Reports</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const status = COMPLAINT_STATUS[complaint.status] || {
+    label: complaint.status,
+    color: '#64748B',
+    bgColor: 'rgba(100, 116, 139, 0.15)',
+  };
   const cat = COMPLAINT_CATEGORIES.find((c) => c.value === complaint.category);
   const hasPhotos = complaint.attachments && complaint.attachments.length > 0;
 
-  return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 40 }}>
-      <View style={styles.content}>
-        <StatusBadge label={status?.label || complaint.status} color={status?.color} bgColor={status?.bgColor} />
-        <Text style={[styles.subject, { color: colors.textPrimary }]}>{complaint.subject}</Text>
-        <Text style={[styles.meta, { color: colors.textMuted }]}>
-          {cat?.label} • Submitted {formatDateTime(complaint.createdAt)}
-        </Text>
+  // Timeline calculation
+  // Stage 1: Submitted (always done)
+  // Stage 2: Verified by admin/operator (done if status != 'pending')
+  // Stage 3: Endorsed to LGU (done if endorsed_to_lgu, action_taken, terminated, resolved)
+  // Stage 4: LGU Action Taken (done if action_taken, terminated, resolved)
+  // Stage 5: Terminated / Resolved (done if terminated, resolved)
 
-        {Boolean(complaint.lguCaseNumber) ? (
-          <View style={[styles.caseBadge, { backgroundColor: 'rgba(56, 189, 248, 0.12)', borderColor: 'rgba(56, 189, 248, 0.3)' }]}>
-            <MaterialCommunityIcons name="shield-check" size={16} color="#38bdf8" />
-            <Text style={{ fontSize: FONTS.sizes.xs, color: '#38bdf8', fontWeight: '700' }}>
-              Dagupan LGU Case: {complaint.lguCaseNumber}
+  const isVerified = complaint.status !== 'pending';
+  const isEndorsed = ['endorsed_to_lgu', 'action_taken', 'terminated', 'resolved'].includes(complaint.status);
+  const isActionTaken = ['action_taken', 'terminated', 'resolved'].includes(complaint.status);
+  const isClosed = ['terminated', 'resolved', 'dismissed'].includes(complaint.status);
+
+  const timelineSteps = [
+    {
+      title: 'Report Submitted',
+      subtitle: 'Commuter grievance recorded with evidence in SmartSakay.',
+      date: complaint.createdAt,
+      state: 'completed',
+      icon: 'check-circle',
+    },
+    {
+      title: 'Operator Review & Verification',
+      subtitle: isVerified
+        ? `Verified by ${complaint.verifiedBy ? `${complaint.verifiedBy.firstName} ${complaint.verifiedBy.lastName}` : 'Dagupan Transit Operations'}.`
+        : 'Under initial review by transport dispatch.',
+      date: complaint.lguEndorsedAt || (isVerified ? complaint.updatedAt : null),
+      state: isVerified ? 'completed' : 'current',
+      icon: isVerified ? 'check-circle' : 'progress-clock',
+    },
+    {
+      title: 'Escalated to Dagupan LGU / POSO',
+      subtitle: isEndorsed
+        ? `Official Case #${complaint.lguCaseNumber || 'Assigned'} endorsed to City POSO.`
+        : 'Awaiting escalation to Dagupan City Public Order & Safety Office.',
+      date: complaint.lguEndorsedAt,
+      state: isEndorsed ? 'completed' : isVerified ? 'current' : 'pending',
+      icon: isEndorsed ? 'check-circle' : 'shield-alert-outline',
+    },
+    {
+      title: 'Official LGU Action & Inquiry',
+      subtitle: isActionTaken
+        ? (complaint.lguActionNotes || 'Administrative inquiry conducted; operator/driver summoned.')
+        : 'City inspectors investigating violation with transport cooperative.',
+      date: complaint.lguActionTakenAt,
+      state: isActionTaken ? 'completed' : isEndorsed ? 'current' : 'pending',
+      icon: isActionTaken ? 'check-circle' : 'police-badge',
+    },
+    {
+      title: 'Resolution & Case Closure',
+      subtitle: isClosed
+        ? (complaint.lguTerminationNotes || 'Grievance officially settled and case closed.')
+        : 'Final compliance check and case conclusion.',
+      date: complaint.lguTerminatedAt || complaint.resolvedAt,
+      state: isClosed ? 'completed' : 'pending',
+      icon: isClosed ? 'check-all' : 'flag-checkered',
+    },
+  ];
+
+  return (
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={{ paddingBottom: 50 }}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
+      }
+    >
+      <View style={styles.content}>
+        {/* Top Case Identity Card */}
+        <Card style={styles.caseHeroCard}>
+          <View style={styles.caseHeroTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.casePrefix}>DAGUPAN CITY TRANSIT GRIEVANCE</Text>
+              <Text style={[styles.caseNumberText, { color: colors.textPrimary }]}>
+                {complaint.lguCaseNumber || `SMARTSAKAY-${complaint._id.slice(-6).toUpperCase()}`}
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.shareBtn} onPress={handleShareCase} activeOpacity={0.8}>
+              <MaterialCommunityIcons name="share-variant-outline" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.statusRow}>
+            <StatusBadge
+              label={status.label}
+              color={status.color}
+              bgColor={status.bgColor}
+            />
+            <Text style={[styles.heroDate, { color: colors.textMuted }]}>
+              Filed {formatDate(complaint.createdAt)}
+            </Text>
+          </View>
+        </Card>
+
+        {/* Live Status Tracker Timeline */}
+        <View style={styles.sectionHeaderRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialCommunityIcons name="timeline-clock" size={20} color={colors.primary} />
+            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
+              Investigation Timeline
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.refreshBadge}
+            onPress={onRefresh}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="refresh" size={14} color={colors.primary} />
+            <Text style={[styles.refreshBadgeText, { color: colors.primary }]}>Refresh</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Card style={styles.timelineCard}>
+          {timelineSteps.map((step, index) => {
+            const isLast = index === timelineSteps.length - 1;
+            const isCompleted = step.state === 'completed';
+            const isCurrent = step.state === 'current';
+
+            let nodeColor = isDark ? '#475569' : '#CBD5E1';
+            let iconName = step.icon;
+
+            if (isCompleted) {
+              nodeColor = '#10B981';
+            } else if (isCurrent) {
+              nodeColor = '#0284C7';
+            }
+
+            return (
+              <View key={index} style={styles.stepRow}>
+                {/* Stepper Line and Node */}
+                <View style={styles.stepperCol}>
+                  <View
+                    style={[
+                      styles.stepperDot,
+                      {
+                        backgroundColor: isCompleted || isCurrent ? nodeColor : colors.surface,
+                        borderColor: nodeColor,
+                      },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name={iconName}
+                      size={14}
+                      color={isCompleted || isCurrent ? '#FFFFFF' : nodeColor}
+                    />
+                  </View>
+                  {!isLast ? (
+                    <View
+                      style={[
+                        styles.stepperLine,
+                        {
+                          backgroundColor: isCompleted ? '#10B981' : isDark ? '#334155' : '#E2E8F0',
+                        },
+                      ]}
+                    />
+                  ) : null}
+                </View>
+
+                {/* Stepper Content */}
+                <View style={[styles.stepperContent, !isLast && { paddingBottom: 22 }]}>
+                  <View style={styles.stepTitleRow}>
+                    <Text
+                      style={[
+                        styles.stepTitle,
+                        {
+                          color: isCompleted
+                            ? colors.textPrimary
+                            : isCurrent
+                            ? '#0284C7'
+                            : colors.textMuted,
+                          fontWeight: isCompleted || isCurrent ? '700' : '500',
+                        },
+                      ]}
+                    >
+                      {step.title}
+                    </Text>
+                    {Boolean(step.date) ? (
+                      <Text style={[styles.stepDate, { color: colors.textMuted }]}>
+                        {formatDate(step.date)}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+                    {step.subtitle}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </Card>
+
+        {/* Official LGU Action Card (if present) */}
+        {Boolean(complaint.lguActionNotes) ? (
+          <View style={[styles.actionBanner, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5', borderColor: '#10B981' }]}>
+            <View style={styles.actionBannerHeader}>
+              <View style={[styles.actionBannerIcon, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
+                <MaterialCommunityIcons name="police-badge" size={20} color="#10B981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.actionBannerTitle, { color: isDark ? '#6EE7B7' : '#047857' }]}>
+                  Official Action Taken by Dagupan LGU
+                </Text>
+                {Boolean(complaint.lguActionTakenAt) ? (
+                  <Text style={[styles.actionBannerDate, { color: isDark ? '#A7F3D0' : '#065F46' }]}>
+                    Recorded on {formatDateTime(complaint.lguActionTakenAt)}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+            <Text style={[styles.actionBannerBody, { color: isDark ? '#E2E8F0' : '#064E3B' }]}>
+              {complaint.lguActionNotes}
             </Text>
           </View>
         ) : null}
 
-        <Divider />
-
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Grievance Details</Text>
-        <Text style={[styles.description, { color: colors.textSecondary }]}>{complaint.description}</Text>
-
-        {Boolean(complaint.vehiclePlateNumber) ? (
-          <>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Vehicle Plate Number</Text>
-            <View style={[styles.plateBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <MaterialCommunityIcons name="car" size={18} color="#fbbf24" />
-              <Text style={styles.plateText}>{complaint.vehiclePlateNumber}</Text>
+        {/* Case Terminated & Resolved Summary (if present) */}
+        {Boolean(complaint.lguTerminationNotes) ? (
+          <View style={[styles.actionBanner, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.12)' : '#F5F3FF', borderColor: '#8B5CF6' }]}>
+            <View style={styles.actionBannerHeader}>
+              <View style={[styles.actionBannerIcon, { backgroundColor: 'rgba(139, 92, 246, 0.2)' }]}>
+                <MaterialCommunityIcons name="check-decagram" size={20} color="#8B5CF6" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.actionBannerTitle, { color: isDark ? '#C4B5FD' : '#6D28D9' }]}>
+                  Case Resolution & Closure Notice
+                </Text>
+                {Boolean(complaint.lguTerminatedAt) ? (
+                  <Text style={[styles.actionBannerDate, { color: isDark ? '#DDD6FE' : '#5B21B6' }]}>
+                    Concluded on {formatDateTime(complaint.lguTerminatedAt)}
+                  </Text>
+                ) : null}
+              </View>
             </View>
-          </>
+            <Text style={[styles.actionBannerBody, { color: isDark ? '#E2E8F0' : '#4C1D95' }]}>
+              {complaint.lguTerminationNotes}
+            </Text>
+          </View>
         ) : null}
+
+        {/* Operator Notes (if present) */}
+        {Boolean(complaint.adminNotes) ? (
+          <Card style={[styles.operatorNoteCard, { backgroundColor: colors.surface }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <MaterialCommunityIcons name="message-text-outline" size={16} color={colors.primary} />
+              <Text style={[styles.noteHeading, { color: colors.primary }]}>Operator Remarks</Text>
+            </View>
+            <Text style={[styles.noteContent, { color: colors.textPrimary }]}>{complaint.adminNotes}</Text>
+          </Card>
+        ) : null}
+
+        {/* Report Details Dossier */}
+        <View style={[styles.sectionHeaderRow, { marginTop: SPACING.lg }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialCommunityIcons name="file-document-outline" size={20} color={colors.textPrimary} />
+            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Grievance Details</Text>
+          </View>
+        </View>
+
+        <Card>
+          <Text style={[styles.subjectTitle, { color: colors.textPrimary }]}>{complaint.subject}</Text>
+
+          <View style={styles.catRow}>
+            <MaterialCommunityIcons name={cat?.icon || 'alert-circle'} size={16} color={colors.textSecondary} />
+            <Text style={[styles.catText, { color: colors.textSecondary }]}>
+              {cat?.label || complaint.category}
+            </Text>
+          </View>
+
+          <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
+            {complaint.description}
+          </Text>
+
+          {/* Vehicle and Route metadata */}
+          <Divider />
+          <View style={styles.detailsGrid}>
+            {Boolean(complaint.vehiclePlateNumber) ? (
+              <View style={styles.gridItem}>
+                <Text style={[styles.gridLabel, { color: colors.textMuted }]}>PLATE NUMBER</Text>
+                <View style={styles.plateTag}>
+                  <MaterialCommunityIcons name="car" size={14} color="#D97706" />
+                  <Text style={styles.plateTagText}>{complaint.vehiclePlateNumber}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {Boolean(complaint.routeId?.name) ? (
+              <View style={styles.gridItem}>
+                <Text style={[styles.gridLabel, { color: colors.textMuted }]}>ROUTE</Text>
+                <Text style={[styles.gridValue, { color: colors.textPrimary }]}>
+                  {complaint.routeId.name}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </Card>
 
         {/* Evidence Photos */}
         {hasPhotos ? (
           <>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Attached Evidence</Text>
+            <View style={[styles.sectionHeaderRow, { marginTop: SPACING.lg }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialCommunityIcons name="camera" size={20} color={colors.textPrimary} />
+                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
+                  Attached Evidence ({complaint.attachments.length})
+                </Text>
+              </View>
+            </View>
+
             <View style={styles.photosRow}>
               {complaint.attachments.map((url, i) => (
-                <TouchableOpacity key={i} onPress={() => setSelectedPhoto(url)} activeOpacity={0.85}>
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => setSelectedPhoto(url)}
+                  activeOpacity={0.85}
+                  style={styles.thumbnailWrapper}
+                >
                   <Image source={{ uri: url }} style={styles.thumbnail} />
+                  <View style={styles.zoomIconPill}>
+                    <MaterialCommunityIcons name="magnify-plus" size={14} color="#FFFFFF" />
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
           </>
         ) : null}
 
-        {/* Official LGU Action */}
-        {Boolean(complaint.lguActionNotes) ? (
-          <Card style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.3)', marginTop: SPACING.lg }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <MaterialCommunityIcons name="police-badge" size={18} color="#10b981" />
-              <Text style={[styles.sectionTitle, { color: '#10b981', margin: 0 }]}>Action Taken by LGU</Text>
-            </View>
-            <Text style={[styles.description, { color: colors.textPrimary }]}>{complaint.lguActionNotes}</Text>
-          </Card>
-        ) : null}
-
-        {/* Termination Summary */}
-        {Boolean(complaint.lguTerminationNotes) ? (
-          <Card style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', borderColor: 'rgba(139, 92, 246, 0.3)', marginTop: SPACING.md }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <MaterialCommunityIcons name="check-circle" size={18} color="#a78bfa" />
-              <Text style={[styles.sectionTitle, { color: '#a78bfa', margin: 0 }]}>Case Terminated & Resolved</Text>
-            </View>
-            <Text style={[styles.description, { color: colors.textPrimary }]}>{complaint.lguTerminationNotes}</Text>
-          </Card>
-        ) : null}
-
-        {Boolean(complaint.adminNotes) && !complaint.lguActionNotes ? (
-          <Card style={{ backgroundColor: colors.info + '10', borderColor: colors.info, marginTop: SPACING.md }}>
-            <Text style={[styles.sectionTitle, { color: colors.info }]}>Operator Notes</Text>
-            <Text style={[styles.description, { color: colors.textPrimary }]}>{complaint.adminNotes}</Text>
-          </Card>
-        ) : null}
+        {/* Dagupan City Ordinance Advice Box */}
+        <View style={[styles.rightsCard, { backgroundColor: isDark ? 'rgba(56, 189, 248, 0.08)' : '#F0F9FF', borderColor: 'rgba(56, 189, 248, 0.3)' }]}>
+          <MaterialCommunityIcons name="information" size={20} color="#0284C7" />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.rightsTitle, { color: '#0284C7' }]}>
+              Official Dagupan POSO Case Record
+            </Text>
+            <Text style={[styles.rightsBody, { color: isDark ? '#BAE6FD' : '#0369A1' }]}>
+              Dagupan City Ordinance and LTFRB regulations strictly mandate compliance with approved fare matrices and the 20% discount for Students, Senior Citizens, and PWDs. If you need follow-up in person, present this Case Tracking Number at Dagupan POSO / City Hall.
+            </Text>
+          </View>
+        </View>
       </View>
 
-      {/* Full Photo Modal */}
+      {/* Full Screen Photo Modal */}
       {selectedPhoto && (
         <Modal visible={true} transparent={true} animationType="fade" onRequestClose={() => setSelectedPhoto(null)}>
           <View style={styles.modalBackdrop}>
             <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedPhoto(null)}>
-              <MaterialCommunityIcons name="close-circle" size={32} color="#FFFFFF" />
+              <MaterialCommunityIcons name="close-circle" size={36} color="#FFFFFF" />
             </TouchableOpacity>
             <Image source={{ uri: selectedPhoto }} style={styles.modalFullImage} resizeMode="contain" />
           </View>
@@ -110,38 +450,305 @@ const ComplaintDetailScreen = ({ route: navRoute }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: SPACING.xl },
-  subject: { fontSize: FONTS.sizes.xl, fontWeight: '800', marginTop: SPACING.md },
-  meta: { fontSize: FONTS.sizes.xs, marginTop: SPACING.xs },
-  caseBadge: {
+  container: {
+    flex: 1,
+  },
+  content: {
+    padding: SPACING.xl,
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.xl,
+  },
+  notFoundTitle: {
+    fontSize: FONTS.sizes.lg,
+    fontWeight: '700',
+    marginTop: 12,
+  },
+  notFoundSubtitle: {
+    fontSize: FONTS.sizes.sm,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 20,
+  },
+  backBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+  },
+  backBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: FONTS.sizes.sm,
+  },
+  caseHeroCard: {
+    padding: 16,
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING.lg,
+  },
+  caseHeroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  casePrefix: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0284C7',
+    letterSpacing: 0.5,
+  },
+  caseNumberText: {
+    fontSize: FONTS.sizes.lg,
+    fontWeight: '900',
+    marginTop: 2,
+    letterSpacing: 0.5,
+  },
+  shareBtn: {
+    padding: 6,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(2, 132, 199, 0.1)',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(150, 150, 150, 0.2)',
+  },
+  heroDate: {
+    fontSize: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  sectionHeading: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: '800',
+  },
+  refreshBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+    backgroundColor: 'rgba(2, 132, 199, 0.1)',
+  },
+  refreshBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  timelineCard: {
+    padding: 16,
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING.md,
+  },
+  stepRow: {
+    flexDirection: 'row',
+  },
+  stepperCol: {
+    alignItems: 'center',
+    width: 28,
+  },
+  stepperDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  stepperLine: {
+    width: 2,
+    flex: 1,
+    marginVertical: 2,
+  },
+  stepperContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  stepTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  stepTitle: {
+    fontSize: FONTS.sizes.sm,
+  },
+  stepDate: {
+    fontSize: 10,
+  },
+  stepSubtitle: {
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  actionBanner: {
+    borderWidth: 1.5,
+    borderRadius: RADIUS.lg,
+    padding: 14,
+    marginBottom: SPACING.md,
+  },
+  actionBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  actionBannerIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  actionBannerDate: {
+    fontSize: 10,
+    marginTop: 1,
+  },
+  actionBannerBody: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  operatorNoteCard: {
+    padding: 12,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(2, 132, 199, 0.3)',
+    marginBottom: SPACING.md,
+  },
+  noteHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  noteContent: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  subjectTitle: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  catRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    marginBottom: 10,
+  },
+  catText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  descriptionText: {
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 10,
+  },
+  detailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginTop: 6,
+  },
+  gridItem: {
+    minWidth: '40%',
+  },
+  gridLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  gridValue: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  plateTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(217, 119, 6, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    alignSelf: 'flex-start',
+  },
+  plateTagText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#D97706',
+    fontFamily: 'monospace',
+  },
+  photosRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: SPACING.lg,
+  },
+  thumbnailWrapper: {
+    position: 'relative',
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+  },
+  thumbnail: {
+    width: 90,
+    height: 90,
+    borderRadius: RADIUS.md,
+  },
+  zoomIconPill: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    borderRadius: RADIUS.full,
+    padding: 3,
+  },
+  rightsCard: {
+    flexDirection: 'row',
+    gap: 10,
+    padding: 12,
     borderRadius: RADIUS.md,
     borderWidth: 1,
     marginTop: SPACING.sm,
-    alignSelf: 'flex-start',
   },
-  sectionTitle: { fontSize: FONTS.sizes.sm, fontWeight: '700', marginBottom: SPACING.xs, marginTop: SPACING.md },
-  description: { fontSize: FONTS.sizes.sm, lineHeight: 22 },
-  plateBox: {
-    flexDirection: 'row',
+  rightsTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  rightsBody: {
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.94)',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    padding: 10,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    alignSelf: 'flex-start',
   },
-  plateText: { color: '#fbbf24', fontWeight: '800', fontFamily: 'monospace', fontSize: 14 },
-  photosRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 4 },
-  thumbnail: { width: 90, height: 90, borderRadius: RADIUS.md, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.2)' },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.92)', justifyContent: 'center', alignItems: 'center' },
-  modalCloseBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10 },
-  modalFullImage: { width: '92%', height: '80%' },
+  modalCloseBtn: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+  },
+  modalFullImage: {
+    width: '92%',
+    height: '80%',
+  },
 });
 
 export default ComplaintDetailScreen;

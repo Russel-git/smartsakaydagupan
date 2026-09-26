@@ -38,8 +38,8 @@ const NOTIF_CONFIG = {
     icon: 'scale-balance',
     color: '#8B5CF6',
     bg: '#EDE9FE',
-    label: 'Complaint / LTFRB Endorsement',
-    actionText: 'View My Complaints',
+    label: 'Dagupan LGU Grievance Update',
+    actionText: 'Track Case Investigation',
     actionScreen: 'ComplaintsList',
   },
   broadcast: {
@@ -80,9 +80,16 @@ const NotificationsScreen = ({ navigation }) => {
   };
 
   const handleActionNavigation = (config) => {
+    const currentNotif = selectedNotif;
     setSelectedNotif(null);
     if (!config?.actionScreen) return;
     try {
+      if (currentNotif?.metadata?.complaintId) {
+        navigation.navigate('ComplaintDetail', {
+          complaintId: currentNotif.metadata.complaintId,
+        });
+        return;
+      }
       if (config.actionParams) {
         navigation.navigate(config.actionScreen, config.actionParams);
       } else {
@@ -243,15 +250,15 @@ const NotificationsScreen = ({ navigation }) => {
                     </Text>
 
                     {/* Reference tag if present */}
-                    {Boolean(selectedNotif.metadata?.ltfrbCaseNumber) ? (
+                    {Boolean(selectedNotif.metadata?.lguCaseNumber || selectedNotif.metadata?.ltfrbCaseNumber) ? (
                       <View style={[styles.refBox, { backgroundColor: '#EDE9FE', borderColor: '#C4B5FD' }]}>
                         <MaterialCommunityIcons name="shield-check" size={18} color="#7C3AED" />
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontSize: 11, fontWeight: '700', color: '#6D28D9' }}>
-                            OFFICIAL LTFRB CASE REFERENCE
+                            OFFICIAL CASE TRACKING NUMBER
                           </Text>
                           <Text style={{ fontSize: 13, fontWeight: '800', color: '#5B21B6', fontFamily: 'monospace' }}>
-                            {selectedNotif.metadata.ltfrbCaseNumber}
+                            {selectedNotif.metadata.lguCaseNumber || selectedNotif.metadata.ltfrbCaseNumber}
                           </Text>
                         </View>
                       </View>
