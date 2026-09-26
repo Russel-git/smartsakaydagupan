@@ -58,7 +58,9 @@ const HomeStack = () => (
     <Stack.Screen name="Weather" component={WeatherScreen} options={{ headerShown: true, title: 'Dagupan Weather & Flood Advisory' }} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: true, title: 'Notifications' }} />
     <Stack.Screen name="CommuterRights" component={CommuterRightsScreen} options={{ headerShown: true, title: 'Commuter Rights' }} />
-    <Stack.Screen name="SubmitComplaint" component={SubmitComplaintScreen} options={{ headerShown: true, title: 'Report Complaint' }} />
+    <Stack.Screen name="ComplaintsList" component={ComplaintsListScreen} options={{ headerShown: true, title: 'My Complaints' }} />
+    <Stack.Screen name="SubmitComplaint" component={SubmitComplaintScreen} options={{ headerShown: true, title: 'Report Grievance' }} />
+    <Stack.Screen name="ComplaintDetail" component={ComplaintDetailScreen} options={{ headerShown: true, title: 'Complaint Details' }} />
     <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ headerShown: true, title: 'Change Password' }} />
     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ headerShown: true, title: 'Reset Password' }} />
   </Stack.Navigator>

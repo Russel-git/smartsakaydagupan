@@ -85,6 +85,20 @@ const GuestProfileScreen = ({ navigation }) => {
           <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 10 }]}
+          onPress={() => exitGuestMode('Register')}
+        >
+          <View style={[styles.menuIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+            <MaterialCommunityIcons name="clipboard-alert-outline" size={20} color="#EF4444" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>File a Complaint / Grievance</Text>
+            <Text style={[styles.menuSublabel, { color: colors.textMuted }]}>Sign in or register to submit verified reports to LGU</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+
         {/* Preferences */}
         <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: 20 }]}>Preferences</Text>
         <View style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>

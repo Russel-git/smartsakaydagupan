@@ -141,6 +141,24 @@ const ProfileScreen = ({ navigation }) => {
 
         {/* Quick Links */}
         <Card>
+          <TouchableOpacity style={styles.linkRow} onPress={() => navigation.navigate('SubmitComplaint')}>
+            <MaterialCommunityIcons name="clipboard-alert-outline" size={22} color="#EF4444" />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.linkText, { color: colors.textPrimary }]}>File a Complaint / Grievance</Text>
+              <Text style={{ fontSize: 11, color: colors.textMuted }}>Report fare violations or driver misconduct (5/day)</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textMuted} />
+          </TouchableOpacity>
+          <Divider />
+          <TouchableOpacity style={styles.linkRow} onPress={() => navigation.navigate('ComplaintsList')}>
+            <MaterialCommunityIcons name="clipboard-text-clock-outline" size={22} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.linkText, { color: colors.textPrimary }]}>My Complaint History</Text>
+              <Text style={{ fontSize: 11, color: colors.textMuted }}>Track LGU investigation & resolution status</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textMuted} />
+          </TouchableOpacity>
+          <Divider />
           <TouchableOpacity style={styles.linkRow} onPress={() => navigation.navigate('CommuterRights')}>
             <MaterialCommunityIcons name="scale-balance" size={22} color={colors.primary} />
             <Text style={[styles.linkText, { color: colors.textPrimary }]}>Commuter Rights</Text>
