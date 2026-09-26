@@ -58,7 +58,7 @@ const WelcomeScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={[styles.rootContainer, { backgroundColor: isDark ? colors.background : '#FBFBFB' }]}>
+    <View style={[styles.rootContainer, { backgroundColor: isDark ? colors.background : '#F9ECE5' }]}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor="transparent"
@@ -79,7 +79,7 @@ const WelcomeScreen = ({ navigation }) => {
         {/* ======================================================== */}
         <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
           <LinearGradient
-            colors={isDark ? [colors.background, colors.background] : ['#FFFFFF', '#FAFAFA', '#FFF7ED']}
+            colors={isDark ? [colors.background, colors.background] : ['#F9ECE5', '#F5DFD5', '#F9ECE5']}
             style={[
               styles.landingContainer,
               {
@@ -90,7 +90,7 @@ const WelcomeScreen = ({ navigation }) => {
           >
             {/* Top Header: Live Network Status + Settings */}
             <View style={styles.landingTopRow}>
-              <View style={[styles.liveNetworkPill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#E2E8F0' }]}>
+              <View style={[styles.liveNetworkPill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#EED7CC' }]}>
                 <View style={styles.liveGreenDot} />
                 <Text style={[styles.liveNetworkText, { color: colors.textSecondary }]}>
                   LIVE NETWORK • DAGUPAN
@@ -98,7 +98,7 @@ const WelcomeScreen = ({ navigation }) => {
               </View>
 
               <TouchableOpacity
-                style={[styles.settingsCircleBtn, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#E2E8F0' }]}
+                style={[styles.settingsCircleBtn, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#EED7CC' }]}
                 onPress={() => navigation.navigate('Weather')}
                 activeOpacity={0.8}
                 accessibilityLabel="Transit Weather and Advisories"
@@ -132,17 +132,17 @@ const WelcomeScreen = ({ navigation }) => {
 
               {/* 3 Floating Transit Feature Pills */}
               <View style={styles.featurePillsCol}>
-                <View style={[styles.floatingFeaturePill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#E2E8F0' }]}>
+                <View style={[styles.floatingFeaturePill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#EED7CC' }]}>
                   <Text style={styles.pillEmoji}>🚐</Text>
                   <Text style={[styles.pillLabel, { color: colors.textPrimary }]}>Jeepney Routes</Text>
                 </View>
 
-                <View style={[styles.floatingFeaturePill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#E2E8F0' }]}>
+                <View style={[styles.floatingFeaturePill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#EED7CC' }]}>
                   <Text style={styles.pillEmoji}>🛺</Text>
                   <Text style={[styles.pillLabel, { color: colors.textPrimary }]}>Tricycle Pinpoint</Text>
                 </View>
 
-                <View style={[styles.floatingFeaturePill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#E2E8F0' }]}>
+                <View style={[styles.floatingFeaturePill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#EED7CC' }]}>
                   <Text style={styles.pillEmoji}>⚖️</Text>
                   <Text style={[styles.pillLabel, { color: colors.textPrimary }]}>Official Fares & Matrix</Text>
                 </View>
@@ -176,7 +176,7 @@ const WelcomeScreen = ({ navigation }) => {
         {/* ======================================================== */}
         {/* SLIDE 1: WELCOME WITH REAL DAGUPAN BANGUS ARCH PHOTO     */}
         {/* ======================================================== */}
-        <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: colors.background }]}>
+        <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: isDark ? colors.background : '#FDF7F4' }]}>
           <View style={[styles.walkthroughContainer, { paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 20) }]}>
             {/* Header: Back & Skip */}
             <View style={styles.walkthroughHeader}>
@@ -245,7 +245,7 @@ const WelcomeScreen = ({ navigation }) => {
         {/* ======================================================== */}
         {/* SLIDE 2: REAL DAGUPAN PASSENGER JEEPNEY PHOTO            */}
         {/* ======================================================== */}
-        <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: colors.background }]}>
+        <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: isDark ? colors.background : '#FDF7F4' }]}>
           <View style={[styles.walkthroughContainer, { paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 20) }]}>
             {/* Header: Back & Skip */}
             <View style={styles.walkthroughHeader}>
@@ -314,7 +314,7 @@ const WelcomeScreen = ({ navigation }) => {
         {/* ======================================================== */}
         {/* SLIDE 3: REAL DAGUPAN TRICYCLE PHOTO + AUTH ACTIONS      */}
         {/* ======================================================== */}
-        <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: colors.background }]}>
+        <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: isDark ? colors.background : '#FDF7F4' }]}>
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={[styles.finalSlideContent, { paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 24) + 12 }]}
@@ -473,16 +473,16 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   cityBadge: {
-    backgroundColor: '#FFF7ED',
+    backgroundColor: '#FBE8DE',
     borderWidth: 1,
-    borderColor: '#FFEDD5',
+    borderColor: '#F3C5AF',
     paddingHorizontal: 14,
     paddingVertical: 4,
     borderRadius: RADIUS.full,
     marginBottom: 12,
   },
   cityBadgeText: {
-    color: '#EA580C',
+    color: '#C2410C',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 2,
@@ -507,7 +507,10 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: RADIUS.full,
     borderWidth: 1,
-    ...SHADOWS.xs,
+    shadowColor: '#C28469',
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
   pillEmoji: {
     fontSize: 14,
