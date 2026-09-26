@@ -1191,3 +1191,63 @@ tr:hover td {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-dim);
 }
+
+/* ===== Responsive Adaptations for Different Devices ===== */
+@media (max-width: 1024px) {
+  .app-container {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100% !important;
+    height: auto !important;
+    position: relative !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+  .sidebar-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px;
+  }
+  .sidebar-section-label {
+    display: none;
+  }
+  .nav-link {
+    margin-bottom: 0 !important;
+    padding: 8px 12px !important;
+    border-radius: var(--radius-sm) !important;
+  }
+  .main-wrapper {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+  .modal-content {
+    width: 94vw !important;
+    max-width: 94vw !important;
+    margin: 10px auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .content-body {
+    padding: 14px !important;
+  }
+  .topbar {
+    padding: 10px 14px !important;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .table-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  table th, table td {
+    padding: 10px 8px !important;
+    white-space: nowrap;
+  }
+  .form-input, .form-select {
+    font-size: 14px !important;
+  }
+}
+

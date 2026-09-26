@@ -78,8 +78,8 @@ const HomeScreen = ({ navigation }) => {
         {/* Header */}
         <View style={[styles.header, { backgroundColor: colors.primary }]}>
           <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.greeting}>{greeting()}{user ? `, ${user.firstName}` : ''}! 👋</Text>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.greeting} numberOfLines={1} adjustsFontSizeToFit>{greeting()}{user ? `, ${user.firstName}` : ''}! 👋</Text>
               <Text style={styles.headerSubtitle}>
                 {isGuest ? 'Guest Session • Dagupan City' : 'SmartSakay Dagupan'}
               </Text>

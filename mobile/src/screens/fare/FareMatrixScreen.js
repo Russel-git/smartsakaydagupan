@@ -140,7 +140,7 @@ const FareMatrixScreen = () => {
 
         {Object.entries(grouped).map(([routeName, data], i) => (
           <View key={i} style={[styles.tableRow, { backgroundColor: i % 2 === 0 ? colors.surface : colors.surfaceElevated, borderColor: colors.border }]}>
-            <Text style={[styles.cell, styles.routeCell, { color: colors.textPrimary, fontWeight: '600' }]} numberOfLines={1}>
+            <Text style={[styles.cell, styles.routeCell, { color: colors.textPrimary, fontWeight: '600' }]} numberOfLines={2}>
               {routeName}
             </Text>
             <Text style={[styles.cell, styles.distCell, { color: colors.textSecondary }]}>
