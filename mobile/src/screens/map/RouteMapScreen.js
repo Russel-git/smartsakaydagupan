@@ -490,22 +490,18 @@ const RouteMapScreen = ({ navigation }) => {
               var opacity = 1.0;
 
               var pts = [];
-              if (route.path && route.path.length > 0) {
+              if (route.path && route.path.length > 1) {
                 pts = route.path.map(function(p) { return [p.lat, p.lng]; });
-              } else if (route.startPoint && route.endPoint) {
-                pts = [
-                  [route.startPoint.lat, route.startPoint.lng],
-                  ...(route.waypoints || []).map(function(w) { return [w.lat, w.lng]; }),
-                  [route.endPoint.lat, route.endPoint.lng]
-                ];
+              } else if (route.waypoints && route.waypoints.length > 1) {
+                pts = route.waypoints.map(function(w) { return [w.lat, w.lng]; });
               }
 
-              if (pts.length > 0) {
+              if (pts.length > 1) {
                 var poly = L.polyline(pts, {
                   color: color,
                   weight: weight,
                   opacity: opacity,
-                  dashArray: (route.path && route.path.length > 0) ? null : '5, 5'
+                  dashArray: null
                 }).bindPopup(
                   '<div style="min-width:180px;">' +
                   '<div style="font-weight:800; font-size:13px; color:' + color + ';">🚐 ' + route.name + '</div>' +
