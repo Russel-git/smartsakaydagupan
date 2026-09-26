@@ -26,21 +26,21 @@ const ComplaintDetailScreen = ({ route: navRoute }) => {
           {cat?.label} • Submitted {formatDateTime(complaint.createdAt)}
         </Text>
 
-        {complaint.lguCaseNumber && (
+        {Boolean(complaint.lguCaseNumber) ? (
           <View style={[styles.caseBadge, { backgroundColor: 'rgba(56, 189, 248, 0.12)', borderColor: 'rgba(56, 189, 248, 0.3)' }]}>
             <MaterialCommunityIcons name="shield-check" size={16} color="#38bdf8" />
             <Text style={{ fontSize: FONTS.sizes.xs, color: '#38bdf8', fontWeight: '700' }}>
               Dagupan LGU Case: {complaint.lguCaseNumber}
             </Text>
           </View>
-        )}
+        ) : null}
 
         <Divider />
 
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Grievance Details</Text>
         <Text style={[styles.description, { color: colors.textSecondary }]}>{complaint.description}</Text>
 
-        {complaint.vehiclePlateNumber && (
+        {Boolean(complaint.vehiclePlateNumber) ? (
           <>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Vehicle Plate Number</Text>
             <View style={[styles.plateBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -48,10 +48,10 @@ const ComplaintDetailScreen = ({ route: navRoute }) => {
               <Text style={styles.plateText}>{complaint.vehiclePlateNumber}</Text>
             </View>
           </>
-        )}
+        ) : null}
 
         {/* Evidence Photos */}
-        {hasPhotos && (
+        {hasPhotos ? (
           <>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Attached Evidence</Text>
             <View style={styles.photosRow}>
@@ -62,10 +62,10 @@ const ComplaintDetailScreen = ({ route: navRoute }) => {
               ))}
             </View>
           </>
-        )}
+        ) : null}
 
         {/* Official LGU Action */}
-        {complaint.lguActionNotes && (
+        {Boolean(complaint.lguActionNotes) ? (
           <Card style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.3)', marginTop: SPACING.lg }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
               <MaterialCommunityIcons name="police-badge" size={18} color="#10b981" />
@@ -73,10 +73,10 @@ const ComplaintDetailScreen = ({ route: navRoute }) => {
             </View>
             <Text style={[styles.description, { color: colors.textPrimary }]}>{complaint.lguActionNotes}</Text>
           </Card>
-        )}
+        ) : null}
 
         {/* Termination Summary */}
-        {complaint.lguTerminationNotes && (
+        {Boolean(complaint.lguTerminationNotes) ? (
           <Card style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', borderColor: 'rgba(139, 92, 246, 0.3)', marginTop: SPACING.md }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
               <MaterialCommunityIcons name="check-circle" size={18} color="#a78bfa" />
@@ -84,14 +84,14 @@ const ComplaintDetailScreen = ({ route: navRoute }) => {
             </View>
             <Text style={[styles.description, { color: colors.textPrimary }]}>{complaint.lguTerminationNotes}</Text>
           </Card>
-        )}
+        ) : null}
 
-        {complaint.adminNotes && !complaint.lguActionNotes && (
+        {Boolean(complaint.adminNotes) && !complaint.lguActionNotes ? (
           <Card style={{ backgroundColor: colors.info + '10', borderColor: colors.info, marginTop: SPACING.md }}>
             <Text style={[styles.sectionTitle, { color: colors.info }]}>Operator Notes</Text>
             <Text style={[styles.description, { color: colors.textPrimary }]}>{complaint.adminNotes}</Text>
           </Card>
-        )}
+        ) : null}
       </View>
 
       {/* Full Photo Modal */}

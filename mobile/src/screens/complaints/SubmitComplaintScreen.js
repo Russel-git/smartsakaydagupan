@@ -223,7 +223,7 @@ const SubmitComplaintScreen = ({ navigation }) => {
 
           {/* Category Selection */}
           <Text style={[styles.label, { color: colors.textPrimary }]}>Violation Category *</Text>
-          {errors.category && <Text style={[styles.error, { color: colors.error }]}>{errors.category}</Text>}
+          {Boolean(errors.category) ? <Text style={[styles.error, { color: colors.error }]}>{errors.category}</Text> : null}
           <View style={styles.categoryGrid}>
             {COMPLAINT_CATEGORIES.map((cat) => (
               <TouchableOpacity

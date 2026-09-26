@@ -97,10 +97,10 @@ const OtpScreen = ({ navigation, route }) => {
         </Text>
       </View>
 
-      {error && (
+      {Boolean(error) ? (
         <View style={[styles.errorBox, { backgroundColor: colors.error + '15' }]}>
           <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-          {error.toLowerCase().includes('already verified') && (
+          {typeof error === 'string' && error.toLowerCase().includes('already verified') ? (
             <TouchableOpacity
               onPress={() => navigation.navigate('Login')}
               style={{
@@ -113,9 +113,9 @@ const OtpScreen = ({ navigation, route }) => {
             >
               <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>Proceed to Sign In</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
-      )}
+      ) : null}
 
       <View style={styles.otpRow}>
 

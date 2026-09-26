@@ -52,11 +52,11 @@ const AuthPromptModal = ({
             <MaterialCommunityIcons name={icon} size={36} color={colors.primary} />
           </View>
 
-          {featureTag && (
+          {Boolean(featureTag) ? (
             <View style={[styles.tag, { backgroundColor: colors.primary + '15' }]}>
               <Text style={[styles.tagText, { color: colors.primary }]}>{featureTag}</Text>
             </View>
-          )}
+          ) : null}
 
           {/* Title & Message */}
           <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>

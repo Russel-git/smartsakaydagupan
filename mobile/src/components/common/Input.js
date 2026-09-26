@@ -34,9 +34,9 @@ const Input = ({
 
   return (
     <View style={[styles.container, style]}>
-      {label && (
+      {Boolean(label) ? (
         <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>
-      )}
+      ) : null}
       <View
         style={[
           styles.inputContainer,
@@ -47,14 +47,14 @@ const Input = ({
           multiline && { minHeight: numberOfLines * 40, alignItems: 'flex-start' },
         ]}
       >
-        {leftIcon && (
+        {Boolean(leftIcon) ? (
           <MaterialCommunityIcons
             name={leftIcon}
             size={20}
             color={isFocused ? colors.primary : colors.textMuted}
             style={styles.leftIcon}
           />
-        )}
+        ) : null}
         <TextInput
           style={[
             styles.input,
@@ -76,7 +76,7 @@ const Input = ({
           onBlur={() => setIsFocused(false)}
           {...props}
         />
-        {secureTextEntry && (
+        {Boolean(secureTextEntry) ? (
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.rightIcon}>
             <MaterialCommunityIcons
               name={showPassword ? 'eye-off' : 'eye'}
@@ -84,14 +84,14 @@ const Input = ({
               color={colors.textMuted}
             />
           </TouchableOpacity>
-        )}
-        {rightIcon && !secureTextEntry && (
+        ) : null}
+        {Boolean(rightIcon) && !secureTextEntry ? (
           <View style={styles.rightIcon}>{rightIcon}</View>
-        )}
+        ) : null}
       </View>
-      {error && (
+      {Boolean(error) ? (
         <Text style={[styles.error, { color: colors.error }]}>{error}</Text>
-      )}
+      ) : null}
     </View>
   );
 };

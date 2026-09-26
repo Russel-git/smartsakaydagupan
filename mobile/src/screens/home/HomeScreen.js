@@ -100,7 +100,7 @@ const HomeScreen = ({ navigation }) => {
           </View>
 
         {/* Weather mini card */}
-        {weather && (() => {
+        {Boolean(weather) ? (() => {
           const conditionStr = weather.current?.condition?.text || (typeof weather.current?.condition === 'string' ? weather.current?.condition : null) || weather.conditionText || 'Dagupan City';
           const iconName = getWeatherIcon(conditionStr);
           const isWarning = conditionStr.toLowerCase().includes('rain') || conditionStr.toLowerCase().includes('thunder');
@@ -121,7 +121,7 @@ const HomeScreen = ({ navigation }) => {
               <MaterialCommunityIcons name="chevron-right" size={16} color="rgba(255,255,255,0.6)" style={{ marginLeft: 'auto' }} />
             </TouchableOpacity>
           );
-        })()}
+        })() : null}
       </View>
 
       {/* Guest Mode Banner */}

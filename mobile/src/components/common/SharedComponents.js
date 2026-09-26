@@ -21,7 +21,7 @@ export const LoadingSpinner = ({ size = 'large', text }) => {
   return (
     <View style={styles.loadingContainer}>
       <ActivityIndicator size={size} color={colors.primary} />
-      {text && <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{text}</Text>}
+      {Boolean(text) ? <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{text}</Text> : null}
     </View>
   );
 };
@@ -32,9 +32,9 @@ export const EmptyState = ({ icon = 'inbox-outline', title, message, action }) =
     <View style={styles.emptyContainer}>
       <MaterialCommunityIcons name={icon} size={64} color={colors.textMuted} />
       <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{title}</Text>
-      {message && (
+      {Boolean(message) ? (
         <Text style={[styles.emptyMessage, { color: colors.textSecondary }]}>{message}</Text>
-      )}
+      ) : null}
       {action}
     </View>
   );
@@ -63,11 +63,11 @@ export const SectionHeader = ({ title, actionText, onAction }) => {
   return (
     <View style={styles.sectionHeader}>
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{title}</Text>
-      {actionText && (
+      {Boolean(actionText) ? (
         <Text style={[styles.sectionAction, { color: colors.primary }]} onPress={onAction}>
           {actionText}
         </Text>
-      )}
+      ) : null}
     </View>
   );
 };

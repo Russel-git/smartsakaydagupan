@@ -243,7 +243,7 @@ const NotificationsScreen = ({ navigation }) => {
                     </Text>
 
                     {/* Reference tag if present */}
-                    {selectedNotif.metadata?.ltfrbCaseNumber && (
+                    {Boolean(selectedNotif.metadata?.ltfrbCaseNumber) ? (
                       <View style={[styles.refBox, { backgroundColor: '#EDE9FE', borderColor: '#C4B5FD' }]}>
                         <MaterialCommunityIcons name="shield-check" size={18} color="#7C3AED" />
                         <View style={{ flex: 1 }}>
@@ -255,7 +255,7 @@ const NotificationsScreen = ({ navigation }) => {
                           </Text>
                         </View>
                       </View>
-                    )}
+                    ) : null}
 
                     {/* Unabridged Announcement Content Box */}
                     <View

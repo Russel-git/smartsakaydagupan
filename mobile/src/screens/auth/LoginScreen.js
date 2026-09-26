@@ -67,12 +67,12 @@ const LoginScreen = ({ navigation }) => {
           </Text>
         </View>
 
-        {error && (
+        {Boolean(error) ? (
           <View style={[styles.errorBox, { backgroundColor: colors.error + '15' }]}>
             <MaterialCommunityIcons name="alert-circle" size={18} color={colors.error} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-              {error.toLowerCase().includes('not verified') && (
+              {typeof error === 'string' && error.toLowerCase().includes('not verified') ? (
                 <TouchableOpacity
                   onPress={() => navigation.navigate('Otp', { email: email.trim(), type: 'registration' })}
                   style={{ marginTop: 8 }}
@@ -81,10 +81,10 @@ const LoginScreen = ({ navigation }) => {
                     Enter Verification Code →
                   </Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
             </View>
           </View>
-        )}
+        ) : null}
 
         <Input
           label="Email Address"

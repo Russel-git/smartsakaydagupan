@@ -148,12 +148,12 @@ const RegisterScreen = ({ navigation }) => {
           </Text>
         </View>
 
-        {error && (
+        {Boolean(error) ? (
           <View style={[styles.errorBox, { backgroundColor: colors.error + '15' }]}>
             <MaterialCommunityIcons name="alert-circle" size={18} color={colors.error} />
             <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
           </View>
-        )}
+        ) : null}
 
         <View style={styles.row}>
           <Input label="First Name" placeholder="Juan (2-16 letters)" value={form.firstName}
