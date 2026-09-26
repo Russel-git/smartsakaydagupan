@@ -7,6 +7,7 @@
     "dev:server": "cd server && npm run dev",
     "dev:admin": "cd admin && npm run dev",
     "dev:mobile": "cd mobile && npm start",
+    "build": "npm run build:admin",
     "build:admin": "cd admin && npm run build",
     "seed": "cd server && node src/seeds/index.js",
     "test:server": "cd server && npm test"
