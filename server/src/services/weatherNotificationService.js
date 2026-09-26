@@ -88,12 +88,24 @@ const checkAndNotifyWeather = async (force = false) => {
       }
     }
 
+    // Automatic 3-day expiration date
+    const WEATHER_EXPIRY_MS = 3 * 24 * 60 * 60 * 1000;
+    const weatherExpiresAt = new Date(Date.now() + WEATHER_EXPIRY_MS);
+
+    // Purge any weather notifications older than 3 days from database
+    await Notification.deleteMany({
+      $or: [{ type: 'weather_alert' }, { category: 'weather_updates' }],
+      createdAt: { $lt: new Date(Date.now() - WEATHER_EXPIRY_MS) },
+    }).catch((e) => console.warn('[WeatherAutoNotifier] Auto-cleanup warning:', e.message));
+
     // 1. Create broadcast notification (userId: null)
     await Notification.create({
       userId: null,
       title: alertTitle,
       message: alertMessage,
       type: 'weather_alert',
+      category: 'weather_updates',
+      expiresAt: weatherExpiresAt,
       metadata: {
         tempC,
         feelsLikeC,
@@ -114,6 +126,8 @@ const checkAndNotifyWeather = async (force = false) => {
         title: alertTitle,
         message: alertMessage,
         type: 'weather_alert',
+        category: 'weather_updates',
+        expiresAt: weatherExpiresAt,
         metadata: {
           tempC,
           feelsLikeC,

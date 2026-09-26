@@ -19,7 +19,13 @@ const notificationSchema = new mongoose.Schema(
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     expiresAt: {
       type: Date,
-      default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      default: function () {
+        // Weather updates automatically expire and get deleted after 3 days (72 hours)
+        if (this.type === 'weather_alert' || this.category === 'weather_updates') {
+          return new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+        }
+        return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      },
       index: { expireAfterSeconds: 0 },
     },
   },

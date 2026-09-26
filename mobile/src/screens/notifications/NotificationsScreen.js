@@ -161,35 +161,53 @@ const NotificationsScreen = ({ navigation }) => {
     fetchNotifications();
   }, []);
 
+  const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+  // Exclude weather updates that are older than 3 days
+  const validNotifications = useMemo(() => {
+    const now = Date.now();
+    return notifications.filter((n) => {
+      const cat = getNotificationCategory(n);
+      if (cat === 'weather_updates') {
+        const created = new Date(n.createdAt).getTime();
+        if (now - created > THREE_DAYS_MS) return false;
+      }
+      return true;
+    });
+  }, [notifications]);
+
   // Compute count for each category
   const categoryCounts = useMemo(() => {
     const counts = {
-      all: notifications.length,
+      all: validNotifications.length,
       weather_updates: 0,
       complaint_updates: 0,
       broadcast_by_admin: 0,
     };
     const unread = {
-      all: unreadCount,
+      all: 0,
       weather_updates: 0,
       complaint_updates: 0,
       broadcast_by_admin: 0,
     };
 
-    notifications.forEach((n) => {
+    validNotifications.forEach((n) => {
       const cat = getNotificationCategory(n);
       if (counts[cat] !== undefined) counts[cat] += 1;
-      if (!n.isRead && unread[cat] !== undefined) unread[cat] += 1;
+      if (!n.isRead) {
+        unread.all += 1;
+        if (unread[cat] !== undefined) unread[cat] += 1;
+      }
     });
 
     return { counts, unread };
-  }, [notifications, unreadCount]);
+  }, [validNotifications]);
 
   // Filter list by selected tab
   const filteredNotifications = useMemo(() => {
-    if (activeTab === 'all') return notifications;
-    return notifications.filter((n) => getNotificationCategory(n) === activeTab);
-  }, [notifications, activeTab]);
+    if (activeTab === 'all') return validNotifications;
+    return validNotifications.filter((n) => getNotificationCategory(n) === activeTab);
+  }, [validNotifications, activeTab]);
 
   const activeTabMeta = useMemo(() => {
     return CATEGORY_TABS.find((t) => t.id === activeTab) || CATEGORY_TABS[0];

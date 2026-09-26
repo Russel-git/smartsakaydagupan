@@ -5,7 +5,23 @@ const apiResponse = require('../utils/apiResponse');
 const getNotifications = async (req, res, next) => {
   try {
     const { page = 1, limit = 50, category, type } = req.query;
-    const filter = { $or: [{ userId: req.user._id }, { userId: null }] };
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
+    // Asynchronously purge any weather updates older than 3 days
+    Notification.deleteMany({
+      $or: [{ category: 'weather_updates' }, { type: 'weather_alert' }],
+      createdAt: { $lt: threeDaysAgo },
+    }).exec().catch(() => {});
+
+    const filter = {
+      $or: [{ userId: req.user._id }, { userId: null }],
+      $nor: [
+        {
+          $or: [{ category: 'weather_updates' }, { type: 'weather_alert' }],
+          createdAt: { $lt: threeDaysAgo },
+        },
+      ],
+    };
 
     if (category && category !== 'all') {
       if (category === 'weather_updates') {
@@ -35,8 +51,16 @@ const getNotifications = async (req, res, next) => {
 
 const getUnreadCount = async (req, res, next) => {
   try {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
     const count = await Notification.countDocuments({
-      $or: [{ userId: req.user._id }, { userId: null }], isRead: false,
+      $or: [{ userId: req.user._id }, { userId: null }],
+      isRead: false,
+      $nor: [
+        {
+          $or: [{ category: 'weather_updates' }, { type: 'weather_alert' }],
+          createdAt: { $lt: threeDaysAgo },
+        },
+      ],
     });
     return apiResponse.success(res, { count });
   } catch (error) { next(error); }
@@ -74,6 +98,11 @@ const broadcast = async (req, res, next) => {
       else finalCategory = 'broadcast_by_admin';
     }
 
+    const isWeather = finalCategory === 'weather_updates' || finalType === 'weather_alert';
+    const expiresAt = isWeather
+      ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
     const commuters = await User.find({ role: 'commuter', isActive: true }).select('_id');
     const notifications = commuters.map((user) => ({
       userId: user._id,
@@ -81,6 +110,7 @@ const broadcast = async (req, res, next) => {
       message,
       type: finalType,
       category: finalCategory,
+      expiresAt,
     }));
     if (notifications.length > 0) await Notification.insertMany(notifications);
     return apiResponse.success(res, { sentTo: notifications.length }, 'Broadcast sent successfully');
@@ -101,12 +131,18 @@ const sendToUser = async (req, res, next) => {
       else finalCategory = 'broadcast_by_admin';
     }
 
+    const isWeather = finalCategory === 'weather_updates' || finalType === 'weather_alert';
+    const expiresAt = isWeather
+      ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
     const notification = await Notification.create({
       userId,
       title,
       message,
       type: finalType,
       category: finalCategory,
+      expiresAt,
     });
     return apiResponse.success(res, notification, 'Notification sent', 201);
   } catch (error) { next(error); }
