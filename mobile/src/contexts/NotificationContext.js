@@ -25,10 +25,10 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [isAuthenticated]);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (params) => {
     if (!isAuthenticated) return;
     try {
-      const { data } = await notificationsAPI.getNotifications();
+      const { data } = await notificationsAPI.getNotifications(params);
       setNotifications(data.data || []);
     } catch (e) {
       // Silently fail

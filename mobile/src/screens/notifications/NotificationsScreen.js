@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,47 +12,135 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNotifications } from '../../contexts/NotificationContext';
-import { EmptyState, Card } from '../../components/common/SharedComponents';
+import { EmptyState } from '../../components/common/SharedComponents';
 import { FONTS, SPACING, RADIUS } from '../../utils/constants';
 import { formatDate, formatDateTime } from '../../utils/helpers';
 
-const NOTIF_CONFIG = {
-  fare_update: {
-    icon: 'cash',
-    color: '#F59E0B',
-    bg: '#FEF3C7',
-    label: 'LTFRB Fare Revision',
-    actionText: 'View Fare Matrix',
-    actionScreen: 'RoutesAndFares',
-    actionParams: { initialTab: 'fares' },
+// Helper to determine notification category
+export const getNotificationCategory = (item) => {
+  if (item?.category === 'weather_updates' || item?.type === 'weather_alert') {
+    return 'weather_updates';
+  }
+  if (item?.category === 'complaint_updates' || item?.type === 'complaint_update') {
+    return 'complaint_updates';
+  }
+  return 'broadcast_by_admin';
+};
+
+// Category UI Configuration
+const CATEGORY_TABS = [
+  {
+    id: 'all',
+    label: 'All',
+    icon: 'bell-outline',
+    color: '#0284C7',
+    emptyTitle: 'No Notifications',
+    emptyMessage: "You're all caught up with Dagupan transit announcements!",
   },
+  {
+    id: 'weather_updates',
+    label: 'Weather Updates',
+    icon: 'weather-partly-rainy',
+    color: '#0284C7',
+    badgeBg: '#E0F2FE',
+    badgeBorder: '#BAE6FD',
+    badgeText: '#0369A1',
+    emptyTitle: 'No Weather Updates',
+    emptyMessage: 'No weather alerts or rainfall advisories in Dagupan right now.',
+  },
+  {
+    id: 'complaint_updates',
+    label: 'Complaint Updates',
+    icon: 'scale-balance',
+    color: '#7C3AED',
+    badgeBg: '#EDE9FE',
+    badgeBorder: '#DDD6FE',
+    badgeText: '#6D28D9',
+    emptyTitle: 'No Complaint Updates',
+    emptyMessage: 'You will receive status updates here when your filed complaints are reviewed or resolved by Dagupan POSO / LGU.',
+  },
+  {
+    id: 'broadcast_by_admin',
+    label: 'Broadcast by Admin',
+    icon: 'bullhorn-variant',
+    color: '#EA580C',
+    badgeBg: '#FFEDD5',
+    badgeBorder: '#FED7AA',
+    badgeText: '#C2410C',
+    emptyTitle: 'No Admin Broadcasts',
+    emptyMessage: 'There are no official transit broadcasts or announcements from city administrators at this moment.',
+  },
+];
+
+// Per-type and category styling details
+const NOTIF_CONFIG = {
   weather_alert: {
-    icon: 'weather-lightning',
-    color: '#EF4444',
-    bg: '#FEE2E2',
-    label: 'Dagupan Weather Alert',
+    categoryKey: 'weather_updates',
+    categoryLabel: 'Weather Updates',
+    icon: 'weather-partly-rainy',
+    color: '#0284C7',
+    bg: '#E0F2FE',
+    actionText: 'Check Weather & Flood Advisory',
+    actionScreen: 'Weather',
+  },
+  weather_updates: {
+    categoryKey: 'weather_updates',
+    categoryLabel: 'Weather Updates',
+    icon: 'weather-partly-rainy',
+    color: '#0284C7',
+    bg: '#E0F2FE',
     actionText: 'Check Weather & Flood Advisory',
     actionScreen: 'Weather',
   },
   complaint_update: {
+    categoryKey: 'complaint_updates',
+    categoryLabel: 'Complaint Updates',
     icon: 'scale-balance',
-    color: '#8B5CF6',
+    color: '#7C3AED',
     bg: '#EDE9FE',
-    label: 'Dagupan LGU Grievance Update',
+    actionText: 'Track Case Investigation',
+    actionScreen: 'ComplaintsList',
+  },
+  complaint_updates: {
+    categoryKey: 'complaint_updates',
+    categoryLabel: 'Complaint Updates',
+    icon: 'scale-balance',
+    color: '#7C3AED',
+    bg: '#EDE9FE',
     actionText: 'Track Case Investigation',
     actionScreen: 'ComplaintsList',
   },
   broadcast: {
-    icon: 'bullhorn',
-    color: '#3B82F6',
-    bg: '#DBEAFE',
-    label: 'Public Transit Advisory',
+    categoryKey: 'broadcast_by_admin',
+    categoryLabel: 'Broadcast by Admin',
+    icon: 'bullhorn-variant',
+    color: '#EA580C',
+    bg: '#FFEDD5',
+  },
+  broadcast_by_admin: {
+    categoryKey: 'broadcast_by_admin',
+    categoryLabel: 'Broadcast by Admin',
+    icon: 'bullhorn-variant',
+    color: '#EA580C',
+    bg: '#FFEDD5',
+  },
+  fare_update: {
+    categoryKey: 'broadcast_by_admin',
+    categoryLabel: 'Broadcast by Admin',
+    subLabel: 'LTFRB Fare Revision',
+    icon: 'cash-multiple',
+    color: '#D97706',
+    bg: '#FEF3C7',
+    actionText: 'View Fare Matrix',
+    actionScreen: 'RoutesAndFares',
+    actionParams: { initialTab: 'fares' },
   },
   system: {
-    icon: 'bell-circle',
-    color: '#6B7280',
+    categoryKey: 'broadcast_by_admin',
+    categoryLabel: 'Broadcast by Admin',
+    icon: 'shield-account',
+    color: '#4B5563',
     bg: '#F3F4F6',
-    label: 'System Notification',
   },
 };
 
@@ -66,11 +154,46 @@ const NotificationsScreen = ({ navigation }) => {
     unreadCount,
   } = useNotifications();
 
+  const [activeTab, setActiveTab] = useState('all');
   const [selectedNotif, setSelectedNotif] = useState(null);
 
   useEffect(() => {
     fetchNotifications();
   }, []);
+
+  // Compute count for each category
+  const categoryCounts = useMemo(() => {
+    const counts = {
+      all: notifications.length,
+      weather_updates: 0,
+      complaint_updates: 0,
+      broadcast_by_admin: 0,
+    };
+    const unread = {
+      all: unreadCount,
+      weather_updates: 0,
+      complaint_updates: 0,
+      broadcast_by_admin: 0,
+    };
+
+    notifications.forEach((n) => {
+      const cat = getNotificationCategory(n);
+      if (counts[cat] !== undefined) counts[cat] += 1;
+      if (!n.isRead && unread[cat] !== undefined) unread[cat] += 1;
+    });
+
+    return { counts, unread };
+  }, [notifications, unreadCount]);
+
+  // Filter list by selected tab
+  const filteredNotifications = useMemo(() => {
+    if (activeTab === 'all') return notifications;
+    return notifications.filter((n) => getNotificationCategory(n) === activeTab);
+  }, [notifications, activeTab]);
+
+  const activeTabMeta = useMemo(() => {
+    return CATEGORY_TABS.find((t) => t.id === activeTab) || CATEGORY_TABS[0];
+  }, [activeTab]);
 
   const handleCardPress = (item) => {
     if (!item.isRead) {
@@ -79,10 +202,10 @@ const NotificationsScreen = ({ navigation }) => {
     setSelectedNotif(item);
   };
 
-  const handleActionNavigation = (config) => {
+  const handleActionNavigation = (cfg) => {
     const currentNotif = selectedNotif;
     setSelectedNotif(null);
-    if (!config?.actionScreen) return;
+    if (!cfg?.actionScreen) return;
     try {
       if (currentNotif?.metadata?.complaintId) {
         navigation.navigate('ComplaintDetail', {
@@ -90,10 +213,10 @@ const NotificationsScreen = ({ navigation }) => {
         });
         return;
       }
-      if (config.actionParams) {
-        navigation.navigate(config.actionScreen, config.actionParams);
+      if (cfg.actionParams) {
+        navigation.navigate(cfg.actionScreen, cfg.actionParams);
       } else {
-        navigation.navigate(config.actionScreen);
+        navigation.navigate(cfg.actionScreen);
       }
     } catch (err) {
       console.log('Navigation fallback:', err.message);
@@ -104,93 +227,236 @@ const NotificationsScreen = ({ navigation }) => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header Bar */}
       <View style={styles.headerRow}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Notifications</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Transit advisories, fare matrix changes & LTFRB updates
+            Weather advisories, complaint updates & admin broadcasts
           </Text>
         </View>
         {unreadCount > 0 && (
           <TouchableOpacity
             onPress={markAllAsRead}
-            style={[styles.markAllBtn, { backgroundColor: colors.primary + '15' }]}
+            style={[styles.markAllBtn, { backgroundColor: colors.primary + '18' }]}
+            activeOpacity={0.7}
           >
             <Text style={[styles.markAll, { color: colors.primary }]}>Mark all read</Text>
           </TouchableOpacity>
         )}
       </View>
 
+      {/* Category Selection Tabs Bar */}
+      <View style={styles.categoryContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScroll}
+        >
+          {CATEGORY_TABS.map((tab) => {
+            const isSelected = activeTab === tab.id;
+            const count = categoryCounts.counts[tab.id] || 0;
+            const unread = categoryCounts.unread[tab.id] || 0;
+
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                onPress={() => setActiveTab(tab.id)}
+                activeOpacity={0.8}
+                style={[
+                  styles.tabChip,
+                  {
+                    backgroundColor: isSelected
+                      ? tab.color
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.06)'
+                      : '#FFFFFF',
+                    borderColor: isSelected
+                      ? tab.color
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.12)'
+                      : colors.border,
+                  },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name={tab.icon}
+                  size={16}
+                  color={isSelected ? '#FFFFFF' : tab.color}
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={[
+                    styles.tabChipText,
+                    {
+                      color: isSelected ? '#FFFFFF' : colors.textPrimary,
+                      fontWeight: isSelected ? '800' : '600',
+                    },
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+                <View
+                  style={[
+                    styles.tabBadge,
+                    {
+                      backgroundColor: isSelected
+                        ? 'rgba(255, 255, 255, 0.28)'
+                        : unread > 0
+                        ? tab.color + '22'
+                        : isDark
+                        ? 'rgba(255, 255, 255, 0.12)'
+                        : '#F1F5F9',
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tabBadgeText,
+                      {
+                        color: isSelected
+                          ? '#FFFFFF'
+                          : unread > 0
+                          ? tab.color
+                          : colors.textSecondary,
+                        fontWeight: unread > 0 || isSelected ? '800' : '600',
+                      },
+                    ]}
+                  >
+                    {count}
+                  </Text>
+                </View>
+                {unread > 0 && !isSelected && (
+                  <View style={[styles.tabUnreadDot, { backgroundColor: tab.color }]} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       {/* Notifications List */}
       <FlatList
-        data={notifications}
+        data={filteredNotifications}
         keyExtractor={(item) => item._id || Math.random().toString()}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <EmptyState
-            icon="bell-off-outline"
-            title="No notifications"
-            message="You're all caught up with Dagupan transit announcements!"
+            icon={activeTabMeta.icon}
+            title={activeTabMeta.emptyTitle}
+            message={activeTabMeta.emptyMessage}
           />
         }
         renderItem={({ item }) => {
-          const cfg = NOTIF_CONFIG[item.type] || NOTIF_CONFIG.system;
+          const cat = getNotificationCategory(item);
+          const cfg = NOTIF_CONFIG[item.type] || NOTIF_CONFIG[cat] || NOTIF_CONFIG.broadcast;
+          const isCategorySelected = activeTab !== 'all';
+
           return (
             <TouchableOpacity
               style={[
                 styles.notifCard,
                 {
-                  backgroundColor: item.isRead ? colors.surface : colors.primary + '0A',
-                  borderColor: item.isRead ? colors.border : colors.primary + '40',
+                  backgroundColor: item.isRead
+                    ? isDark
+                      ? colors.surface
+                      : '#FFFFFF'
+                    : isDark
+                    ? 'rgba(2, 132, 199, 0.08)'
+                    : '#F0F9FF',
+                  borderColor: item.isRead
+                    ? colors.border
+                    : isDark
+                    ? 'rgba(2, 132, 199, 0.35)'
+                    : '#BAE6FD',
                 },
               ]}
               onPress={() => handleCardPress(item)}
               activeOpacity={0.7}
             >
-              <View style={[styles.iconCircle, { backgroundColor: cfg.color + '20' }]}>
+              {/* Category Icon */}
+              <View
+                style={[
+                  styles.iconCircle,
+                  {
+                    backgroundColor: isDark ? cfg.color + '22' : cfg.bg,
+                    borderColor: cfg.color + '40',
+                    borderWidth: 1,
+                  },
+                ]}
+              >
                 <MaterialCommunityIcons name={cfg.icon} size={22} color={cfg.color} />
               </View>
 
               <View style={styles.notifContent}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      fontWeight: '700',
-                      color: cfg.color,
-                      textTransform: 'uppercase',
-                    }}
+                {/* Header row with Category Tag and Time */}
+                <View style={styles.cardHeaderRow}>
+                  <View
+                    style={[
+                      styles.categoryTag,
+                      {
+                        backgroundColor: isDark ? cfg.color + '25' : cfg.bg,
+                        borderColor: cfg.color + '55',
+                      },
+                    ]}
                   >
-                    {cfg.label}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.categoryTagText,
+                        { color: isDark ? '#FFFFFF' : cfg.color },
+                      ]}
+                    >
+                      {cfg.categoryLabel}
+                    </Text>
+                  </View>
+
+                  {cfg.subLabel ? (
+                    <View
+                      style={[
+                        styles.subTag,
+                        { backgroundColor: isDark ? 'rgba(217, 119, 6, 0.2)' : '#FEF3C7' },
+                      ]}
+                    >
+                      <Text style={styles.subTagText}>{cfg.subLabel}</Text>
+                    </View>
+                  ) : null}
+
                   <Text style={[styles.notifTime, { color: colors.textMuted }]}>
                     {formatDate(item.createdAt)}
                   </Text>
                 </View>
 
+                {/* Notification Title */}
                 <Text
                   style={[
                     styles.notifTitle,
-                    { color: colors.textPrimary, fontWeight: item.isRead ? '600' : '800' },
+                    {
+                      color: colors.textPrimary,
+                      fontWeight: item.isRead ? '700' : '900',
+                    },
                   ]}
                   numberOfLines={2}
                 >
                   {item.title}
                 </Text>
 
-                <Text style={[styles.notifMsg, { color: colors.textSecondary }]} numberOfLines={2}>
+                {/* Notification Message */}
+                <Text
+                  style={[styles.notifMsg, { color: colors.textSecondary }]}
+                  numberOfLines={2}
+                >
                   {item.message}
                 </Text>
 
+                {/* Bottom Action Prompt */}
                 <View style={styles.viewFullRow}>
-                  <Text style={[styles.viewFullText, { color: colors.primary }]}>
-                    Tap to view full announcement
+                  <Text style={[styles.viewFullText, { color: cfg.color }]}>
+                    Tap to view announcement
                   </Text>
-                  <MaterialCommunityIcons name="chevron-right" size={16} color={colors.primary} />
+                  <MaterialCommunityIcons name="chevron-right" size={15} color={cfg.color} />
                 </View>
               </View>
 
               {!item.isRead && (
-                <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
+                <View style={[styles.unreadDot, { backgroundColor: cfg.color }]} />
               )}
             </TouchableOpacity>
           );
@@ -199,7 +465,9 @@ const NotificationsScreen = ({ navigation }) => {
 
       {/* Full-Context Announcement Detail Modal */}
       {Boolean(selectedNotif) ? (() => {
-        const cfg = NOTIF_CONFIG[selectedNotif.type] || NOTIF_CONFIG.system;
+        const cat = getNotificationCategory(selectedNotif);
+        const cfg = NOTIF_CONFIG[selectedNotif.type] || NOTIF_CONFIG[cat] || NOTIF_CONFIG.broadcast;
+
         return (
           <Modal
             visible={!!selectedNotif}
@@ -208,7 +476,15 @@ const NotificationsScreen = ({ navigation }) => {
             onRequestClose={() => setSelectedNotif(null)}
           >
             <View style={styles.modalBackdrop}>
-              <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', width: '100%', padding: SPACING.md }}>
+              <SafeAreaView
+                style={{
+                  flex: 1,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  width: '100%',
+                  padding: SPACING.md,
+                }}
+              >
                 <View
                   style={[
                     styles.modalContainer,
@@ -217,13 +493,25 @@ const NotificationsScreen = ({ navigation }) => {
                 >
                   {/* Modal Header */}
                   <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                      <View style={[styles.modalIconBox, { backgroundColor: cfg.color + '22' }]}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                        flex: 1,
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.modalIconBox,
+                          { backgroundColor: isDark ? cfg.color + '25' : cfg.bg },
+                        ]}
+                      >
                         <MaterialCommunityIcons name={cfg.icon} size={22} color={cfg.color} />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.modalBadgeText, { color: cfg.color }]}>
-                          {cfg.label}
+                          {cfg.categoryLabel}
                         </Text>
                         <Text style={[styles.modalTimeText, { color: colors.textMuted }]}>
                           {formatDateTime(selectedNotif.createdAt)}
@@ -233,7 +521,14 @@ const NotificationsScreen = ({ navigation }) => {
 
                     <TouchableOpacity
                       onPress={() => setSelectedNotif(null)}
-                      style={[styles.closeBtn, { backgroundColor: colors.background }]}
+                      style={[
+                        styles.closeBtn,
+                        {
+                          backgroundColor: isDark
+                            ? 'rgba(255, 255, 255, 0.08)'
+                            : colors.background,
+                        },
+                      ]}
                     >
                       <MaterialCommunityIcons name="close" size={20} color={colors.textPrimary} />
                     </TouchableOpacity>
@@ -249,16 +544,42 @@ const NotificationsScreen = ({ navigation }) => {
                       {selectedNotif.title}
                     </Text>
 
-                    {/* Reference tag if present */}
-                    {Boolean(selectedNotif.metadata?.lguCaseNumber || selectedNotif.metadata?.ltfrbCaseNumber) ? (
-                      <View style={[styles.refBox, { backgroundColor: '#EDE9FE', borderColor: '#C4B5FD' }]}>
+                    {/* Reference tag if complaint update */}
+                    {Boolean(
+                      selectedNotif.metadata?.lguCaseNumber ||
+                        selectedNotif.metadata?.ltfrbCaseNumber
+                    ) ? (
+                      <View
+                        style={[
+                          styles.refBox,
+                          {
+                            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#EDE9FE',
+                            borderColor: isDark ? '#7C3AED' : '#C4B5FD',
+                          },
+                        ]}
+                      >
                         <MaterialCommunityIcons name="shield-check" size={18} color="#7C3AED" />
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#6D28D9' }}>
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              fontWeight: '800',
+                              color: isDark ? '#DDD6FE' : '#6D28D9',
+                              letterSpacing: 0.5,
+                            }}
+                          >
                             OFFICIAL CASE TRACKING NUMBER
                           </Text>
-                          <Text style={{ fontSize: 13, fontWeight: '800', color: '#5B21B6', fontFamily: 'monospace' }}>
-                            {selectedNotif.metadata.lguCaseNumber || selectedNotif.metadata.ltfrbCaseNumber}
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              fontWeight: '800',
+                              color: isDark ? '#FFFFFF' : '#5B21B6',
+                              fontFamily: 'monospace',
+                            }}
+                          >
+                            {selectedNotif.metadata.lguCaseNumber ||
+                              selectedNotif.metadata.ltfrbCaseNumber}
                           </Text>
                         </View>
                       </View>
@@ -269,7 +590,7 @@ const NotificationsScreen = ({ navigation }) => {
                       style={[
                         styles.messageContainer,
                         {
-                          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+                          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#F8FAFC',
                           borderColor: colors.border,
                         },
                       ]}
@@ -281,9 +602,13 @@ const NotificationsScreen = ({ navigation }) => {
 
                     {/* Dagupan City Transit Advisory Footer Notice */}
                     <View style={styles.footerNoticeRow}>
-                      <MaterialCommunityIcons name="information-outline" size={15} color={colors.textMuted} />
+                      <MaterialCommunityIcons
+                        name="information-outline"
+                        size={15}
+                        color={colors.textMuted}
+                      />
                       <Text style={[styles.footerNoticeText, { color: colors.textMuted }]}>
-                        Official SmartSakay Dagupan notification verified by City Transport Authority.
+                        Official SmartSakay Dagupan notification verified by Dagupan City Transport Authority.
                       </Text>
                     </View>
                   </ScrollView>
@@ -295,7 +620,12 @@ const NotificationsScreen = ({ navigation }) => {
                         style={[styles.primaryActionBtn, { backgroundColor: cfg.color }]}
                         onPress={() => handleActionNavigation(cfg)}
                       >
-                        <MaterialCommunityIcons name="open-in-app" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <MaterialCommunityIcons
+                          name="open-in-app"
+                          size={18}
+                          color="#FFFFFF"
+                          style={{ marginRight: 6 }}
+                        />
                         <Text style={styles.primaryActionText}>{cfg.actionText}</Text>
                       </TouchableOpacity>
                     ) : null}
@@ -329,11 +659,12 @@ const NotificationsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerRow: {
-    padding: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
+    paddingBottom: SPACING.xs,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
   },
   title: { fontSize: FONTS.sizes.xl, fontWeight: '800' },
@@ -344,7 +675,52 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full,
   },
   markAll: { fontSize: FONTS.sizes.xs, fontWeight: '700' },
-  listContent: { padding: SPACING.lg, paddingTop: 0 },
+
+  // Category Tabs Filter Bar
+  categoryContainer: {
+    marginVertical: SPACING.sm,
+  },
+  categoryScroll: {
+    paddingHorizontal: SPACING.lg,
+    gap: 8,
+    paddingBottom: 2,
+  },
+  tabChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  tabChipText: {
+    fontSize: 12,
+  },
+  tabBadge: {
+    marginLeft: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    minWidth: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabBadgeText: {
+    fontSize: 10,
+  },
+  tabUnreadDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginLeft: 4,
+  },
+
+  // Notification Cards
+  listContent: {
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xxl,
+    paddingTop: SPACING.xs,
+  },
   notifCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -363,20 +739,66 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   notifContent: { flex: 1 },
-  notifTitle: { fontSize: FONTS.sizes.md, marginBottom: 4, lineHeight: 20 },
-  notifMsg: { fontSize: FONTS.sizes.sm, lineHeight: 19 },
-  notifTime: { fontSize: FONTS.sizes.xs, fontWeight: '500' },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  categoryTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  categoryTagText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  subTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  subTagText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  notifTime: {
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '500',
+    marginLeft: 'auto',
+  },
+  notifTitle: {
+    fontSize: FONTS.sizes.md,
+    marginBottom: 3,
+    lineHeight: 20,
+  },
+  notifMsg: {
+    fontSize: FONTS.sizes.sm,
+    lineHeight: 18,
+  },
   viewFullRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    marginTop: 8,
+    marginTop: 6,
   },
   viewFullText: {
-    fontSize: FONTS.sizes.xs,
+    fontSize: 11,
     fontWeight: '700',
   },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 6,
+  },
 
   // Modal Styles
   modalBackdrop: {

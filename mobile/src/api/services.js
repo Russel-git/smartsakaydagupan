@@ -72,7 +72,7 @@ export const weatherAPI = {
 };
 
 export const notificationsAPI = {
-  getNotifications: () => apiClient.get('/notifications'),
+  getNotifications: (params) => apiClient.get('/notifications', { params }),
   getUnreadCount: () => apiClient.get('/notifications/unread-count'),
   markAsRead: (id) => apiClient.put(`/notifications/${id}/read`),
   markAllAsRead: () => apiClient.put('/notifications/read-all'),
