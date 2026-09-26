@@ -21,9 +21,10 @@ import { FONTS, SPACING, RADIUS, SHADOWS } from '../../utils/constants';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const WELCOME_IMG = require('../../../assets/onboard_welcome.jpg');
-const TRACKING_IMG = require('../../../assets/onboard_tracking.jpg');
-const FARES_IMG = require('../../../assets/onboard_fares.jpg');
+// Real Dagupan Transit Photos provided by the user
+const WELCOME_IMG = require('../../../assets/onboard_welcome.jpg'); // Welcome to Dagupan Bangus Arch & Jeepney
+const TRACKING_IMG = require('../../../assets/onboard_tracking.jpg'); // Authentic Dagupan / Calasiao Jeepney with commuters
+const FARES_IMG = require('../../../assets/onboard_fares.jpg');       // Dagupan Tricycles on city street
 
 const WelcomeScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
@@ -57,10 +58,10 @@ const WelcomeScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={[styles.rootContainer, { backgroundColor: activeIndex === 0 ? '#EA580C' : colors.background }]}>
+    <View style={[styles.rootContainer, { backgroundColor: isDark ? colors.background : '#FBFBFB' }]}>
       <StatusBar
-        barStyle={activeIndex === 0 ? 'light-content' : (isDark ? 'light-content' : 'dark-content')}
-        backgroundColor={activeIndex === 0 ? '#EA580C' : 'transparent'}
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
         translucent={true}
       />
 
@@ -74,63 +75,98 @@ const WelcomeScreen = ({ navigation }) => {
         style={styles.scrollView}
       >
         {/* ======================================================== */}
-        {/* SLIDE 0: BRAND SPLASH / LANDING PAGE (Screen 1 in mockup) */}
+        {/* SLIDE 0: BRAND LANDING PAGE (Exact user mockup)           */}
         {/* ======================================================== */}
         <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
           <LinearGradient
-            colors={['#F97316', '#EA580C', '#C2410C']}
-            style={[styles.splashSection, { paddingTop: topInset + 30, paddingBottom: Math.max(insets.bottom, 24) + 16 }]}
-            start={{ x: 0.1, y: 0 }}
-            end={{ x: 0.9, y: 1 }}
+            colors={isDark ? [colors.background, colors.background] : ['#FFFFFF', '#FAFAFA', '#FFF7ED']}
+            style={[
+              styles.landingContainer,
+              {
+                paddingTop: topInset + 12,
+                paddingBottom: Math.max(insets.bottom, 20) + 12,
+              },
+            ]}
           >
-            {/* Upper Content: Vehicle Icon + Brand Title */}
-            <View style={styles.splashCenter}>
-              <View style={styles.splashIconCircle}>
-                <MaterialCommunityIcons name="bus-side" size={56} color="#FFFFFF" />
+            {/* Top Header: Live Network Status + Settings */}
+            <View style={styles.landingTopRow}>
+              <View style={[styles.liveNetworkPill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#E2E8F0' }]}>
+                <View style={styles.liveGreenDot} />
+                <Text style={[styles.liveNetworkText, { color: colors.textSecondary }]}>
+                  LIVE NETWORK • DAGUPAN
+                </Text>
               </View>
 
-              <Text style={styles.splashAppName}>SmartSakay</Text>
-              <Text style={styles.splashAppCity}>DAGUPAN</Text>
+              <TouchableOpacity
+                style={[styles.settingsCircleBtn, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#E2E8F0' }]}
+                onPress={() => navigation.navigate('Weather')}
+                activeOpacity={0.8}
+                accessibilityLabel="Transit Weather and Advisories"
+              >
+                <MaterialCommunityIcons name="cog-outline" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
-              <Text style={styles.splashTagline}>
-                Your trusted transit & commuter companion for Dagupan City and Pangasinan
+            {/* Center Content: Logo, Brand Typography & Feature Badges */}
+            <View style={styles.landingCenterContent}>
+              {/* App Icon Tile */}
+              <LinearGradient
+                colors={['#F97316', '#EA580C']}
+                style={styles.appIconTile}
+                start={{ x: 0.1, y: 0.1 }}
+                end={{ x: 0.9, y: 0.9 }}
+              >
+                <MaterialCommunityIcons name="bus-side" size={46} color="#FFFFFF" />
+              </LinearGradient>
+
+              {/* Title & Badge */}
+              <Text style={[styles.appNameTitle, { color: colors.textPrimary }]}>SmartSakay</Text>
+              
+              <View style={styles.cityBadge}>
+                <Text style={styles.cityBadgeText}>DAGUPAN CITY</Text>
+              </View>
+
+              <Text style={[styles.appDescription, { color: colors.textSecondary }]}>
+                Your trusted transit & commuter companion for Dagupan City and Pangasinan.
               </Text>
 
-              {/* Transit Feature Pills */}
-              <View style={styles.splashPillsRow}>
-                <View style={styles.splashPill}>
-                  <MaterialCommunityIcons name="van-passenger" size={16} color="#FEF08A" />
-                  <Text style={styles.splashPillText}>Jeepney Routes</Text>
+              {/* 3 Floating Transit Feature Pills */}
+              <View style={styles.featurePillsCol}>
+                <View style={[styles.floatingFeaturePill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#E2E8F0' }]}>
+                  <Text style={styles.pillEmoji}>🚐</Text>
+                  <Text style={[styles.pillLabel, { color: colors.textPrimary }]}>Jeepney Routes</Text>
                 </View>
-                <View style={styles.splashPill}>
-                  <MaterialCommunityIcons name="moped" size={16} color="#FEF08A" />
-                  <Text style={styles.splashPillText}>Tricycle Pinpoint</Text>
+
+                <View style={[styles.floatingFeaturePill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#E2E8F0' }]}>
+                  <Text style={styles.pillEmoji}>🛺</Text>
+                  <Text style={[styles.pillLabel, { color: colors.textPrimary }]}>Tricycle Pinpoint</Text>
                 </View>
-                <View style={styles.splashPill}>
-                  <MaterialCommunityIcons name="scale-balance" size={16} color="#FEF08A" />
-                  <Text style={styles.splashPillText}>Official Fares</Text>
+
+                <View style={[styles.floatingFeaturePill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#E2E8F0' }]}>
+                  <Text style={styles.pillEmoji}>⚖️</Text>
+                  <Text style={[styles.pillLabel, { color: colors.textPrimary }]}>Official Fares & Matrix</Text>
                 </View>
               </View>
             </View>
 
-            {/* Bottom Actions for Slide 0 */}
-            <View style={styles.splashBottomActions}>
+            {/* Bottom Actions: Explore Dagupan Transit Button + Shortcuts */}
+            <View style={styles.landingBottomSection}>
               <TouchableOpacity
-                style={styles.splashPrimaryBtn}
+                style={styles.exploreBtn}
                 onPress={() => scrollToSlide(1)}
                 activeOpacity={0.88}
               >
-                <Text style={styles.splashPrimaryBtnText}>Explore Dagupan Transit</Text>
-                <MaterialCommunityIcons name="arrow-right" size={20} color="#EA580C" />
+                <Text style={styles.exploreBtnText}>Explore Dagupan Transit</Text>
+                <MaterialCommunityIcons name="arrow-right" size={20} color="#FFFFFF" />
               </TouchableOpacity>
 
-              <View style={styles.splashQuickLinks}>
+              <View style={styles.quickLinksRow}>
                 <TouchableOpacity onPress={() => navigation.navigate('Login')} activeOpacity={0.8}>
-                  <Text style={styles.splashQuickLinkText}>Sign In</Text>
+                  <Text style={[styles.quickLinkText, { color: colors.textSecondary }]}>Sign In</Text>
                 </TouchableOpacity>
-                <Text style={styles.splashQuickLinkDivider}>•</Text>
+                <Text style={[styles.quickLinkDivider, { color: colors.textMuted }]}>•</Text>
                 <TouchableOpacity onPress={handleGuestMode} activeOpacity={0.8}>
-                  <Text style={styles.splashQuickLinkText}>Continue as Guest</Text>
+                  <Text style={[styles.quickLinkText, { color: colors.textSecondary }]}>Continue as Guest</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -138,18 +174,18 @@ const WelcomeScreen = ({ navigation }) => {
         </View>
 
         {/* ======================================================== */}
-        {/* SLIDE 1: WELCOME TO SMARTSAKAY DAGUPAN (Screen 3 mockup)   */}
+        {/* SLIDE 1: WELCOME WITH REAL DAGUPAN BANGUS ARCH PHOTO     */}
         {/* ======================================================== */}
         <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: colors.background }]}>
           <View style={[styles.walkthroughContainer, { paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 20) }]}>
             {/* Header: Back & Skip */}
             <View style={styles.walkthroughHeader}>
               <TouchableOpacity
-                style={styles.headerBackBtn}
+                style={[styles.headerBackBtn, { backgroundColor: isDark ? colors.surface : '#F1F5F9' }]}
                 onPress={() => scrollToSlide(0)}
                 activeOpacity={0.7}
               >
-                <MaterialCommunityIcons name="chevron-left" size={28} color={colors.textPrimary} />
+                <MaterialCommunityIcons name="chevron-left" size={26} color={colors.textPrimary} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -161,14 +197,18 @@ const WelcomeScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Illustration Canvas */}
-            <View style={styles.illustrationWrapper}>
-              <View style={[styles.illustrationBackdrop, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F8FAFC' }]}>
+            {/* Real Photo Frame */}
+            <View style={styles.photoFrameWrapper}>
+              <View style={[styles.realPhotoCard, { borderColor: colors.border }]}>
                 <Image
                   source={WELCOME_IMG}
-                  style={styles.illustrationImg}
+                  style={styles.realPhotoImg}
                   resizeMode="cover"
                 />
+                <View style={styles.photoBadgeOverlay}>
+                  <MaterialCommunityIcons name="map-marker" size={13} color="#FFFFFF" />
+                  <Text style={styles.photoBadgeText}>Dagupan City Welcome Arch</Text>
+                </View>
               </View>
             </View>
 
@@ -203,18 +243,18 @@ const WelcomeScreen = ({ navigation }) => {
         </View>
 
         {/* ======================================================== */}
-        {/* SLIDE 2: QUICK AND RELIABLE TRACKING (Screen 2 mockup)    */}
+        {/* SLIDE 2: REAL DAGUPAN PASSENGER JEEPNEY PHOTO            */}
         {/* ======================================================== */}
         <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: colors.background }]}>
           <View style={[styles.walkthroughContainer, { paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 20) }]}>
             {/* Header: Back & Skip */}
             <View style={styles.walkthroughHeader}>
               <TouchableOpacity
-                style={styles.headerBackBtn}
+                style={[styles.headerBackBtn, { backgroundColor: isDark ? colors.surface : '#F1F5F9' }]}
                 onPress={() => scrollToSlide(1)}
                 activeOpacity={0.7}
               >
-                <MaterialCommunityIcons name="chevron-left" size={28} color={colors.textPrimary} />
+                <MaterialCommunityIcons name="chevron-left" size={26} color={colors.textPrimary} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -226,14 +266,18 @@ const WelcomeScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Illustration Canvas */}
-            <View style={styles.illustrationWrapper}>
-              <View style={[styles.illustrationBackdrop, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F8FAFC' }]}>
+            {/* Real Photo Frame */}
+            <View style={styles.photoFrameWrapper}>
+              <View style={[styles.realPhotoCard, { borderColor: colors.border }]}>
                 <Image
                   source={TRACKING_IMG}
-                  style={styles.illustrationImg}
+                  style={styles.realPhotoImg}
                   resizeMode="cover"
                 />
+                <View style={styles.photoBadgeOverlay}>
+                  <MaterialCommunityIcons name="van-passenger" size={13} color="#FFFFFF" />
+                  <Text style={styles.photoBadgeText}>Dagupan - Calasiao Jeepney</Text>
+                </View>
               </View>
             </View>
 
@@ -268,22 +312,22 @@ const WelcomeScreen = ({ navigation }) => {
         </View>
 
         {/* ======================================================== */}
-        {/* SLIDE 3: OFFICIAL TARIFFS & COMMUTER RIGHTS (Final Action) */}
+        {/* SLIDE 3: REAL DAGUPAN TRICYCLE PHOTO + AUTH ACTIONS      */}
         {/* ======================================================== */}
         <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: colors.background }]}>
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={[styles.finalSlideContent, { paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 24) + 10 }]}
+            contentContainerStyle={[styles.finalSlideContent, { paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 24) + 12 }]}
             showsVerticalScrollIndicator={false}
           >
             {/* Header: Back only */}
             <View style={styles.walkthroughHeader}>
               <TouchableOpacity
-                style={styles.headerBackBtn}
+                style={[styles.headerBackBtn, { backgroundColor: isDark ? colors.surface : '#F1F5F9' }]}
                 onPress={() => scrollToSlide(2)}
                 activeOpacity={0.7}
               >
-                <MaterialCommunityIcons name="chevron-left" size={28} color={colors.textPrimary} />
+                <MaterialCommunityIcons name="chevron-left" size={26} color={colors.textPrimary} />
               </TouchableOpacity>
 
               <View style={styles.paginationDotsSmall}>
@@ -293,14 +337,18 @@ const WelcomeScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {/* Compact Illustration Canvas */}
-            <View style={styles.finalIllustrationWrapper}>
-              <View style={[styles.illustrationBackdropCompact, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F8FAFC' }]}>
+            {/* Real Photo Frame */}
+            <View style={styles.photoFrameWrapperCompact}>
+              <View style={[styles.realPhotoCardCompact, { borderColor: colors.border }]}>
                 <Image
                   source={FARES_IMG}
-                  style={styles.illustrationImgCompact}
+                  style={styles.realPhotoImgCompact}
                   resizeMode="cover"
                 />
+                <View style={styles.photoBadgeOverlay}>
+                  <MaterialCommunityIcons name="moped" size={13} color="#FFFFFF" />
+                  <Text style={styles.photoBadgeText}>Dagupan City Tricycles</Text>
+                </View>
               </View>
             </View>
 
@@ -359,115 +407,150 @@ const styles = StyleSheet.create({
   },
 
   /* ------------------------------------------------ */
-  /* SLIDE 0: BRAND SPLASH STYLES                      */
+  /* SLIDE 0: BRAND LANDING STYLES (Mockup Match)     */
   /* ------------------------------------------------ */
-  splashSection: {
+  landingContainer: {
     flex: 1,
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.xxl,
+    paddingHorizontal: SPACING.xl,
   },
-  splashCenter: {
-    alignItems: 'center',
-    marginTop: SCREEN_HEIGHT * 0.08,
-  },
-  splashIconCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
-    borderWidth: 2.5,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
-    shadowColor: '#000000',
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  splashAppName: {
-    fontSize: 38,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -1,
-  },
-  splashAppCity: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FEF08A',
-    letterSpacing: 6,
-    marginTop: 2,
-    marginBottom: SPACING.lg,
-  },
-  splashTagline: {
-    fontSize: FONTS.sizes.sm + 1,
-    color: 'rgba(255, 255, 255, 0.92)',
-    textAlign: 'center',
-    lineHeight: 22,
-    maxWidth: 290,
-    marginBottom: SPACING.xl,
-  },
-  splashPillsRow: {
+  landingTopRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-    maxWidth: 320,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
   },
-  splashPill: {
+  liveNetworkPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    ...SHADOWS.xs,
   },
-  splashPillText: {
-    color: '#FFFFFF',
+  liveGreenDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  liveNetworkText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  settingsCircleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.xs,
+  },
+  landingCenterContent: {
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  appIconTile: {
+    width: 82,
+    height: 82,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: '#EA580C',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  appNameTitle: {
+    fontSize: 34,
+    fontWeight: '900',
+    letterSpacing: -0.8,
+    marginBottom: 6,
+  },
+  cityBadge: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    marginBottom: 12,
+  },
+  cityBadgeText: {
+    color: '#EA580C',
     fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  appDescription: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    textAlign: 'center',
+    maxWidth: 290,
+    marginBottom: 20,
+  },
+  featurePillsCol: {
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+  },
+  floatingFeaturePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    ...SHADOWS.xs,
+  },
+  pillEmoji: {
+    fontSize: 14,
+  },
+  pillLabel: {
+    fontSize: 12.5,
     fontWeight: '700',
   },
-  splashBottomActions: {
+  landingBottomSection: {
     width: '100%',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
-  splashPrimaryBtn: {
+  exploreBtn: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#EA580C',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 16,
     borderRadius: RADIUS.full,
-    shadowColor: '#000000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowColor: '#EA580C',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  splashPrimaryBtnText: {
-    color: '#EA580C',
+  exploreBtnText: {
+    color: '#FFFFFF',
     fontSize: FONTS.sizes.md,
     fontWeight: '800',
   },
-  splashQuickLinks: {
+  quickLinksRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    marginTop: 2,
   },
-  splashQuickLinkText: {
-    color: '#FFFFFF',
-    fontSize: 13,
+  quickLinkText: {
+    fontSize: 12.5,
     fontWeight: '600',
-    textDecorationLine: 'underline',
   },
-  splashQuickLinkDivider: {
-    color: 'rgba(255, 255, 255, 0.6)',
+  quickLinkDivider: {
     fontSize: 12,
   },
 
@@ -487,9 +570,9 @@ const styles = StyleSheet.create({
     height: 44,
   },
   headerBackBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -501,25 +584,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  illustrationWrapper: {
+  photoFrameWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 12,
+    marginVertical: 10,
   },
-  illustrationBackdrop: {
-    width: Math.min(SCREEN_WIDTH * 0.78, 300),
-    height: Math.min(SCREEN_WIDTH * 0.78, 300),
-    borderRadius: 36,
+  realPhotoCard: {
+    width: Math.min(SCREEN_WIDTH * 0.88, 350),
+    height: Math.min(SCREEN_WIDTH * 0.52, 210),
+    borderRadius: 20,
     overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(234, 88, 12, 0.15)',
+    position: 'relative',
+    borderWidth: 1,
     ...SHADOWS.md,
   },
-  illustrationImg: {
+  realPhotoImg: {
     width: '100%',
     height: '100%',
+  },
+  photoBadgeOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  photoBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '700',
   },
   infoWrapper: {
     alignItems: 'center',
@@ -538,11 +636,11 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     textAlign: 'center',
     marginTop: 2,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   descriptionText: {
     fontSize: 13,
-    lineHeight: 20,
+    lineHeight: 19,
     textAlign: 'center',
     maxWidth: 310,
   },
@@ -552,7 +650,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     paddingHorizontal: SPACING.sm,
-    marginTop: 16,
+    marginTop: 10,
   },
   paginationDotsContainer: {
     flexDirection: 'row',
@@ -607,46 +705,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     alignItems: 'center',
   },
-  finalIllustrationWrapper: {
+  photoFrameWrapperCompact: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 10,
+    marginVertical: 8,
   },
-  illustrationBackdropCompact: {
-    width: Math.min(SCREEN_WIDTH * 0.65, 230),
-    height: Math.min(SCREEN_WIDTH * 0.65, 230),
-    borderRadius: 30,
+  realPhotoCardCompact: {
+    width: Math.min(SCREEN_WIDTH * 0.88, 340),
+    height: Math.min(SCREEN_WIDTH * 0.42, 170),
+    borderRadius: 18,
     overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(234, 88, 12, 0.15)',
+    position: 'relative',
+    borderWidth: 1,
     ...SHADOWS.sm,
   },
-  illustrationImgCompact: {
+  realPhotoImgCompact: {
     width: '100%',
     height: '100%',
   },
   infoWrapperCompact: {
     alignItems: 'center',
     paddingHorizontal: SPACING.md,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   descriptionTextCompact: {
     fontSize: 12.5,
-    lineHeight: 18,
+    lineHeight: 17,
     textAlign: 'center',
     maxWidth: 310,
   },
   authButtonsWrapper: {
     width: '100%',
     paddingHorizontal: SPACING.sm,
-    gap: 10,
+    gap: 8,
   },
   actionBtn: {
     width: '100%',
   },
-  guestActionBtn: {
+  guestBtn: {
     marginTop: 2,
   },
   guestNote: {
