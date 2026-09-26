@@ -166,20 +166,14 @@ const HomeScreen = ({ navigation }) => {
         <View style={styles.quickGrid}>
           <TouchableOpacity
             style={[styles.quickCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => {
-              if (isGuest) {
-                openPrompt('File a Complaint', 'Register or sign in to file verified transit complaints with photo evidence to Dagupan LGU.', 'clipboard-alert', 'Verified Report');
-              } else {
-                navigation.navigate('SubmitComplaint');
-              }
-            }}
+            onPress={() => navigation.navigate('RoutesAndFares', { initialTab: 'routes' })}
             activeOpacity={0.8}
           >
-            <View style={[styles.quickIconCircle, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
-              <MaterialCommunityIcons name="clipboard-alert-outline" size={24} color="#EF4444" />
+            <View style={[styles.quickIconCircle, { backgroundColor: 'rgba(14, 165, 233, 0.12)' }]}>
+              <MaterialCommunityIcons name="routes" size={24} color="#0EA5E9" />
             </View>
-            <Text style={[styles.quickTitle, { color: colors.textPrimary }]}>File Complaint</Text>
-            <Text style={[styles.quickSubtitle, { color: colors.textMuted }]}>Report violation</Text>
+            <Text style={[styles.quickTitle, { color: colors.textPrimary }]}>Jeepney Routes</Text>
+            <Text style={[styles.quickSubtitle, { color: colors.textMuted }]}>View routes</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -214,14 +208,20 @@ const HomeScreen = ({ navigation }) => {
 
           <TouchableOpacity
             style={[styles.quickCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => navigation.navigate('CommuterRights')}
+            onPress={() => {
+              if (isGuest) {
+                openPrompt('File a Complaint', 'Register or sign in to file verified transit complaints with photo evidence to Dagupan LGU.', 'clipboard-alert', 'Verified Report');
+              } else {
+                navigation.navigate('SubmitComplaint');
+              }
+            }}
             activeOpacity={0.8}
           >
-            <View style={[styles.quickIconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
-              <MaterialCommunityIcons name="scale-balance" size={24} color="#3B82F6" />
+            <View style={[styles.quickIconCircle, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+              <MaterialCommunityIcons name="clipboard-alert-outline" size={24} color="#EF4444" />
             </View>
-            <Text style={[styles.quickTitle, { color: colors.textPrimary }]}>Rights & 20%</Text>
-            <Text style={[styles.quickSubtitle, { color: colors.textMuted }]}>Discount guide</Text>
+            <Text style={[styles.quickTitle, { color: colors.textPrimary }]}>File Complaint</Text>
+            <Text style={[styles.quickSubtitle, { color: colors.textMuted }]}>Report violation</Text>
           </TouchableOpacity>
         </View>
 
@@ -262,8 +262,17 @@ const HomeScreen = ({ navigation }) => {
               </Text>
 
               <View style={styles.activeCaseFooter}>
-                <Text style={styles.activeCaseFooterLink}>Track Live Updates & Step Progress</Text>
-                <MaterialCommunityIcons name="arrow-right" size={16} color="#0284C7" />
+                <TouchableOpacity
+                  style={[
+                    styles.myReportsArrowBtn,
+                    { backgroundColor: isDark ? 'rgba(2, 132, 199, 0.25)' : 'rgba(2, 132, 199, 0.12)' },
+                  ]}
+                  onPress={() => navigation.navigate('ComplaintsList')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.myReportsArrowBtnText}>My Reports</Text>
+                  <MaterialCommunityIcons name="arrow-right" size={14} color="#0284C7" />
+                </TouchableOpacity>
               </View>
             </Card>
           </TouchableOpacity>
@@ -532,13 +541,22 @@ const styles = StyleSheet.create({
   activeCaseFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(2, 132, 199, 0.3)',
     paddingTop: 8,
+    marginTop: 2,
   },
-  activeCaseFooterLink: {
-    fontSize: 11,
+  myReportsArrowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+  },
+  myReportsArrowBtnText: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#0284C7',
   },
