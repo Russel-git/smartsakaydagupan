@@ -63,7 +63,7 @@ const RouteDetailScreen = ({ route: navRoute }) => {
         <Card>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Boarding Area & Central Staging</Text>
           <View style={styles.infoRow}>
-            <MaterialCommunityIcons name="map-marker-radius" size={20} color={colors.primary} />
+            <MaterialCommunityIcons name="bus-stop" size={20} color={colors.primary} />
             <Text style={[styles.infoText, { color: colors.textPrimary, fontWeight: '600' }]}>
               Downtown Dagupan (Central Hub)
             </Text>

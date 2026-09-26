@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Platform, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { WebView } from 'react-native-webview';
@@ -10,6 +10,7 @@ import { routesAPI } from '../../api/services';
 import { FONTS, SPACING, RADIUS } from '../../utils/constants';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const GPS_ICON = require('../../../assets/gps_access_icon.png');
 
 // Haversine distance calculator in km
 const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
@@ -219,9 +220,43 @@ const RouteMapScreen = ({ navigation }) => {
     ? safeRoutes
     : safeRoutes.filter((r) => r.category === selectedCategory);
 
-  // Trigger re-centering on commuter location
-  const handleRecenter = () => {
-    setRecenterCount((c) => c + 1);
+  // Trigger re-centering on commuter location with fresh GPS fix
+  const handleRecenter = async () => {
+    if (webViewRef.current && Platform.OS !== 'web') {
+      webViewRef.current.injectJavaScript(`if (window.centerOnCommuter) { window.centerOnCommuter(); } true;`);
+    }
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setCommuterLocation({
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: Math.round(pos.coords.accuracy || 20),
+              isReal: true,
+            });
+            setLocationStatus(`Live GPS Active (±${Math.round(pos.coords.accuracy || 20)}m)`);
+            setRecenterCount((c) => c + 1);
+          },
+          () => setRecenterCount((c) => c + 1),
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      } else {
+        const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        if (cur) {
+          setCommuterLocation({
+            lat: cur.coords.latitude,
+            lng: cur.coords.longitude,
+            accuracy: Math.round(cur.coords.accuracy || 20),
+            isReal: true,
+          });
+          setLocationStatus(`Live GPS Active (±${Math.round(cur.coords.accuracy || 20)}m)`);
+        }
+        setRecenterCount((c) => c + 1);
+      }
+    } catch (_) {
+      setRecenterCount((c) => c + 1);
+    }
   };
 
   // Launch Live Tracker with route corridor geofence validation
@@ -345,39 +380,10 @@ const RouteMapScreen = ({ navigation }) => {
             100% { transform: scale(2.0); opacity: 0; }
           }
 
-          /* Floating Locate Me Button */
-          .locate-me-btn {
-            position: absolute;
-            right: 12px;
-            bottom: 24px;
-            z-index: 1000;
-            background: #0f172a;
-            color: #ffffff;
-            border: 2px solid #2563eb;
-            border-radius: 50%;
-            width: 44px;
-            height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            cursor: pointer;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.5);
-            transition: all 0.2s ease;
-          }
-          .locate-me-btn:hover {
-            transform: scale(1.08);
-            background: #1e293b;
-            border-color: #60a5fa;
-          }
-          .locate-me-btn:active {
-            transform: scale(0.95);
-          }
         </style>
       </head>
       <body>
         <div id="map"></div>
-        <button id="locateMeBtn" class="locate-me-btn" title="Re-center on My Exact Location">🎯</button>
         <script>
           var userLat = ${lat};
           var userLng = ${lng};
@@ -427,8 +433,8 @@ const RouteMapScreen = ({ navigation }) => {
 
           commuterMarker.bindPopup(commuterPopupHtml);
 
-          // Locate Me Button Handler
-          document.getElementById('locateMeBtn').onclick = function() {
+          // Center On Commuter Function for Native / Web bridge
+          window.centerOnCommuter = function() {
             map.setView([userLat, userLng], 16, { animate: true });
             commuterMarker.openPopup();
           };
@@ -600,7 +606,7 @@ const RouteMapScreen = ({ navigation }) => {
           activeOpacity={0.7}
           style={styles.recenterHeaderBtn}
         >
-          <MaterialCommunityIcons name="crosshairs-gps" size={14} color="#38BDF8" />
+          <Image source={GPS_ICON} style={{ width: 14, height: 14, marginRight: 2 }} resizeMode="contain" />
           <Text style={styles.recenterHeaderText}>
             {commuterLocation.lat.toFixed(4)}°N, {commuterLocation.lng.toFixed(4)}°E
           </Text>
@@ -610,7 +616,7 @@ const RouteMapScreen = ({ navigation }) => {
       {/* Sub-Header Bar: Terminals visible notice + Tricycle Pinpoint action */}
       <View style={[styles.subBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.hubIndicator}>
-          <MaterialCommunityIcons name="map-marker-multiple" size={15} color={colors.primary} />
+          <MaterialCommunityIcons name="domain" size={15} color={colors.primary} />
           <Text style={[styles.hubIndicatorText, { color: colors.textSecondary }]}>
             Terminals & Hubs visible on map
           </Text>
@@ -668,6 +674,16 @@ const RouteMapScreen = ({ navigation }) => {
             scrollEnabled={false}
           />
         )}
+
+        {/* Floating Custom GPS Access Button using user's uploaded icon */}
+        <TouchableOpacity
+          style={styles.floatingGpsBtn}
+          onPress={handleRecenter}
+          activeOpacity={0.85}
+          accessibilityLabel="Access Current Location"
+        >
+          <Image source={GPS_ICON} style={styles.gpsIconImg} resizeMode="contain" />
+        </TouchableOpacity>
       </View>
 
       {/* Category Filter for Jeepney Routes */}
@@ -748,7 +764,7 @@ const RouteMapScreen = ({ navigation }) => {
 
                   {hasGpxPath && (
                     <View style={[styles.metaBadge, { backgroundColor: '#ECFDF5' }]}>
-                      <MaterialCommunityIcons name="map-marker-path" size={13} color="#10B981" />
+                      <MaterialCommunityIcons name="routes" size={13} color="#10B981" />
                       <Text style={[styles.metaBadgeText, { color: '#059669', fontWeight: '700' }]}>
                         GPX Track Active
                       </Text>
@@ -862,6 +878,28 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.12)',
     elevation: 3,
     position: 'relative',
+  },
+  floatingGpsBtn: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    elevation: 6,
+    borderWidth: 2,
+    borderColor: '#EA580C',
+    zIndex: 1100,
+  },
+  gpsIconImg: {
+    width: 32,
+    height: 32,
   },
   filterRow: {
     flexDirection: 'row',

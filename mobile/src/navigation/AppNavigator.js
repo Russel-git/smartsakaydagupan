@@ -116,7 +116,7 @@ const GuestTabs = () => {
         tabBarIcon: ({ color, size }) => {
           const icons = {
             Home: 'home',
-            RoutesAndFares: 'map-marker-radius',
+            RoutesAndFares: 'routes',
             Assistant: 'robot',
             Account: 'account-outline',
           };
@@ -158,7 +158,7 @@ const MainTabs = () => {
         tabBarIcon: ({ color, size }) => {
           const icons = {
             Home: 'home',
-            RoutesAndFares: 'map-marker-radius',
+            RoutesAndFares: 'routes',
             Assistant: 'robot',
             More: 'menu',
           };

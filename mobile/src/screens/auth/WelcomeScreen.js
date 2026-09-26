@@ -41,7 +41,7 @@ const WelcomeScreen = ({ navigation }) => {
         <View style={styles.featureRow}>
           {[
             { icon: 'cash-check', label: 'Verified Fares' },
-            { icon: 'map-marker-radius', label: 'Route Finder' },
+            { icon: 'routes', label: 'Route Finder' },
             { icon: 'robot', label: 'AI Assistant' },
           ].map((f, i) => (
             <View key={i} style={styles.featureItem}>
