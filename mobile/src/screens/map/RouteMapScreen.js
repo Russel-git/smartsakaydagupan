@@ -242,15 +242,20 @@ const RouteMapScreen = ({ navigation }) => {
           { enableHighAccuracy: true, timeout: 5000 }
         );
       } else {
-        const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        if (cur) {
-          setCommuterLocation({
-            lat: cur.coords.latitude,
-            lng: cur.coords.longitude,
-            accuracy: Math.round(cur.coords.accuracy || 20),
-            isReal: true,
-          });
-          setLocationStatus(`Live GPS Active (±${Math.round(cur.coords.accuracy || 20)}m)`);
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          if (cur) {
+            setCommuterLocation({
+              lat: cur.coords.latitude,
+              lng: cur.coords.longitude,
+              accuracy: Math.round(cur.coords.accuracy || 20),
+              isReal: true,
+            });
+            setLocationStatus(`Live GPS Active (±${Math.round(cur.coords.accuracy || 20)}m)`);
+          }
+        } else {
+          setLocationStatus('GPS Permission Denied');
         }
         setRecenterCount((c) => c + 1);
       }
@@ -424,7 +429,7 @@ const RouteMapScreen = ({ navigation }) => {
             '<span style="background:#2563EB; color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:3px;">YOU ARE HERE</span>' +
             '<span style="color:#10B981; font-weight:700; font-size:11px;">● LIVE GPS</span>' +
             '</div>' +
-            '<div style="font-size:13px; font-weight:800; color:#0f172a;">Commuter Exact Location</div>' +
+            '<div style="font-size:13px; font-weight:800; color:#0f172a;">Your Current Location</div>' +
             '<div style="font-family:monospace; font-size:11px; color:#64748b; margin-top:2px;">' +
             userLat.toFixed(5) + '°N, ' + userLng.toFixed(5) + '°E (±' + userAccuracy + 'm)' +
             '</div>' +

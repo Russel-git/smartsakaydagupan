@@ -8,8 +8,8 @@ import {
   Platform,
   Dimensions,
   ActivityIndicator,
-  Image,
   Modal,
+  Image,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -18,10 +18,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useFeedback } from '../../contexts/FeedbackContext';
 import { Card } from '../../components/common/SharedComponents';
 import ConfirmDialogModal from '../../components/common/ConfirmDialogModal';
-import { faresAPI, routesAPI } from '../../api/services';
 import { saveRideToHistory } from '../../utils/storage';
 import { FONTS, SPACING, RADIUS, SHADOWS } from '../../utils/constants';
-import { formatPeso } from '../../utils/helpers';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const GPS_ICON = require('../../../assets/gps_access_icon.png');
@@ -33,7 +31,14 @@ const DAGUPAN_CENTER = {
   name: 'Dagupan City Plaza',
 };
 
-// Popular Dagupan to Visit for 1-tap pinpoint
+// Base speed for accurate estimated travel time: 30 km/h - 35 km/h (average: 32.5 km/h)
+const BASE_SPEED_KMH = 32.5;
+const calculateEstMinutes = (distanceKm) => {
+  if (!distanceKm || distanceKm <= 0) return 1;
+  return Math.max(1, Math.round((distanceKm / BASE_SPEED_KMH) * 60));
+};
+
+// Popular in Dagupan to Visit for 1-tap pinpoint with exact coordinates
 const POPULAR_DESTINATIONS = [
   { name: 'Region 1', fullName: 'Region 1 Medical Center', lat: 16.04858883203431, lng: 120.34159201507514, icon: 'hospital-building' },
   { name: 'University of Luzon', fullName: 'University of Luzon', lat: 16.03979698464543, lng: 120.33585706611083, icon: 'school' },
@@ -56,9 +61,9 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(R * c * 10) / 10;
 };
@@ -86,19 +91,15 @@ const PinpointFareScreen = ({ navigation }) => {
   const [pendingPinpoint, setPendingPinpoint] = useState(null);
   const [isDestinationSet, setIsDestinationSet] = useState(true);
 
-  // Location Permission State
-  const [permissionStatus, setPermissionStatus] = useState('checking'); // 'checking' | 'granted' | 'denied'
+  // Location Permission State: 'checking' | 'granted' | 'denied'
+  const [permissionStatus, setPermissionStatus] = useState('checking');
   const [gpsLoading, setGpsLoading] = useState(false);
 
   // Road Routing State (OSRM road-aligned data)
   const [roadDistanceKm, setRoadDistanceKm] = useState(2.4);
-  const [roadDurationMins, setRoadDurationMins] = useState(8);
+  const [roadDurationMins, setRoadDurationMins] = useState(calculateEstMinutes(2.4));
   const [roadSummary, setRoadSummary] = useState('Aligning to Dagupan road network...');
   const [isRouting, setIsRouting] = useState(false);
-
-  // Active Fares & Solo Ride / Visitor Ordinance Settings
-  const [activeFares, setActiveFares] = useState({});
-  const [isDiscounted, setIsDiscounted] = useState(false); // 20% Student/Senior/PWD discount
 
   // Live Tracking Mode State: 'idle' | 'tracking' | 'arrived'
   const [trackingState, setTrackingState] = useState('idle');
@@ -112,7 +113,14 @@ const PinpointFareScreen = ({ navigation }) => {
   const lastLocationRef = useRef(null);
   const watchSubscriptionRef = useRef(null);
 
-  // Live remaining distance to destination (updates as commuter moves)
+  // Calculate Distance (km)
+  const effectiveDistanceKm = useMemo(() => {
+    if (roadDistanceKm && roadDistanceKm > 0) return roadDistanceKm;
+    const direct = calculateDistanceKm(origin.lat, origin.lng, destination.lat, destination.lng);
+    return Math.round(direct * 1.25 * 10) / 10;
+  }, [roadDistanceKm, origin, destination]);
+
+  // Live remaining distance to destination (updates as user moves)
   const remainingDistToDestKm = useMemo(() => {
     const loc = currentGpsPos || origin;
     if (!loc || !destination) return effectiveDistanceKm;
@@ -122,7 +130,7 @@ const PinpointFareScreen = ({ navigation }) => {
   // Destination arrival lock check: within 150 meters (0.15 km)
   const isNearDestination = remainingDistToDestKm <= 0.15;
 
-  // Request GPS Permission & Initial Location
+  // Request GPS Permission & Initial Location directly from system
   const requestLocation = async () => {
     setGpsLoading(true);
     try {
@@ -139,7 +147,7 @@ const PinpointFareScreen = ({ navigation }) => {
             setCurrentGpsPos(coords);
             setPermissionStatus('granted');
             setGpsLoading(false);
-            showInfo('GPS Updated', 'Recenetred map to your current location.');
+            showInfo('GPS Updated', 'Recentered map to your current location.');
           },
           (err) => {
             console.warn('Web GPS fallback:', err.message);
@@ -163,7 +171,7 @@ const PinpointFareScreen = ({ navigation }) => {
           };
           setOrigin(coords);
           setCurrentGpsPos(coords);
-          showInfo('GPS Updated', 'Recenetred map to your current location.');
+          showInfo('GPS Updated', 'Recentered map to your current location.');
         } else {
           setPermissionStatus('denied');
         }
@@ -176,55 +184,10 @@ const PinpointFareScreen = ({ navigation }) => {
     }
   };
 
+  // Ask for permission on mount
   useEffect(() => {
     requestLocation();
   }, []);
-
-  // Fetch Active Fares from Database
-  useEffect(() => {
-    faresAPI
-      .getActiveFares()
-      .then((res) => {
-        const list = res.data?.data || [];
-        const map = {};
-        list.forEach((f) => {
-          map[f.vehicleType] = f;
-        });
-        setActiveFares(map);
-      })
-      .catch((err) => console.warn('Failed to load fares:', err.message));
-  }, []);
-
-  // Calculate Distance (km)
-  const effectiveDistanceKm = useMemo(() => {
-    if (roadDistanceKm && roadDistanceKm > 0) return roadDistanceKm;
-    const direct = calculateDistanceKm(origin.lat, origin.lng, destination.lat, destination.lng);
-    return Math.round(direct * 1.25 * 10) / 10;
-  }, [roadDistanceKm, origin, destination]);
-
-  // Solo Ride / Visitor Fair Fare Calculation (Dagupan City TFRB Ordinance)
-  // Base ₱15 for 1st km, +₱3/km thereafter
-  const computedFare = useMemo(() => {
-    const dist = trackingState === 'tracking' ? Math.max(effectiveDistanceKm, distanceTraveledKm) : effectiveDistanceKm;
-    const triConf = activeFares.solo_ride || activeFares.tricycle || { baseFare: 15, baseDistanceKm: 1, perKmRate: 3 };
-    const baseFare = triConf.baseFare || 15;
-    const baseDist = triConf.baseDistanceKm || 1;
-    const perKm = triConf.perKmRate || 3;
-    const extraDist = dist > baseDist ? dist - baseDist : 0;
-    const extraFare = Math.ceil(extraDist) * perKm;
-    const regular = baseFare + extraFare;
-    const discounted = Math.round(regular * 0.8);
-
-    return {
-      regular,
-      discounted,
-      finalFare: isDiscounted ? discounted : regular,
-      baseFare,
-      baseDist,
-      perKm,
-      extraKm: Math.round(extraDist * 10) / 10,
-    };
-  }, [effectiveDistanceKm, distanceTraveledKm, trackingState, activeFares, isDiscounted]);
 
   // Confirm and set the pinpointed destination
   const handleConfirmSet = (target) => {
@@ -236,21 +199,23 @@ const PinpointFareScreen = ({ navigation }) => {
         lng: toSet.lng,
         name: toSet.name || prev.name,
       }));
-      if (toSet.distanceKm) setRoadDistanceKm(toSet.distanceKm);
-      if (toSet.durationMins) setRoadDurationMins(toSet.durationMins);
+      if (toSet.distanceKm) {
+        setRoadDistanceKm(toSet.distanceKm);
+        setRoadDurationMins(calculateEstMinutes(toSet.distanceKm));
+      }
       if (toSet.summary) setRoadSummary(toSet.summary);
     }
     const destName = toSet?.name || destination.name;
     setIsDestinationSet(true);
     setPendingPinpoint(null);
-    showSuccess('Destination Set', `Destination set to ${destName}. Ready to track ride!`);
+    showSuccess('Destination Set', `Destination set to ${destName}. Ready to guide ride!`);
 
     // Signal map to update pin popup
     const script = `if (window.onDestinationConfirmed) { window.onDestinationConfirmed('${destName.replace(/'/g, "\\'")}'); }`;
     if (webViewRef.current && Platform.OS !== 'web') {
       webViewRef.current.injectJavaScript(script);
     } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const iframe = document.getElementById('solo-ride-pinpoint-map') || document.getElementById('tricycle-pinpoint-map');
+      const iframe = document.getElementById('solo-ride-pinpoint-map');
       if (iframe && iframe.contentWindow) {
         iframe.contentWindow.postMessage(JSON.stringify({ type: 'CONFIRM_SET_PINPOINT', name: destName }), '*');
       }
@@ -267,23 +232,25 @@ const PinpointFareScreen = ({ navigation }) => {
     if (data.type === 'ROUTE_CALCULATED') {
       setIsRouting(false);
       const name = data.name || (data.summary ? `Near ${data.summary.split('➔')[0].trim()}` : destination.name);
+      const dist = data.distanceKm || roadDistanceKm;
+      const mins = calculateEstMinutes(dist);
       setPendingPinpoint({
         lat: data.lat,
         lng: data.lng,
         name,
-        distanceKm: data.distanceKm,
-        durationMins: data.durationMins,
+        distanceKm: dist,
+        durationMins: mins,
         summary: data.summary,
       });
       setIsDestinationSet(false);
-      if (data.distanceKm) setRoadDistanceKm(data.distanceKm);
-      if (data.durationMins) setRoadDurationMins(data.durationMins);
+      setRoadDistanceKm(dist);
+      setRoadDurationMins(mins);
       if (data.summary) setRoadSummary(data.summary);
     } else if (data.type === 'PINPOINT_DESTINATION') {
       setIsRouting(false);
       const d = calculateDistanceKm(origin.lat, origin.lng, data.lat, data.lng);
       const dist = Math.round(d * 1.25 * 10) / 10;
-      const mins = Math.max(2, Math.round((d / 18) * 60));
+      const mins = calculateEstMinutes(dist);
       setPendingPinpoint({
         lat: data.lat,
         lng: data.lng,
@@ -312,20 +279,25 @@ const PinpointFareScreen = ({ navigation }) => {
     }
   }, [origin, pendingPinpoint, destination]);
 
-  // Send destination to Leaflet map from Popular Dagupan to Visit chips
+  // Send destination to Leaflet map from Popular in Dagupan to Visit chips
   const selectLandmark = (item) => {
     setIsRouting(true);
+    const dist = calculateDistanceKm(origin.lat, origin.lng, item.lat, item.lng);
+    const estDist = Math.round(dist * 1.25 * 10) / 10;
+    const mins = calculateEstMinutes(estDist);
     setPendingPinpoint({
       lat: item.lat,
       lng: item.lng,
       name: item.name,
+      distanceKm: estDist,
+      durationMins: mins,
     });
     setIsDestinationSet(false);
     const script = `if (window.setDestinationFromApp) { window.setDestinationFromApp(${item.lat}, ${item.lng}, '${item.name.replace(/'/g, "\\'")}'); }`;
     if (webViewRef.current && Platform.OS !== 'web') {
       webViewRef.current.injectJavaScript(script);
     } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const iframe = document.getElementById('solo-ride-pinpoint-map') || document.getElementById('tricycle-pinpoint-map');
+      const iframe = document.getElementById('solo-ride-pinpoint-map');
       if (iframe && iframe.contentWindow) {
         iframe.contentWindow.postMessage(JSON.stringify({ type: 'SET_DESTINATION', lat: item.lat, lng: item.lng, name: item.name }), '*');
       }
@@ -338,18 +310,22 @@ const PinpointFareScreen = ({ navigation }) => {
       handleConfirmSet();
     }
     setTrackingState('tracking');
-    setDistanceTraveledKm(0);
     setElapsedSeconds(0);
-    setCurrentGpsPos(origin);
+    setDistanceTraveledKm(0);
     lastLocationRef.current = origin;
+    showSuccess('Live Tracker Started', `Tracking your solo ride to ${destination.name}`);
 
-    showInfo('Tracking Started', `Live Solo Ride / Visitor meter active towards ${destination.name}.`);
-
+    // Elapsed timer
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     timerIntervalRef.current = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
+      setElapsedSeconds((sec) => sec + 1);
     }, 1000);
 
     // Watch position
+    startContinuousTracking();
+  };
+
+  const startContinuousTracking = async () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && navigator.geolocation) {
       const id = navigator.geolocation.watchPosition(
         (pos) => {
@@ -403,26 +379,14 @@ const PinpointFareScreen = ({ navigation }) => {
       watchSubscriptionRef.current.remove();
     }
 
-    // Calculate actual distance traveled (or default minimum 0.5km)
     const actualDistKm = Math.max(0.4, distanceTraveledKm > 0.05 ? distanceTraveledKm : 0.8);
-    // Base fare: ₱15 for 1st km, +₱3/km succeeding
-    const baseFare = 15;
-    const ratePerKm = 3;
-    let regFare = baseFare;
-    if (actualDistKm > 1) {
-      regFare = Math.round(baseFare + (actualDistKm - 1) * ratePerKm);
-    }
-    const finalFare = isDiscounted ? Math.round(regFare * 0.80) : regFare;
-
     const completedRide = {
       id: `ride_solo_${Date.now()}`,
       timestamp: new Date().toISOString(),
       routeName: `Solo Ride / Visitor to ${destination.name} (Early Drop-Off)`,
       destination: `Early Drop-off near ${currentGpsPos?.name || 'Current Stop'}`,
       vehicleType: 'solo_ride',
-      fare: finalFare,
-      regularFare: regFare,
-      discount: isDiscounted ? 'discounted' : 'none',
+      mode: 'Private / Solo Ride',
       distanceKm: parseFloat(actualDistKm.toFixed(2)),
       durationSecs: elapsedSeconds || 60,
     };
@@ -431,7 +395,7 @@ const PinpointFareScreen = ({ navigation }) => {
     await saveRideToHistory(completedRide);
     setTrackingState('arrived');
     setArrivalModalVisible(true);
-    showSuccess('Ride Ended', `Dropped off early. Fair fare: ₱${finalFare}.`);
+    showSuccess('Ride Ended', 'Ended solo ride and logged travel stats.');
   };
 
   // Arrived at destination
@@ -441,25 +405,36 @@ const PinpointFareScreen = ({ navigation }) => {
       watchSubscriptionRef.current.remove();
     }
 
-    // Save to Ride History
+    const finalDist = distanceTraveledKm > 0.1 ? distanceTraveledKm : effectiveDistanceKm;
     const completedRide = {
       id: `ride_solo_${Date.now()}`,
       timestamp: new Date().toISOString(),
       routeName: `Solo Ride / Visitor to ${destination.name}`,
       destination: destination.name,
       vehicleType: 'solo_ride',
-      fare: computedFare.finalFare,
-      regularFare: computedFare.regular,
-      discount: isDiscounted ? 'discounted' : 'none',
-      distanceKm: Math.max(effectiveDistanceKm, distanceTraveledKm),
-      durationSecs: elapsedSeconds || roadDurationMins * 60,
+      mode: 'Private / Solo Ride',
+      distanceKm: parseFloat(finalDist.toFixed(2)),
+      durationSecs: elapsedSeconds || (roadDurationMins * 60),
     };
+
     setLastCompletedRide(completedRide);
     await saveRideToHistory(completedRide);
     setTrackingState('arrived');
     setArrivalModalVisible(true);
+    showSuccess("You've arrived!", `You successfully arrived at ${destination.name}!`);
   };
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (watchSubscriptionRef.current && typeof watchSubscriptionRef.current.remove === 'function') {
+        watchSubscriptionRef.current.remove();
+      }
+    };
+  }, []);
+
+  // HTML for Interactive Leaflet Map with Directional Light Beam & Non-overlapping Controls
   const generateLeafletHtml = () => {
     const oLat = origin.lat;
     const oLng = origin.lng;
@@ -470,14 +445,82 @@ const PinpointFareScreen = ({ navigation }) => {
       <!DOCTYPE html>
       <html>
       <head>
-        <meta charset="utf-8"/>
-        <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
-          html, body, #map { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          html, body, #map { width: 100%; height: 100%; background: #0f172a; }
           
-          /* Pulsating Origin GPS Radar */
+          /* Leaflet Controls Adjustment: Zoom placed top-right with margin to avoid overlap */
+          .leaflet-top.leaflet-right {
+            top: 48px;
+            right: 12px;
+          }
+          .leaflet-control-zoom {
+            border: 2px solid rgba(255,255,255,0.2) !important;
+            border-radius: 8px !important;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+          }
+          .leaflet-control-zoom a {
+            background-color: #1e293b !important;
+            color: #ffffff !important;
+            border-bottom: 1px solid #334155 !important;
+          }
+          .leaflet-control-zoom a:hover {
+            background-color: #334155 !important;
+          }
+
+          /* Directional Light Pointer Cone from Current Location */
+          .origin-marker-wrap {
+            position: relative;
+            width: 140px;
+            height: 140px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+          }
+          .light-beam-rotor {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 140px;
+            height: 140px;
+            pointer-events: none;
+            transform-origin: 70px 70px;
+            transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .light-beam-cone {
+            width: 100%;
+            height: 100%;
+            /* Flashlight beam radiating forward (0deg at top) */
+            background: conic-gradient(
+              from -25deg at 50% 50%,
+              transparent 0deg,
+              rgba(14, 165, 233, 0.15) 10deg,
+              rgba(56, 189, 248, 0.55) 20deg,
+              rgba(255, 255, 255, 0.95) 25deg,
+              rgba(56, 189, 248, 0.55) 30deg,
+              rgba(14, 165, 233, 0.15) 40deg,
+              transparent 50deg,
+              transparent 360deg
+            );
+            border-radius: 50%;
+            filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.9));
+            animation: beamGlow 2.5s infinite ease-in-out;
+          }
+          @keyframes beamGlow {
+            0%, 100% { opacity: 0.82; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.06); }
+          }
+
+          /* Pulsating Origin GPS Radar Core */
           .origin-beacon {
             position: relative;
             width: 26px;
@@ -491,7 +534,7 @@ const PinpointFareScreen = ({ navigation }) => {
             width: 100%;
             height: 100%;
             border-radius: 50%;
-            background: rgba(16, 185, 129, 0.4);
+            background: rgba(14, 165, 233, 0.45);
             animation: radar 2s infinite ease-out;
           }
           .origin-core {
@@ -499,7 +542,7 @@ const PinpointFareScreen = ({ navigation }) => {
             width: 14px;
             height: 14px;
             border-radius: 50%;
-            background: #10B981;
+            background: #0284C7;
             border: 2px solid #ffffff;
             box-shadow: 0 2px 6px rgba(0,0,0,0.4);
           }
@@ -508,7 +551,7 @@ const PinpointFareScreen = ({ navigation }) => {
             100% { transform: scale(2.2); opacity: 0; }
           }
 
-          /* Compact Destination Pin (smaller as requested) */
+          /* Compact Destination Pin */
           .dest-pin-compact {
             width: 24px;
             height: 24px;
@@ -562,8 +605,8 @@ const PinpointFareScreen = ({ navigation }) => {
       </head>
       <body>
         <div id="map"></div>
-        <div class="map-tap-hint" id="status-hint">📍 Tap or drag red pin to choose destination, then tap Set</div>
-        <div class="route-status-pill" id="route-meta">Finding fastest road...</div>
+        <div class="map-tap-hint" id="status-hint">📍 Tap anywhere or drag red pin, then tap Set</div>
+        <div class="route-status-pill" id="route-meta">Finding fastest road corridor...</div>
 
         <script>
           function postToApp(data) {
@@ -575,28 +618,49 @@ const PinpointFareScreen = ({ navigation }) => {
             }
           }
 
+          function getBearing(lat1, lon1, lat2, lon2) {
+            var dLon = ((lon2 - lon1) * Math.PI) / 180;
+            var lat1Rad = (lat1 * Math.PI) / 180;
+            var lat2Rad = (lat2 * Math.PI) / 180;
+            var y = Math.sin(dLon) * Math.cos(lat2Rad);
+            var x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+            var brng = (Math.atan2(y, x) * 180) / Math.PI;
+            return (brng + 360) % 360;
+          }
+
           var oLat = ${oLat};
           var oLng = ${oLng};
           var dLat = ${dLat};
           var dLng = ${dLng};
           var currentDestName = '${destination.name.replace(/'/g, "\\'")}';
 
+          // Zoom control moved to top-right to prevent overlap with floating GPS button
           var map = L.map('map', { zoomControl: false }).setView([(oLat + dLat)/2, (oLng + dLng)/2], 14);
-          L.control.zoom({ position: 'bottomright' }).addTo(map);
+          L.control.zoom({ position: 'topright' }).addTo(map);
 
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap'
           }).addTo(map);
 
-          // Origin Marker
+          // Origin Marker with Directional Light Beam
+          var initialBearing = Math.round(getBearing(oLat, oLng, dLat, dLng));
           var originIcon = L.divIcon({
-            className: 'origin-marker',
-            html: '<div class="origin-beacon"><div class="origin-pulse"></div><div class="origin-core"></div></div>',
-            iconSize: [26, 26],
-            iconAnchor: [13, 13]
+            className: '',
+            html: 
+              '<div class="origin-marker-wrap">' +
+                '<div class="light-beam-rotor" id="directional-light" style="transform: rotate(' + initialBearing + 'deg);">' +
+                  '<div class="light-beam-cone"></div>' +
+                '</div>' +
+                '<div class="origin-beacon">' +
+                  '<div class="origin-pulse"></div>' +
+                  '<div class="origin-core"></div>' +
+                '</div>' +
+              '</div>',
+            iconSize: [140, 140],
+            iconAnchor: [70, 70]
           });
           var originMarker = L.marker([oLat, oLng], { icon: originIcon }).addTo(map)
-            .bindPopup('<b>Starting Location</b><br/>Your GPS Position');
+            .bindPopup('<b>Starting Location</b><br/>Your GPS Position & Directional Beam');
 
           // Smaller Destination Marker
           var destIcon = L.divIcon({
@@ -610,7 +674,7 @@ const PinpointFareScreen = ({ navigation }) => {
           function buildPopupHtml(title, distKm, durMins, isConfirmed) {
             return '<div style="text-align:center; padding:3px; min-width:140px; font-family:system-ui,-apple-system,sans-serif;">' +
               '<b style="font-size:12px; color:#0f172a;">📍 ' + (title || 'Pinpoint Location') + '</b><br/>' +
-              (distKm ? ('<span style="font-size:11px; color:#64748b;">~' + distKm + ' km • ~' + durMins + ' mins</span><br/>') : '') +
+              (distKm ? ('<span style="font-size:11px; color:#64748b;">~' + distKm + ' km • ~' + durMins + ' mins (30-35 km/h)</span><br/>') : '') +
               (isConfirmed
                 ? '<div style="margin-top:5px; font-size:11px; font-weight:800; color:#16A34A;">✓ Destination Set</div>'
                 : '<button onclick="window.confirmFromMap()" style="background:#16A34A; color:#ffffff; border:none; padding:5px 14px; border-radius:12px; font-size:11px; font-weight:800; margin-top:6px; cursor:pointer; box-shadow:0 2px 4px rgba(22,163,74,0.3);">Set</button>'
@@ -629,6 +693,7 @@ const PinpointFareScreen = ({ navigation }) => {
             var hintEl = document.getElementById('status-hint');
             if (hintEl) hintEl.innerHTML = '✓ Destination Set: ' + name;
             destMarker.setPopupContent(buildPopupHtml(name, null, null, true));
+            destMarker.openPopup();
           };
 
           var currentGlowLayer = null;
@@ -639,10 +704,17 @@ const PinpointFareScreen = ({ navigation }) => {
             dLng = destLongitude;
             destMarker.setLatLng([dLat, dLng]);
 
+            // Update Directional Light Beam to point from origin to new destination
+            var deg = Math.round(getBearing(oLat, oLng, dLat, dLng));
+            var beamEl = document.getElementById('directional-light');
+            if (beamEl) {
+              beamEl.style.transform = 'rotate(' + deg + 'deg)';
+            }
+
             var hintEl = document.getElementById('status-hint');
             var metaEl = document.getElementById('route-meta');
-            if (hintEl) hintEl.innerHTML = '⚡ Finding fastest route...';
-            if (metaEl) metaEl.innerHTML = 'Calculating road alignment...';
+            if (hintEl) hintEl.innerHTML = '⚡ Finding fastest road corridor...';
+            if (metaEl) metaEl.innerHTML = 'Aligning road direction...';
 
             postToApp({ type: 'ROUTING_STARTED', lat: dLat, lng: dLng });
 
@@ -661,7 +733,7 @@ const PinpointFareScreen = ({ navigation }) => {
                 if (currentRouteLayer) map.removeLayer(currentRouteLayer);
 
                 currentGlowLayer = L.polyline(latLngs, {
-                  color: '#D97706',
+                  color: '#0284C7',
                   weight: 8,
                   opacity: 0.35,
                   lineCap: 'round',
@@ -669,7 +741,7 @@ const PinpointFareScreen = ({ navigation }) => {
                 }).addTo(map);
 
                 currentRouteLayer = L.polyline(latLngs, {
-                  color: '#D97706',
+                  color: '#0284C7',
                   weight: 5,
                   opacity: 0.95,
                   lineCap: 'round',
@@ -679,7 +751,8 @@ const PinpointFareScreen = ({ navigation }) => {
                 map.fitBounds(L.latLngBounds(latLngs), { padding: [45, 45], maxZoom: 16 });
 
                 var distKm = Math.round((best.distance / 1000) * 10) / 10;
-                var durMins = Math.max(1, Math.round(best.duration / 60));
+                // Base speed for accuracy: 30 km/h - 35 km/h
+                var durMins = Math.max(1, Math.round((distKm / 32.5) * 60));
                 var streetNames = [];
                 if (best.legs && best.legs[0] && best.legs[0].steps) {
                   best.legs[0].steps.forEach(function(s) {
@@ -711,8 +784,10 @@ const PinpointFareScreen = ({ navigation }) => {
               console.warn('Road routing error:', err);
             }
 
+            var fallbackDist = Math.round(calculateDistanceKm(oLat, oLng, dLat, dLng) * 1.25 * 10) / 10;
+            var fallbackMins = Math.max(1, Math.round((fallbackDist / 32.5) * 60));
             if (hintEl) hintEl.innerHTML = '📍 Tap "Set" to confirm destination';
-            destMarker.setPopupContent(buildPopupHtml(currentDestName || 'Pinpointed Location', null, null, false));
+            destMarker.setPopupContent(buildPopupHtml(currentDestName || 'Pinpointed Location', fallbackDist, fallbackMins, false));
             if (isUserInteraction) destMarker.openPopup();
             postToApp({ type: 'PINPOINT_DESTINATION', lat: dLat, lng: dLng, name: currentDestName });
           }
@@ -770,21 +845,11 @@ const PinpointFareScreen = ({ navigation }) => {
             </Text>
             <Text style={[styles.arrivalSubtitle, { color: colors.textSecondary }]}>
               {lastCompletedRide?.destination
-                ? `You completed your ride at ${lastCompletedRide.destination}.`
-                : `You have reached your destination at ${destination.name}.`}
+                ? `You reached your destination at ${lastCompletedRide.destination}.`
+                : `You reached your destination at ${destination.name}.`}
             </Text>
 
-            <View style={[styles.arrivalReceiptCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <Text style={[styles.receiptLabel, { color: colors.textMuted }]}>FAIR FARE TO PAY</Text>
-              <Text style={[styles.receiptFareBig, { color: colors.primary }]}>
-                {formatPeso(lastCompletedRide?.fare || computedFare.finalFare)}
-              </Text>
-              {isDiscounted && (
-                <Text style={styles.receiptDiscountText}>Includes 20% Mandatory Discount</Text>
-              )}
-
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
+            <View style={[styles.arrivalSummaryCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
               <View style={styles.arrivalMetaRow}>
                 <View style={styles.arrivalMetaCol}>
                   <Text style={[styles.arrivalMetaLabel, { color: colors.textMuted }]}>Distance</Text>
@@ -793,15 +858,24 @@ const PinpointFareScreen = ({ navigation }) => {
                   </Text>
                 </View>
                 <View style={styles.arrivalMetaCol}>
-                  <Text style={[styles.arrivalMetaLabel, { color: colors.textMuted }]}>Trip Time</Text>
+                  <Text style={[styles.arrivalMetaLabel, { color: colors.textMuted }]}>Trip Duration</Text>
                   <Text style={[styles.arrivalMetaVal, { color: colors.textPrimary }]}>
                     {Math.max(1, Math.round((elapsedSeconds || roadDurationMins * 60) / 60))} mins
                   </Text>
                 </View>
                 <View style={styles.arrivalMetaCol}>
-                  <Text style={[styles.arrivalMetaLabel, { color: colors.textMuted }]}>Mode</Text>
-                  <Text style={[styles.arrivalMetaVal, { color: colors.textPrimary }]}>Solo Ride / Visitor</Text>
+                  <Text style={[styles.arrivalMetaLabel, { color: colors.textMuted }]}>Base Speed</Text>
+                  <Text style={[styles.arrivalMetaVal, { color: '#0284C7' }]}>30–35 km/h</Text>
                 </View>
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialCommunityIcons name="shield-check" size={16} color="#16A34A" />
+                <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600' }}>
+                  Solo / Visitor Navigation Route Completed
+                </Text>
               </View>
             </View>
 
@@ -837,20 +911,20 @@ const PinpointFareScreen = ({ navigation }) => {
         visible={stopConfirmVisible}
         onClose={() => setStopConfirmVisible(false)}
         onConfirm={handleStopRideEarly}
-        title="Stop Ride & Drop Off Here?"
-        message={`Are you dropping off early before reaching ${destination.name}? This will complete your commute and calculate the fair fare for the ${distanceTraveledKm > 0 ? distanceTraveledKm.toFixed(2) : 'actual'} km traveled.`}
-        confirmText="Yes, Drop Off Here"
+        title="End Navigation & Stop Here?"
+        message={`Are you ending your solo ride before reaching ${destination.name}? This will complete your route navigation for the ${distanceTraveledKm > 0 ? distanceTraveledKm.toFixed(2) : 'actual'} km traveled.`}
+        confirmText="Yes, End Trip Here"
         cancelText="Continue Riding"
         type="warning"
         icon="stop-circle-outline"
       />
 
-      {/* Popular Destination Quick Chips */}
+      {/* Popular in Dagupan to Visit Quick Chips */}
       <View style={[styles.quickChipsSection, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.chipHeaderRow}>
-          <MaterialCommunityIcons name="star-outline" size={16} color="#D97706" />
+          <MaterialCommunityIcons name="star-outline" size={16} color="#0284C7" />
           <Text style={[styles.chipHeaderTitle, { color: colors.textSecondary }]}>
-            Popular Dagupan to Visit:
+            Popular in Dagupan to Visit:
           </Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
@@ -889,7 +963,23 @@ const PinpointFareScreen = ({ navigation }) => {
         </ScrollView>
       </View>
 
-      {/* Interactive Map with Custom Orange GPS Access Button, Set Button, and Pin */}
+      {/* Location Permission Prompt Banner (if denied) */}
+      {permissionStatus === 'denied' && (
+        <View style={styles.permissionBanner}>
+          <MaterialCommunityIcons name="map-marker-alert" size={20} color="#EA580C" />
+          <View style={{ flex: 1, marginLeft: 8 }}>
+            <Text style={styles.permissionBannerTitle}>Location Permission Needed</Text>
+            <Text style={styles.permissionBannerSub}>
+              Allow location access to pinpoint routes from your current GPS position.
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.permissionAllowBtn} onPress={requestLocation}>
+            <Text style={styles.permissionAllowBtnText}>Allow</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Interactive Map with Directional Light Beam, Set Button, and Non-overlapping GPS Access Button */}
       <View style={styles.mapContainer}>
         {Platform.OS === 'web' ? (
           <iframe
@@ -915,7 +1005,7 @@ const PinpointFareScreen = ({ navigation }) => {
           />
         )}
 
-        {/* Floating "Set" Confirmation Bar over Map (Appears when destination is chosen) */}
+        {/* Floating "Set" Confirmation Bar over Map */}
         {!isDestinationSet && pendingPinpoint && (
           <View
             style={[
@@ -971,7 +1061,7 @@ const PinpointFareScreen = ({ navigation }) => {
           </View>
         )}
 
-        {/* Floating Custom GPS Access Button (Using Uploaded Avatar Pin Icon) */}
+        {/* Floating Custom GPS Access Button (Bottom-Right, Zero Overlap with Top-Right Zoom) */}
         <TouchableOpacity
           style={styles.floatingGpsBtn}
           onPress={requestLocation}
@@ -987,117 +1077,78 @@ const PinpointFareScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.contentPadding}>
-        {/* Solo Ride / Visitor Ordinance Notice */}
-        <View style={[styles.ordinanceBanner, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
-          <MaterialCommunityIcons name="account-arrow-right" size={24} color="#D97706" />
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[styles.ordinanceTitle, { color: '#92400E' }]}>
-              Dagupan City Solo Ride / Visitor Ordinance Tariff (TFRB)
-            </Text>
-            <Text style={[styles.ordinanceDesc, { color: '#B45309' }]}>
-              Base fare ₱15.00 for the first 1.0 km, +₱3.00/km for succeeding distance. Pinpoint anywhere in the city.
-            </Text>
-          </View>
-        </View>
-
-        {/* Real-time Trip Metrics Card */}
+        {/* Real-time Trip Navigation & Time Estimate Card (Private / Solo Visitor) */}
         <Card style={[styles.metricsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.metricsHeader}>
             <View>
               <Text style={[styles.metricsHeading, { color: colors.textPrimary }]}>
-                Road Route & Live Meter
+                Route Navigation & Time Estimate
               </Text>
               <Text style={[styles.metricsSubtitle, { color: colors.textMuted }]}>
-                Point-to-point road-aligned distance for solo ride / visitor
+                Private solo ride & visitor point-to-point road guidance
               </Text>
             </View>
-            <View style={[styles.routingBadge, { backgroundColor: '#D9770615', borderColor: '#D9770650', borderWidth: 1 }]}>
-              <MaterialCommunityIcons name="routes" size={13} color="#D97706" />
-              <Text style={[styles.routingBadgeText, { color: '#D97706' }]}>Road Aligned</Text>
+            <View style={[styles.routingBadge, { backgroundColor: '#0284C715', borderColor: '#0284C750', borderWidth: 1 }]}>
+              <MaterialCommunityIcons name="compass-outline" size={13} color="#0284C7" />
+              <Text style={[styles.routingBadgeText, { color: '#0284C7' }]}>Direction Light</Text>
             </View>
           </View>
 
           {/* Road Path Summary */}
           {Boolean(roadSummary) && (
             <View style={[styles.roadSummaryRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <MaterialCommunityIcons name="directions-fork" size={16} color="#D97706" />
+              <MaterialCommunityIcons name="directions-fork" size={16} color="#0284C7" />
               <Text style={[styles.roadSummaryText, { color: colors.textSecondary }]} numberOfLines={1}>
                 {roadSummary}
               </Text>
             </View>
           )}
 
-          {/* Stats Row */}
+          {/* Stats Row: Distance, Est. Time (30-35 km/h), Target Location */}
           <View style={styles.metricStatsRow}>
             <View style={styles.metricItem}>
               <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Road Distance</Text>
-              <Text style={[styles.metricValue, { color: '#D97706' }]}>
+              <Text style={[styles.metricValue, { color: '#0284C7' }]}>
                 {effectiveDistanceKm} km
               </Text>
             </View>
             <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
             <View style={styles.metricItem}>
-              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Est. Time</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Est. Time (30-35 km/h)</Text>
               <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
                 ~{roadDurationMins} mins
               </Text>
             </View>
             <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
             <View style={styles.metricItem}>
-              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Fair Fare</Text>
-              <Text style={[styles.metricValue, { color: colors.primary }]}>
-                {formatPeso(computedFare.finalFare)}
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Destination</Text>
+              <Text style={[styles.metricValue, { color: '#16A34A', fontSize: 13 }]} numberOfLines={1}>
+                {destination.name}
               </Text>
             </View>
           </View>
         </Card>
 
-        {/* 20% Discount Toggle Switch */}
-        <TouchableOpacity
-          style={[styles.discountCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          onPress={() => setIsDiscounted(!isDiscounted)}
-          activeOpacity={0.8}
-        >
-          <View style={styles.discountLeft}>
-            <MaterialCommunityIcons
-              name="ticket-percent"
-              size={24}
-              color={isDiscounted ? '#10B981' : colors.textMuted}
-            />
-            <View style={{ marginLeft: 10 }}>
-              <Text style={[styles.discountTitle, { color: colors.textPrimary }]}>
-                20% Commuter Discount
-              </Text>
-              <Text style={[styles.discountSubtitle, { color: colors.textMuted }]}>
-                Students, Senior Citizens (RA 9994) & PWDs (RA 10754)
-              </Text>
-            </View>
-          </View>
-          <View style={[styles.discountToggle, isDiscounted && { backgroundColor: '#10B981' }]}>
-            <View style={[styles.discountKnob, isDiscounted && { alignSelf: 'flex-end' }]} />
-          </View>
-        </TouchableOpacity>
-
         {/* Live Tracking Actions */}
         {trackingState === 'idle' ? (
           <TouchableOpacity
-            style={[styles.startRideBtn, { backgroundColor: '#D97706' }]}
+            style={[styles.startRideBtn, { backgroundColor: '#0284C7' }]}
             onPress={handleStartTracking}
             activeOpacity={0.88}
           >
             <MaterialCommunityIcons name="navigation-variant" size={24} color="#FFFFFF" />
-            <Text style={styles.startRideBtnText}>Start Solo Ride / Visitor Live Tracker</Text>
+            <Text style={styles.startRideBtnText}>Start Solo / Visitor Navigation</Text>
           </TouchableOpacity>
         ) : (
-          <View style={[styles.activeTrackingCard, { backgroundColor: colors.surface, borderColor: '#D97706' }]}>
+          <View style={[styles.activeTrackingCard, { backgroundColor: colors.surface, borderColor: '#0284C7' }]}>
             <View style={styles.activeTrackingHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <View style={styles.pulseDot} />
                 <Text style={[styles.activeTrackingTitle, { color: colors.textPrimary }]}>
-                  Live Solo Ride / Visitor Meter Active
+                  Live Route Guidance Active
                 </Text>
               </View>
-              <Text style={[styles.timerText, { color: '#D97706' }]}>
+              <Text style={[styles.timerText, { color: '#0284C7' }]}>
                 {Math.floor(elapsedSeconds / 60)}:{(elapsedSeconds % 60).toString().padStart(2, '0')}
               </Text>
             </View>
@@ -1111,15 +1162,15 @@ const PinpointFareScreen = ({ navigation }) => {
               style={[
                 styles.proximityCard,
                 {
-                  backgroundColor: isNearDestination ? 'rgba(22, 163, 74, 0.1)' : 'rgba(217, 119, 6, 0.08)',
-                  borderColor: isNearDestination ? '#16A34A' : '#D9770640',
+                  backgroundColor: isNearDestination ? 'rgba(22, 163, 74, 0.1)' : 'rgba(2, 132, 199, 0.08)',
+                  borderColor: isNearDestination ? '#16A34A' : '#0284C740',
                 },
               ]}
             >
               <MaterialCommunityIcons
                 name={isNearDestination ? 'check-circle' : 'map-marker-distance'}
                 size={20}
-                color={isNearDestination ? '#16A34A' : '#D97706'}
+                color={isNearDestination ? '#16A34A' : '#0284C7'}
               />
               <View style={{ flex: 1 }}>
                 <Text
@@ -1133,21 +1184,21 @@ const PinpointFareScreen = ({ navigation }) => {
                     : `Remaining: ~${remainingDistToDestKm.toFixed(2)} km to destination`}
                 </Text>
                 <Text style={[styles.proximityStatusSub, { color: colors.textMuted }]}>
-                  Traveled: {distanceTraveledKm.toFixed(2)} km • Live Tariff: {formatPeso(computedFare.finalFare)}
+                  Traveled: {distanceTraveledKm.toFixed(2)} km • Est. Time Remaining: ~{calculateEstMinutes(remainingDistToDestKm)} mins
                 </Text>
               </View>
             </View>
 
             {/* Action Buttons: Stop Ride Early vs Arrived at Destination */}
             <View style={styles.trackingBtnRow}>
-              {/* STOP BUTTON: Always pressable to drop off early */}
+              {/* STOP BUTTON: Always pressable to end ride early */}
               <TouchableOpacity
                 style={[styles.stopRideBtn, { borderColor: '#EF4444' }]}
                 onPress={() => setStopConfirmVisible(true)}
                 activeOpacity={0.85}
               >
                 <MaterialCommunityIcons name="stop-circle-outline" size={18} color="#DC2626" />
-                <Text style={styles.stopRideBtnText}>Stop Ride & Drop Off</Text>
+                <Text style={styles.stopRideBtnText}>End Navigation</Text>
               </TouchableOpacity>
 
               {/* ARRIVE BUTTON: Disabled/Locked until arrived within 150m of destination */}
@@ -1173,35 +1224,11 @@ const PinpointFareScreen = ({ navigation }) => {
 
             {!isNearDestination && (
               <Text style={[styles.lockedWarningText, { color: colors.textMuted }]}>
-                🔒 "Arrived" button is locked until you reach {destination.name}. If you are dropping off early, tap "Stop Ride & Drop Off".
+                🔒 "Arrived" button unlocks when you reach {destination.name}. If you're ending your trip early, tap "End Navigation".
               </Text>
             )}
           </View>
         )}
-
-        {/* Anti-Overcharging Legal Grievance Link */}
-        <TouchableOpacity
-          style={[styles.overchargeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          onPress={() => {
-            navigation.navigate('SubmitComplaint', {
-              category: 'overcharging',
-              subject: `Solo Ride / Visitor overcharging to ${destination.name}`,
-              description: `Driver overcharged for solo ride / visitor trip from ${origin.name} to ${destination.name} (${effectiveDistanceKm} km). Official Dagupan City tariff is ${formatPeso(computedFare.finalFare)} but driver demanded excess fare.`,
-            });
-          }}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="alert-octagon-outline" size={22} color="#DC2626" />
-          <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text style={[styles.overchargeCardTitle, { color: colors.textPrimary }]}>
-              Charged more than {formatPeso(computedFare.finalFare)}?
-            </Text>
-            <Text style={[styles.overchargeCardSubtitle, { color: colors.textMuted }]}>
-              Tap to report overcharging directly to Dagupan City LGU / POSO
-            </Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -1233,15 +1260,45 @@ const styles = StyleSheet.create({
   landmarkChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: RADIUS.full,
     borderWidth: 1,
-    gap: 6,
   },
   landmarkChipText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  permissionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+  },
+  permissionBannerTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  permissionBannerSub: {
+    fontSize: 10,
+    color: '#B45309',
+    marginTop: 1,
+  },
+  permissionAllowBtn: {
+    backgroundColor: '#D97706',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+  },
+  permissionAllowBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
   },
   mapContainer: {
     width: '100%',
@@ -1264,7 +1321,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 6,
     borderWidth: 1.5,
-    borderColor: '#EA580C',
+    borderColor: '#0284C7',
     zIndex: 1100,
   },
   floatingSetBar: {
@@ -1350,23 +1407,6 @@ const styles = StyleSheet.create({
   contentPadding: {
     padding: SPACING.md,
   },
-  ordinanceBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING.md,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    marginBottom: SPACING.md,
-  },
-  ordinanceTitle: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '800',
-  },
-  ordinanceDesc: {
-    fontSize: FONTS.sizes.xs,
-    marginTop: 2,
-    lineHeight: 16,
-  },
   metricsCard: {
     padding: SPACING.md,
     borderRadius: RADIUS.lg,
@@ -1437,43 +1477,6 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: FONTS.sizes.lg,
     fontWeight: '900',
-  },
-  discountCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: SPACING.md,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    marginBottom: SPACING.md,
-    ...SHADOWS.xs,
-  },
-  discountLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  discountTitle: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '700',
-  },
-  discountSubtitle: {
-    fontSize: 10,
-    marginTop: 1,
-  },
-  discountToggle: {
-    width: 44,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#94A3B8',
-    padding: 2,
-    justifyContent: 'center',
-  },
-  discountKnob: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
   },
   startRideBtn: {
     flexDirection: 'row',
@@ -1557,10 +1560,10 @@ const styles = StyleSheet.create({
   stopRideBtnText: {
     color: '#DC2626',
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   arriveBtn: {
-    flex: 1,
+    flex: 1.3,
     backgroundColor: '#16A34A',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1568,6 +1571,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 12,
     borderRadius: RADIUS.md,
+    ...SHADOWS.sm,
   },
   arriveBtnDisabled: {
     backgroundColor: '#94A3B8',
@@ -1579,31 +1583,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   lockedWarningText: {
-    fontSize: 11,
-    marginTop: 8,
-    lineHeight: 15,
-  },
-  overchargeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING.md,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    marginTop: 2,
-  },
-  overchargeCardTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  overchargeCardSubtitle: {
     fontSize: 10,
-    marginTop: 1,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 14,
   },
   arrivalModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: SPACING.lg,
   },
   arrivalModalCard: {
@@ -1615,16 +1604,16 @@ const styles = StyleSheet.create({
     ...SHADOWS.lg,
   },
   arrivalIconCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#16A34A18',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.md,
   },
   arrivalTitle: {
-    fontSize: FONTS.sizes.lg,
+    fontSize: FONTS.sizes.xl,
     fontWeight: '900',
     textAlign: 'center',
     marginBottom: 4,
@@ -1634,29 +1623,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: SPACING.md,
   },
-  arrivalReceiptCard: {
+  arrivalSummaryCard: {
     width: '100%',
     padding: SPACING.md,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
     alignItems: 'center',
     marginBottom: SPACING.lg,
-  },
-  receiptLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  receiptFareBig: {
-    fontSize: 28,
-    fontWeight: '900',
-    marginTop: 2,
-  },
-  receiptDiscountText: {
-    fontSize: 10,
-    color: '#16A34A',
-    fontWeight: '700',
-    marginTop: 2,
   },
   divider: {
     width: '100%',
@@ -1670,6 +1643,7 @@ const styles = StyleSheet.create({
   },
   arrivalMetaCol: {
     alignItems: 'center',
+    flex: 1,
   },
   arrivalMetaLabel: {
     fontSize: 10,

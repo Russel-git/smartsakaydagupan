@@ -44,12 +44,10 @@ const FareCalculatorScreen = () => {
       const { data } = await faresAPI.calculateFare(params);
       setFareResult(data.data);
     } catch (e) {
-      // Fallback calculation
+      // Fallback calculation for regulated public jeepneys
       const fares = {
         traditional: { base: 14, perKm: 2, baseDist: 4 },
         modern: { base: 17, perKm: 2.4, baseDist: 4 },
-        solo_ride: { base: 15, perKm: 3.0, baseDist: 1 },
-        tricycle: { base: 15, perKm: 3.0, baseDist: 1 },
       };
       const f = fares[vehicleType] || fares.traditional;
       const dist = selectedRoute.distanceKm;
@@ -113,10 +111,10 @@ const FareCalculatorScreen = () => {
           ))}
         </ScrollView>
 
-        {/* Vehicle Type */}
-        <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>Vehicle Type</Text>
+        {/* Vehicle Type (Traditional & Modern PUJ only) */}
+        <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>Public Vehicle Type</Text>
         <View style={styles.toggleRow}>
-          {VEHICLE_TYPES.map((vt) => (
+          {VEHICLE_TYPES.filter((vt) => vt.value === 'traditional' || vt.value === 'modern').map((vt) => (
             <TouchableOpacity
               key={vt.value}
               style={[
@@ -181,37 +179,35 @@ const FareCalculatorScreen = () => {
 
         {/* Result */}
         {fareResult && selectedRoute && (() => {
-          const isSoloRide = vehicleType === 'solo_ride' || vehicleType === 'tricycle';
-          const baseRate = fareResult.baseFare || (isSoloRide ? 15 : vehicleType === 'traditional' ? 14 : 17);
-          const baseDist = fareResult.baseDistanceKm || (isSoloRide ? 1 : 4);
-          const perKm = fareResult.perKmRate || (isSoloRide ? 3.0 : vehicleType === 'traditional' ? 2 : 2.4);
+          const isModern = vehicleType === 'modern';
+          const baseRate = fareResult.baseFare || (isModern ? 17 : 14);
+          const baseDist = fareResult.baseDistanceKm || 4;
+          const perKm = fareResult.perKmRate || (isModern ? 2.4 : 2.0);
           const isDiscounted = discount !== 'none';
           const baseFarePayable = isDiscounted ? Math.ceil(baseRate * 0.8) : baseRate;
           const loopFarePayable = isDiscounted ? fareResult.discountedFare : fareResult.regularFare;
 
           return (
-            <Card style={[styles.resultCard, { borderTopWidth: 4, borderTopColor: isSoloRide ? '#F59E0B' : colors.primary }]}>
+            <Card style={[styles.resultCard, { borderTopWidth: 4, borderTopColor: isModern ? '#2563EB' : colors.primary }]}>
               {/* Emphasized Base Fare */}
-              <View style={[styles.baseFareBadge, isSoloRide && { backgroundColor: '#F59E0B15' }]}>
-                <MaterialCommunityIcons name={isSoloRide ? 'account-arrow-right' : 'shield-check'} size={16} color={isSoloRide ? '#D97706' : '#16A34A'} />
-                <Text style={[styles.baseFareBadgeText, isSoloRide && { color: '#D97706' }]}>
-                  {isSoloRide ? 'DAGUPAN SOLO RIDE / VISITOR TARIFF (FIRST 1.0 KM)' : 'OFFICIAL BASE FARE (FIRST 4 KM)'}
+              <View style={[styles.baseFareBadge, isModern && { backgroundColor: '#2563EB15' }]}>
+                <MaterialCommunityIcons name="shield-check" size={16} color={isModern ? '#2563EB' : '#16A34A'} />
+                <Text style={[styles.baseFareBadgeText, isModern && { color: '#2563EB' }]}>
+                  {isModern ? 'MODERN PUJ OFFICIAL BASE FARE (FIRST 4 KM)' : 'TRADITIONAL JEEPNEY BASE FARE (FIRST 4 KM)'}
                 </Text>
               </View>
 
-              <Text style={[styles.resultFare, { color: isSoloRide ? '#D97706' : colors.primary }]}>
+              <Text style={[styles.resultFare, { color: isModern ? '#2563EB' : colors.primary }]}>
                 {formatPeso(baseFarePayable)}
               </Text>
 
               {isDiscounted ? (
                 <Text style={[styles.resultOriginal, { color: colors.textMuted }]}>
-                  Regular Base: {formatPeso(baseRate)} (20% Discount Applied)
+                  Regular Base: {formatPeso(baseRate)} (20% Statutory Discount Applied)
                 </Text>
               ) : (
                 <Text style={[styles.baseFareCoverage, { color: colors.textSecondary }]}>
-                  {isSoloRide
-                    ? 'Standard commuter tariff covering the first 1.0 km in Dagupan City'
-                    : 'Standard minimum boarding fare covering 0 to 4 kilometers'}
+                  Standard minimum boarding fare covering 0 to 4 kilometers
                 </Text>
               )}
 
@@ -221,6 +217,7 @@ const FareCalculatorScreen = () => {
                   <Text style={[styles.breakdownLabel, { color: colors.textMuted }]}>Base Distance</Text>
                   <Text style={[styles.breakdownValue, { color: colors.textPrimary }]}>First {baseDist}.0 km</Text>
                 </View>
+                <View style={[styles.breakdownDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.breakdownItem}>
                   <Text style={[styles.breakdownLabel, { color: colors.textMuted }]}>Succeeding Rate</Text>
                   <Text style={[styles.breakdownValue, { color: colors.textPrimary }]}>+{formatPeso(perKm)} / km</Text>
@@ -234,7 +231,7 @@ const FareCalculatorScreen = () => {
                     Full Route Corridor (~{selectedRoute.distanceKm} km):
                   </Text>
                   <Text style={[styles.loopCeilingSub, { color: colors.textMuted }]}>
-                    {isSoloRide ? 'Metered / standard shared tariff for full route' : 'Only applies if you ride the complete route circuit'}
+                    Only applies if you ride the complete route circuit
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
@@ -249,21 +246,8 @@ const FareCalculatorScreen = () => {
                 </View>
               </View>
 
-              {/* Special Direct Trip Guidance for Solo Ride / Visitor */}
-              {isSoloRide && (
-                <View style={[styles.specialTripBox, { backgroundColor: '#F59E0B12', borderColor: '#F59E0B40' }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <MaterialCommunityIcons name="information" size={16} color="#D97706" style={{ marginRight: 6 }} />
-                    <Text style={styles.specialTripTitle}>Solo Ride / Visitor Reference</Text>
-                  </View>
-                  <Text style={[styles.specialTripText, { color: colors.textSecondary }]}>
-                    Direct / chartered solo rides within Downtown, CSI Lucao, or Bonuan typically range ₱50.00 – ₱80.00 depending on distance. Statutory 20% discount strictly applies for Students, PWDs, and Seniors with valid ID.
-                  </Text>
-                </View>
-              )}
-
               <Text style={[styles.sourceText, { color: colors.textMuted }]}>
-                Source: {isSoloRide ? 'Dagupan City TFRB Ordinance / LTFRB Guidelines' : 'LTFRB Order, March 13, 2026'} • Valid for {selectedRoute.name}
+                Source: LTFRB Fare Matrix Order • Valid for {selectedRoute.name}
               </Text>
             </Card>
           );
