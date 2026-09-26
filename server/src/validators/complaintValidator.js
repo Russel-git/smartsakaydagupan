@@ -18,11 +18,45 @@ const createComplaintSchema = Joi.object({
 
 const updateComplaintStatusSchema = Joi.object({
   status: Joi.string()
-    .valid('pending', 'under_review', 'endorsed_to_ltfrb', 'resolved', 'dismissed')
+    .valid(
+      'pending',
+      'under_review',
+      'endorsed_to_lgu',
+      'action_taken',
+      'terminated',
+      'deleted',
+      'endorsed_to_ltfrb',
+      'resolved',
+      'dismissed'
+    )
     .required(),
   adminNotes: Joi.string().allow('', null).max(2000),
+  lguCaseNumber: Joi.string().allow('', null).max(100),
+  lguActionNotes: Joi.string().allow('', null).max(2000),
   ltfrbCaseNumber: Joi.string().allow('', null).max(100),
   ltfrbNotes: Joi.string().allow('', null).max(2000),
+});
+
+const deleteComplaintSchema = Joi.object({
+  deletionReason: Joi.string()
+    .valid(
+      'Spam / False Information',
+      'Duplicate Complaint',
+      'Inappropriate / Abusive Content',
+      'Insufficient Evidence / Details',
+      'Resolved Informally',
+      'Other'
+    )
+    .required(),
+  deletionNotes: Joi.string().allow('', null).max(1000),
+});
+
+const lguActionSchema = Joi.object({
+  lguActionNotes: Joi.string().trim().min(3).max(2000).required(),
+});
+
+const lguTerminateSchema = Joi.object({
+  lguTerminationNotes: Joi.string().allow('', null).max(2000),
 });
 
 const endorseComplaintSchema = Joi.object({
@@ -38,6 +72,9 @@ const addAdminNotesSchema = Joi.object({
 module.exports = {
   createComplaintSchema,
   updateComplaintStatusSchema,
+  deleteComplaintSchema,
+  lguActionSchema,
+  lguTerminateSchema,
   endorseComplaintSchema,
   addAdminNotesSchema,
 };
