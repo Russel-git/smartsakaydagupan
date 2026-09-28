@@ -18,17 +18,19 @@ import Svg, {
 } from 'react-native-svg';
 
 const MAP_BASE_IMAGE = require('../../../assets/city_map_base.jpg');
-const JEEPNEY_IMAGE = require('../../../assets/jeepney_flag_top.png');
-const FILIPINO_DRIVER_IMAGE = require('../../../assets/filipino_driver.jpg');
+// Front-to-side (3/4 perspective) Philippine flag jeepney with boy driver inside the cabin
+const JEEPNEY_IMAGE = require('../../../assets/jeepney_perspective_driver.png');
+// Friendly Filipino boy character avatar from user illustration
+const FILIPINO_BOY_AVATAR = require('../../../assets/filipino_boy_avatar.png');
 
 /**
  * Normalized S-Curve Highway Corridor Waypoints:
  * Matches user's serpentine sketch:
- * - Starts top-right offscreen (the far end)
+ * - Starts top-right offscreen (far end)
  * - Sweeps west across top forming the top-left crest
  * - Cuts diagonally southeast across the screen center
  * - Bends down along the right side
- * - Sweeps back southwest into the front screen foreground and stops
+ * - Sweeps back southwest into the front screen foreground and drifts to a stop
  * - Continues past screen bottom for realistic highway continuation
  */
 const WAYPOINTS = [
@@ -72,6 +74,8 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
   const screenH = windowHeight > 0 ? windowHeight : Dimensions.get('window').height || 844;
 
   const animProgress = useRef(new Animated.Value(0)).current;
+  const driftSmokeAnim = useRef(new Animated.Value(0)).current;
+  const skidOpacityAnim = useRef(new Animated.Value(0)).current;
   const bubbleAnim = useRef(new Animated.Value(0)).current;
   const waveAnim = useRef(new Animated.Value(0)).current;
   const overlayOpacity = useRef(new Animated.Value(1)).current;
@@ -100,11 +104,11 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
   // Exact Right Lane Center: exactly 1/4 of total road width
   const RIGHT_LANE_OFFSET = ROAD_WIDTH * 0.25;
 
-  // Proportional Philippine flag jeepney dimensions
-  const JEEP_W = Math.round(ROAD_WIDTH * 0.40);
-  const JEEP_H = Math.round(JEEP_W * 2.18);
+  // 3/4 Front-Side Perspective Jeepney Dimensions (427 x 294 aspect ratio)
+  const JEEP_W = isTablet ? 230 : Math.round(screenW * 0.44);
+  const JEEP_H = Math.round(JEEP_W * (294 / 427));
 
-  // SVG Layer Proportions
+  // SVG Highway Layer Proportions
   const curbShadowWidth = ROAD_WIDTH + Math.round(ROAD_WIDTH * 0.16);
   const curbOuterWidth = ROAD_WIDTH + Math.round(ROAD_WIDTH * 0.11);
   const curbInnerWidth = ROAD_WIDTH + Math.round(ROAD_WIDTH * 0.05);
@@ -150,8 +154,10 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
     return d;
   }, [absoluteWaypoints]);
 
-  // 2. Generate trajectory locked in the RIGHT lane with continuous angle unwrapping
-  // The jeepney travels from the far-end top (t=0) down to the front screen stop position (t=0.86)
+  // 2. Trajectory with 3D perspective scale and stylish drift:
+  // - Starts at far end (t=0.03, scale=0.28)
+  // - Follows serpentine curves with subtle banking tilt
+  // - Enters foreground (t=0.84, scale=1.08) and drifts slightly (-16° kick, -3° settle)
   const { inputRange, outputRangeX, outputRangeY, outputRangeRot, outputRangeScale, stopPosition } = useMemo(() => {
     const steps = 90;
     const inRange = [];
@@ -160,18 +166,15 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
     const outRot = [];
     const outScale = [];
 
-    let prevAngle = null;
-    let unwrappedAngle = 0;
     let finalStop = { x: 0, y: 0 };
 
     for (let i = 0; i <= steps; i++) {
       const progress = i / steps;
       inRange.push(progress);
 
-      // Map progress [0..1] to road parameter [0..0.86] (stopping at foreground position)
-      const t = progress * 0.86;
+      // Map progress to road parameter [0.03..0.85]
+      const t = 0.03 + progress * 0.81;
 
-      // Tangent vector
       const dt = 0.005;
       const p1 = getPt(Math.max(0, t - dt));
       const p2 = getPt(Math.min(1, t + dt));
@@ -181,36 +184,34 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
       const dy = p2.y - p1.y;
       const len = Math.hypot(dx, dy) || 1;
 
-      // Clockwise perpendicular normal pointing to the RIGHT of direction of travel:
       const nx = -dy / len;
       const ny = dx / len;
 
-      // Exact right lane coordinates
       const laneX = p.x + nx * RIGHT_LANE_OFFSET;
       const laneY = p.y + ny * RIGHT_LANE_OFFSET;
 
-      // Forward heading angle
-      const rawAngle = (Math.atan2(dx, -dy) * 180) / Math.PI;
+      // Realistic 3D perspective scale: 0.28x at the far end to 1.08x at the front foreground
+      const scale = 0.28 + 0.80 * Math.pow(progress, 1.45);
 
-      // Angle unwrapping to avoid 360-degree flip jitters
-      if (prevAngle === null) {
-        unwrappedAngle = rawAngle;
-        prevAngle = rawAngle;
+      // Drift physics:
+      // Early drive: subtle banking tilt into curves (-6° to +6°)
+      // Finishing in the front: rear kicks out into stylish drift angle (-16°) and counter-steer settles (-3°)
+      let driftAngle = 0;
+      if (progress <= 0.75) {
+        driftAngle = Math.max(-6, Math.min(6, (dx / len) * 8));
       } else {
-        let diff = rawAngle - (prevAngle % 360);
-        while (diff > 180) diff -= 360;
-        while (diff < -180) diff += 360;
-        unwrappedAngle = prevAngle + diff;
-        prevAngle = unwrappedAngle;
+        const dP = (progress - 0.75) / 0.25;
+        if (dP < 0.55) {
+          driftAngle = -6 - 10 * (dP / 0.55); // Kicks out into drift
+        } else {
+          driftAngle = -16 + 13 * ((dP - 0.55) / 0.45); // Counter-steer and settle into parked stance
+        }
       }
-
-      // Realistic 3D perspective scale: 0.78x in far distance to 1.05x in front foreground
-      const scale = 0.78 + 0.27 * progress;
 
       outX.push(laneX - JEEP_W / 2);
       outY.push(laneY - JEEP_H / 2);
-      outRot.push(`${unwrappedAngle.toFixed(1)}deg`);
-      outScale.push(scale);
+      outRot.push(`${driftAngle.toFixed(1)}deg`);
+      outScale.push(scale.toFixed(3));
 
       if (i === steps) {
         finalStop = { x: laneX, y: laneY };
@@ -248,16 +249,16 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
   });
 
   useEffect(() => {
-    // Exactly 5.0 seconds total sequence:
-    // Phase 1 (0.0s - 3.2s): Jeepney drives down S-curve and realistically brakes to a stop
+    // 5.0 seconds total realistic sequence:
+    // Phase 1 (0.0s - 3.2s): Drives from far end to front, performs stylish drift stop
     Animated.timing(animProgress, {
       toValue: 1.0,
       duration: 3200,
-      easing: Easing.bezier(0.25, 0.1, 0.25, 1.0), // Smooth start, controlled cruise, braking ease
+      easing: Easing.bezier(0.22, 0.05, 0.25, 1.0), // Smooth acceleration, controlled cruise, braking drift
       useNativeDriver: false,
     }).start(({ finished }) => {
       if (finished && !hasFinishedRef.current) {
-        // Phase 2 (3.2s - 4.6s): Driver waves + "Tara na! Sakay na!" speech bubble springs in
+        // Phase 2 (3.2s - 4.6s): Boy avatar waves + "Tara na! Sakay na!" speech bubble springs in
         Animated.parallel([
           Animated.spring(bubbleAnim, {
             toValue: 1,
@@ -281,7 +282,34 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
       }
     });
 
+    // Drift effects trigger around 2400ms (when progress enters the drift phase)
+    const driftTimeout = setTimeout(() => {
+      // Fade in tire skid marks on the road
+      Animated.timing(skidOpacityAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: false,
+      }).start();
+
+      // Animate comic drift smoke puff
+      Animated.sequence([
+        Animated.timing(driftSmokeAnim, {
+          toValue: 1,
+          duration: 450,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: false,
+        }),
+        Animated.timing(driftSmokeAnim, {
+          toValue: 2,
+          duration: 550,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+      ]).start();
+    }, 2450);
+
     return () => {
+      clearTimeout(driftTimeout);
       if (finishTimeoutRef.current) {
         clearTimeout(finishTimeoutRef.current);
       }
@@ -329,13 +357,27 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
   const rightSkip = Math.max(insets.right, 20);
 
   // Responsive speech bubble dimensions and positioning directly above stopped vehicle
-  const bubbleW = isTablet ? 300 : 256;
-  const bubbleH = isTablet ? 96 : 84;
+  const bubbleW = isTablet ? 310 : 260;
+  const bubbleH = isTablet ? 98 : 86;
   const bubbleLeft = Math.max(16, Math.min(screenW - bubbleW - 16, stopPosition.x - bubbleW / 2));
   const bubbleTop = Math.max(
     topSkip + 44,
-    stopPosition.y - JEEP_H / 2 - bubbleH - (isTablet ? 26 : 20)
+    stopPosition.y - JEEP_H / 2 - bubbleH - (isTablet ? 30 : 22)
   );
+
+  // Drift smoke puff animations
+  const smokeScale = driftSmokeAnim.interpolate({
+    inputRange: [0, 1, 2],
+    outputRange: [0.3, 1.2, 1.6],
+  });
+  const smokeOpacity = driftSmokeAnim.interpolate({
+    inputRange: [0, 0.4, 1, 2],
+    outputRange: [0, 0.9, 0.7, 0],
+  });
+  const smokeTranslateX = driftSmokeAnim.interpolate({
+    inputRange: [0, 1, 2],
+    outputRange: [0, 18, 28],
+  });
 
   return (
     <Animated.View
@@ -449,7 +491,37 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
           </Svg>
         </View>
 
-        {/* Layer 3: Dynamic Philippine Flag Jeepney Riding Locked in the RIGHT Lane */}
+        {/* Layer 3: Realistic Tire Skid Marks Beneath Drift Position */}
+        <Animated.View
+          style={[StyleSheet.absoluteFill, { opacity: skidOpacityAnim }]}
+          pointerEvents="none"
+        >
+          <Svg
+            width="100%"
+            height="100%"
+            viewBox={`0 0 ${screenW} ${screenH}`}
+            style={StyleSheet.absoluteFill}
+          >
+            {/* Outer Rear Tire Skid Mark */}
+            <Path
+              d={`M ${stopPosition.x + 18} ${stopPosition.y - 28} Q ${stopPosition.x + 44} ${stopPosition.y + 4}, ${stopPosition.x + 36} ${stopPosition.y + 24}`}
+              stroke="rgba(15, 23, 42, 0.40)"
+              strokeWidth={isTablet ? 7 : 5}
+              fill="none"
+              strokeLinecap="round"
+            />
+            {/* Inner Front Tire Skid Mark */}
+            <Path
+              d={`M ${stopPosition.x - 14} ${stopPosition.y - 20} Q ${stopPosition.x + 12} ${stopPosition.y + 10}, ${stopPosition.x + 4} ${stopPosition.y + 28}`}
+              stroke="rgba(15, 23, 42, 0.35)"
+              strokeWidth={isTablet ? 7 : 5}
+              fill="none"
+              strokeLinecap="round"
+            />
+          </Svg>
+        </Animated.View>
+
+        {/* Layer 4: Front-to-Side Perspective Philippine Flag Jeepney with Boy Driver */}
         <Animated.View
           style={[
             styles.jeepneyWrapper,
@@ -466,24 +538,31 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
           ]}
           pointerEvents="none"
         >
-          {/* Top-down Philippine Flag Jeepney Body */}
+          {/* Front-to-side perspective jeepney body with boy driving inside cabin */}
           <Image
             source={JEEPNEY_IMAGE}
             style={styles.jeepneyImage}
             resizeMode="contain"
           />
 
-          {/* Filipino Driver Visible Inside the Cabin Window */}
-          <View style={styles.driverCabinArea}>
-            <Image
-              source={FILIPINO_DRIVER_IMAGE}
-              style={styles.driverCabinImage}
-              resizeMode="cover"
-            />
-          </View>
+          {/* Comic Drift Smoke Puffs behind rear wheels */}
+          <Animated.View
+            style={[
+              styles.driftSmokePuff,
+              {
+                opacity: smokeOpacity,
+                transform: [
+                  { scale: smokeScale },
+                  { translateX: smokeTranslateX },
+                ],
+              },
+            ]}
+          >
+            <Text style={[styles.smokeEmoji, { fontSize: isTablet ? 30 : 24 }]}>💨</Text>
+          </Animated.View>
         </Animated.View>
 
-        {/* Layer 4: Interactive Comic Speech Bubble ("Tara na! Sakay na!") & Waving Filipino Driver */}
+        {/* Layer 5: Interactive Comic Speech Bubble ("Tara na! Sakay na!") & Filipino Boy Graphic */}
         <Animated.View
           style={[
             styles.speechBubbleContainer,
@@ -505,7 +584,7 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
           ]}
           pointerEvents="none"
         >
-          {/* Animated Waving Filipino Driver Badge */}
+          {/* Animated Waving Filipino Boy Driver Badge */}
           <Animated.View
             style={[
               styles.driverBadgeWrapper,
@@ -522,13 +601,13 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
             ]}
           >
             <Image
-              source={FILIPINO_DRIVER_IMAGE}
+              source={FILIPINO_BOY_AVATAR}
               style={[
                 styles.driverBadgeImage,
                 {
-                  width: isTablet ? 58 : 48,
-                  height: isTablet ? 58 : 48,
-                  borderRadius: isTablet ? 29 : 24,
+                  width: isTablet ? 60 : 50,
+                  height: isTablet ? 60 : 50,
+                  borderRadius: isTablet ? 30 : 25,
                 },
               ]}
               resizeMode="cover"
@@ -538,7 +617,7 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
             </View>
           </Animated.View>
 
-          {/* Speech Bubble Card with Real Text */}
+          {/* Speech Bubble Card with Crisp Real Text */}
           <View style={styles.speechBubbleCard}>
             <View style={styles.speechBubbleHeader}>
               <View style={styles.liveIndicatorDot} />
@@ -614,21 +693,14 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  driverCabinArea: {
+  driftSmokePuff: {
     position: 'absolute',
-    top: '28%',
-    left: '20%',
-    width: '26%',
-    height: '13%',
-    borderRadius: 4,
-    overflow: 'hidden',
-    backgroundColor: '#0F172A',
-    borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
+    right: '8%',
+    bottom: '22%',
+    zIndex: 5,
   },
-  driverCabinImage: {
-    width: '100%',
-    height: '100%',
+  smokeEmoji: {
+    opacity: 0.9,
   },
   speechBubbleContainer: {
     position: 'absolute',
