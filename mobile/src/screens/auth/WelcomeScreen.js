@@ -9,6 +9,9 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  Animated,
+  Easing,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,8 +21,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useFeedback } from '../../contexts/FeedbackContext';
 import Button from '../../components/common/Button';
 import { FONTS, SPACING, RADIUS, SHADOWS } from '../../utils/constants';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import JeepneyIntroOverlay from '../../components/intro/JeepneyIntroOverlay';
 
 // Real Dagupan Transit Photos provided by the user
 const WELCOME_IMG = require('../../../assets/onboard_welcome.jpg'); // Welcome to Dagupan Bangus Arch & Jeepney
@@ -32,12 +34,49 @@ const WelcomeScreen = ({ navigation }) => {
   const { showInfo } = useFeedback();
   const insets = useSafeAreaInsets();
 
+  // Dynamic window dimensions that automatically adapt to iPads, tablets, foldables, and orientation changes
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const screenWidth = windowWidth > 0 ? windowWidth : Dimensions.get('window').width || 390;
+  const screenHeight = windowHeight > 0 ? windowHeight : Dimensions.get('window').height || 844;
+  const isTablet = Math.min(screenWidth, screenHeight) >= 600;
+
+  // Responsive photo card dimensions tailored for tablets vs phones
+  const photoCardWidth = isTablet ? 460 : Math.min(screenWidth * 0.88, 350);
+  const photoCardHeight = isTablet ? 250 : Math.min(screenWidth * 0.52, 210);
+  const compactPhotoCardWidth = isTablet ? 440 : Math.min(screenWidth * 0.88, 340);
+  const compactPhotoCardHeight = isTablet ? 210 : Math.min(screenWidth * 0.42, 170);
+
   const scrollRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(0);
+
+  // Intro Jeepney Animation State & Landing Page Kinetic Transition
+  const [showIntro, setShowIntro] = useState(true);
+  const landingFadeAnim = useRef(new Animated.Value(0)).current;
+  const landingSlideAnim = useRef(new Animated.Value(24)).current;
 
   const topInset = Platform.OS === 'android'
     ? Math.max(insets.top, StatusBar.currentHeight || 28)
     : insets.top;
+
+  const handleIntroFinish = () => {
+    // Kinetic momentum transition: Landing page gently rises and fades in
+    Animated.parallel([
+      Animated.timing(landingFadeAnim, {
+        toValue: 1,
+        duration: 420,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.timing(landingSlideAnim, {
+        toValue: 0,
+        duration: 420,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }),
+    ]).start(() => {
+      setShowIntro(false);
+    });
+  };
 
   const handleGuestMode = async () => {
     await enterGuestMode();
@@ -45,13 +84,13 @@ const WelcomeScreen = ({ navigation }) => {
   };
 
   const scrollToSlide = (index) => {
-    scrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: true });
+    scrollRef.current?.scrollTo({ x: index * screenWidth, animated: true });
     setActiveIndex(index);
   };
 
   const handleScroll = (e) => {
     const offsetX = e.nativeEvent.contentOffset.x;
-    const index = Math.round(offsetX / SCREEN_WIDTH);
+    const index = Math.round(offsetX / screenWidth);
     if (index !== activeIndex) {
       setActiveIndex(index);
     }
@@ -77,26 +116,46 @@ const WelcomeScreen = ({ navigation }) => {
         {/* ======================================================== */}
         {/* SLIDE 0: BRAND LANDING PAGE (Exact user mockup)           */}
         {/* ======================================================== */}
-        <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
-          <LinearGradient
-            colors={isDark ? [colors.background, colors.background] : ['#F9ECE5', '#F5DFD5', '#F9ECE5']}
+        <View style={[styles.slide, { width: screenWidth }]}>
+          <Animated.View
             style={[
-              styles.landingContainer,
-              {
-                paddingTop: topInset + 12,
-                paddingBottom: Math.max(insets.bottom, 20) + 12,
-              },
+              { flex: 1 },
+              { opacity: landingFadeAnim, transform: [{ translateY: landingSlideAnim }] },
             ]}
           >
-            {/* Top Header: Live Network Status */}
-            <View style={styles.landingTopRow}>
-              <View style={[styles.liveNetworkPill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#EED7CC' }]}>
-                <View style={styles.liveGreenDot} />
-                <Text style={[styles.liveNetworkText, { color: colors.textSecondary }]}>
-                  LIVE NETWORK • DAGUPAN
-                </Text>
+            <LinearGradient
+              colors={isDark ? [colors.background, colors.background] : ['#F9ECE5', '#F5DFD5', '#F9ECE5']}
+              style={[
+                styles.landingContainer,
+                {
+                  paddingTop: topInset + 12,
+                  paddingBottom: Math.max(insets.bottom, 20) + 12,
+                },
+              ]}
+            >
+              <View style={[styles.landingInnerContent, { maxWidth: isTablet ? 500 : '100%' }]}>
+                {/* Top Header: Live Network Status & Replay Button */}
+                <View style={styles.landingTopRow}>
+                <View style={[styles.liveNetworkPill, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#EED7CC' }]}>
+                  <View style={styles.liveGreenDot} />
+                  <Text style={[styles.liveNetworkText, { color: colors.textSecondary }]}>
+                    LIVE NETWORK • DAGUPAN
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.replayBtn, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: isDark ? colors.border : '#EED7CC' }]}
+                  onPress={() => {
+                    landingFadeAnim.setValue(0);
+                    landingSlideAnim.setValue(24);
+                    setShowIntro(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="reload" size={13} color="#EA580C" />
+                  <Text style={[styles.replayBtnText, { color: colors.textSecondary }]}>Replay</Text>
+                </TouchableOpacity>
               </View>
-            </View>
 
             {/* Center Content: Logo, Brand Typography & Feature Badges */}
             <View style={styles.landingCenterContent}>
@@ -161,14 +220,16 @@ const WelcomeScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
             </View>
-          </LinearGradient>
-        </View>
+          </View>
+        </LinearGradient>
+      </Animated.View>
+    </View>
 
         {/* ======================================================== */}
         {/* SLIDE 1: WELCOME WITH REAL DAGUPAN BANGUS ARCH PHOTO     */}
         {/* ======================================================== */}
-        <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: isDark ? colors.background : '#FDF7F4' }]}>
-          <View style={[styles.walkthroughContainer, { paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View style={[styles.slide, { width: screenWidth, backgroundColor: isDark ? colors.background : '#FDF7F4' }]}>
+          <View style={[styles.walkthroughContainer, { maxWidth: isTablet ? 540 : '100%', paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 20) }]}>
             {/* Header: Back & Skip */}
             <View style={styles.walkthroughHeader}>
               <TouchableOpacity
@@ -190,7 +251,7 @@ const WelcomeScreen = ({ navigation }) => {
 
             {/* Real Photo Frame */}
             <View style={styles.photoFrameWrapper}>
-              <View style={[styles.realPhotoCard, { borderColor: colors.border }]}>
+              <View style={[styles.realPhotoCard, { width: photoCardWidth, height: photoCardHeight, borderColor: colors.border }]}>
                 <Image
                   source={WELCOME_IMG}
                   style={styles.realPhotoImg}
@@ -236,8 +297,8 @@ const WelcomeScreen = ({ navigation }) => {
         {/* ======================================================== */}
         {/* SLIDE 2: REAL DAGUPAN PASSENGER JEEPNEY PHOTO            */}
         {/* ======================================================== */}
-        <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: isDark ? colors.background : '#FDF7F4' }]}>
-          <View style={[styles.walkthroughContainer, { paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View style={[styles.slide, { width: screenWidth, backgroundColor: isDark ? colors.background : '#FDF7F4' }]}>
+          <View style={[styles.walkthroughContainer, { maxWidth: isTablet ? 540 : '100%', paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 20) }]}>
             {/* Header: Back & Skip */}
             <View style={styles.walkthroughHeader}>
               <TouchableOpacity
@@ -259,7 +320,7 @@ const WelcomeScreen = ({ navigation }) => {
 
             {/* Real Photo Frame */}
             <View style={styles.photoFrameWrapper}>
-              <View style={[styles.realPhotoCard, { borderColor: colors.border }]}>
+              <View style={[styles.realPhotoCard, { width: photoCardWidth, height: photoCardHeight, borderColor: colors.border }]}>
                 <Image
                   source={TRACKING_IMG}
                   style={styles.realPhotoImg}
@@ -305,10 +366,10 @@ const WelcomeScreen = ({ navigation }) => {
         {/* ======================================================== */}
         {/* SLIDE 3: REAL DAGUPAN TRICYCLE PHOTO + AUTH ACTIONS      */}
         {/* ======================================================== */}
-        <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: isDark ? colors.background : '#FDF7F4' }]}>
+        <View style={[styles.slide, { width: screenWidth, backgroundColor: isDark ? colors.background : '#FDF7F4' }]}>
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={[styles.finalSlideContent, { paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 24) + 12 }]}
+            contentContainerStyle={[styles.finalSlideContent, { maxWidth: isTablet ? 540 : '100%', alignSelf: 'center', paddingTop: topInset + 8, paddingBottom: Math.max(insets.bottom, 24) + 12 }]}
             showsVerticalScrollIndicator={false}
           >
             {/* Header: Back only */}
@@ -330,7 +391,7 @@ const WelcomeScreen = ({ navigation }) => {
 
             {/* Real Photo Frame */}
             <View style={styles.photoFrameWrapperCompact}>
-              <View style={[styles.realPhotoCardCompact, { borderColor: colors.border }]}>
+              <View style={[styles.realPhotoCardCompact, { width: compactPhotoCardWidth, height: compactPhotoCardHeight, borderColor: colors.border }]}>
                 <Image
                   source={FARES_IMG}
                   style={styles.realPhotoImgCompact}
@@ -381,6 +442,10 @@ const WelcomeScreen = ({ navigation }) => {
           </ScrollView>
         </View>
       </ScrollView>
+
+      {showIntro && (
+        <JeepneyIntroOverlay onFinish={handleIntroFinish} />
+      )}
     </View>
   );
 };
@@ -388,6 +453,7 @@ const WelcomeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
+    position: 'relative',
   },
   scrollView: {
     flex: 1,
@@ -402,8 +468,14 @@ const styles = StyleSheet.create({
   /* ------------------------------------------------ */
   landingContainer: {
     flex: 1,
-    justifyContent: 'space-between',
     paddingHorizontal: SPACING.xl,
+    alignItems: 'center',
+  },
+  landingInnerContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+    width: '100%',
+    alignSelf: 'center',
   },
   landingTopRow: {
     flexDirection: 'row',
@@ -431,6 +503,21 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  replayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    ...SHADOWS.xs,
+  },
+  replayBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   landingCenterContent: {
     alignItems: 'center',
@@ -546,6 +633,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.xl,
+    width: '100%',
+    alignSelf: 'center',
   },
   walkthroughHeader: {
     flexDirection: 'row',
@@ -575,8 +664,6 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   realPhotoCard: {
-    width: Math.min(SCREEN_WIDTH * 0.88, 350),
-    height: Math.min(SCREEN_WIDTH * 0.52, 210),
     borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
@@ -689,6 +776,8 @@ const styles = StyleSheet.create({
   finalSlideContent: {
     paddingHorizontal: SPACING.xl,
     alignItems: 'center',
+    width: '100%',
+    alignSelf: 'center',
   },
   photoFrameWrapperCompact: {
     alignItems: 'center',
@@ -696,8 +785,6 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   realPhotoCardCompact: {
-    width: Math.min(SCREEN_WIDTH * 0.88, 340),
-    height: Math.min(SCREEN_WIDTH * 0.42, 170),
     borderRadius: 18,
     overflow: 'hidden',
     position: 'relative',

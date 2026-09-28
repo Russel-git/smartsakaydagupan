@@ -3,9 +3,9 @@ import { Platform, NativeModules } from 'react-native';
 
 const getDevServerIp = () => {
   if (Platform.OS === 'web') return 'localhost';
-  const scriptURL = NativeModules.SourceCode?.scriptURL;
+  const scriptURL = NativeModules.SourceCode?.scriptURL || NativeModules.ExponentConstants?.manifest?.debuggerHost;
   if (scriptURL) {
-    const address = scriptURL.split('://')[1];
+    const address = scriptURL.includes('://') ? scriptURL.split('://')[1] : scriptURL;
     if (address) {
       const host = address.split('/')[0];
       const ip = host.split(':')[0];
@@ -14,7 +14,7 @@ const getDevServerIp = () => {
       }
     }
   }
-  return '192.168.1.4';
+  return '192.168.1.2';
 };
 
 const DEV_IP = getDevServerIp();
