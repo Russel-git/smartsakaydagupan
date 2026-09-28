@@ -24,27 +24,20 @@ const JEEPNEY_IMAGE = require('../../../assets/jeepney_perspective_driver.png');
 const FILIPINO_BOY_AVATAR = require('../../../assets/filipino_boy_avatar.png');
 
 /**
- * Normalized S-Curve Highway Corridor Waypoints:
- * Matches user's serpentine sketch:
- * - Starts top-right offscreen (far end)
- * - Sweeps west across top forming the top-left crest
- * - Cuts diagonally southeast across the screen center
- * - Bends down along the right side
- * - Sweeps back southwest into the front screen foreground and drifts to a stop
- * - Continues past screen bottom for realistic highway continuation
+ * Isometric Z/Depth Highway Corridor:
+ * Animates directly down along the isometric Z/depth axis (top-right to bottom-left)
+ * - Start: Far background depth (top-right), small & faded (scale: 0.4, opacity: 0.2)
+ * - Motion: Straight forward/downward toward the viewer along the isometric depth line
+ * - End: Lower-center foreground, full size (scale: 1.10, opacity: 1.0) with slight drift finish
  */
 const WAYPOINTS = [
-  { xOffset: +0.22, y: -0.15 }, // w0: Far-end spawn point (above screen top)
-  { xOffset: +0.18, y: -0.02 }, // w1: Enters screen from top-right
-  { xOffset: -0.02, y: 0.08 },  // w2: Sweeps into top-left turn
-  { xOffset: -0.26, y: 0.16 },  // w3: Top-left crest curve
-  { xOffset: -0.10, y: 0.28 },  // w4: Diagonal sweep southeast
-  { xOffset: +0.22, y: 0.42 },  // w5: Mid-right highway bend
-  { xOffset: +0.26, y: 0.56 },  // w6: Curves downward along right
-  { xOffset: +0.12, y: 0.70 },  // w7: Sweeps back southwest toward center
-  { xOffset: -0.02, y: 0.82 },  // w8: Front screen foreground stop position
-  { xOffset: -0.10, y: 0.96 },  // w9: Lower highway continuation
-  { xOffset: -0.16, y: 1.15 },  // w10: Highway continues past screen bottom
+  { xOffset: +0.32, y: -0.10 }, // w0: Far background depth spawn
+  { xOffset: +0.26, y: 0.08 },  // w1: Background entrance
+  { xOffset: +0.18, y: 0.28 },  // w2: Mid-distance approach
+  { xOffset: +0.08, y: 0.48 },  // w3: Advancing forward toward viewer
+  { xOffset: -0.03, y: 0.68 },  // w4: Lower-center foreground finish / drift stop
+  { xOffset: -0.10, y: 0.88 },  // w5: Foreground road continuation
+  { xOffset: -0.18, y: 1.15 },  // w6: Past screen bottom
 ];
 
 function catmullRom(p0, p1, p2, p3, t) {
@@ -98,8 +91,8 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
 
   // Responsive highway proportions
   const ROAD_WIDTH = isTablet
-    ? Math.min(96, Math.max(78, Math.round((isLandscape ? screenH : screenW) * 0.096)))
-    : Math.min(74, Math.max(60, Math.round(screenW * 0.165)));
+    ? Math.min(104, Math.max(82, Math.round((isLandscape ? screenH : screenW) * 0.10)))
+    : Math.min(80, Math.max(64, Math.round(screenW * 0.18)));
 
   // Exact Right Lane Center: exactly 1/4 of total road width
   const RIGHT_LANE_OFFSET = ROAD_WIDTH * 0.25;
@@ -140,7 +133,7 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
     );
   };
 
-  // 1. Generate full S-curve highway centerline SVG path string
+  // 1. Generate full isometric highway centerline SVG path string
   const roadPathD = useMemo(() => {
     const steps = 70;
     let d = '';
@@ -154,10 +147,10 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
     return d;
   }, [absoluteWaypoints]);
 
-  // 2. Trajectory with 3D perspective scale and stylish drift:
-  // - Starts at far end (t=0.03, scale=0.28)
-  // - Follows serpentine curves with subtle banking tilt
-  // - Enters foreground (t=0.84, scale=1.08) and drifts slightly (-16° kick, -3° settle)
+  // 2. Trajectory along Isometric Z/Depth Axis (top-right to bottom-left):
+  // - Starts far in background depth (t=0.02, scale=0.40, opacity=0.20)
+  // - Drives straight forward/downward toward the viewer
+  // - Reaches lower-center foreground (t=0.75, scale=1.10, opacity=1.0) and drifts slightly
   const { inputRange, outputRangeX, outputRangeY, outputRangeRot, outputRangeScale, stopPosition } = useMemo(() => {
     const steps = 90;
     const inRange = [];
@@ -172,8 +165,8 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
       const progress = i / steps;
       inRange.push(progress);
 
-      // Map progress to road parameter [0.03..0.85]
-      const t = 0.03 + progress * 0.81;
+      // Map progress to road parameter [0.02..0.75] (stops in lower-center foreground)
+      const t = 0.02 + progress * 0.73;
 
       const dt = 0.005;
       const p1 = getPt(Math.max(0, t - dt));
@@ -228,6 +221,7 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
       stopPosition: finalStop,
     };
   }, [absoluteWaypoints, RIGHT_LANE_OFFSET, JEEP_W, JEEP_H]);
+
 
   const translateX = animProgress.interpolate({
     inputRange,
