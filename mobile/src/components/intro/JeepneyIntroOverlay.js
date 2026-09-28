@@ -211,7 +211,7 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
       outX.push(laneX - JEEP_W / 2);
       outY.push(laneY - JEEP_H / 2);
       outRot.push(`${driftAngle.toFixed(1)}deg`);
-      outScale.push(scale.toFixed(3));
+      outScale.push(Number(scale.toFixed(3)));
 
       if (i === steps) {
         finalStop = { x: laneX, y: laneY };
