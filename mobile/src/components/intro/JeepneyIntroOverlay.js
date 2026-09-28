@@ -190,21 +190,22 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
       const laneX = p.x + nx * RIGHT_LANE_OFFSET;
       const laneY = p.y + ny * RIGHT_LANE_OFFSET;
 
-      // Realistic 3D perspective scale: 0.28x at the far end to 1.08x at the front foreground
-      const scale = 0.28 + 0.80 * Math.pow(progress, 1.45);
+      // Realistic 3D perspective scale: 0.40x in the far distance up to 1.10x in the front foreground
+      const scale = 0.40 + 0.70 * Math.pow(progress, 1.35);
 
-      // Drift physics:
-      // Early drive: subtle banking tilt into curves (-6° to +6°)
-      // Finishing in the front: rear kicks out into stylish drift angle (-16°) and counter-steer settles (-3°)
+      // Orthographic isometric alignment:
+      // - Parallel edges kept orthographic with subtle chassis lean into curves (-2.5° to +2.5°)
+      // - Slight drift slip angle on final deceleration (-6.5° settling to -1.5°)
+      // - Keeps the grille, headlights, and front windshield clearly forward-facing at all times
       let driftAngle = 0;
       if (progress <= 0.75) {
-        driftAngle = Math.max(-6, Math.min(6, (dx / len) * 8));
+        driftAngle = Math.max(-2.5, Math.min(2.5, (dx / len) * 3.5));
       } else {
         const dP = (progress - 0.75) / 0.25;
-        if (dP < 0.55) {
-          driftAngle = -6 - 10 * (dP / 0.55); // Kicks out into drift
+        if (dP < 0.6) {
+          driftAngle = -2.5 - 4.0 * (dP / 0.6); // slight drift tilt to -6.5°
         } else {
-          driftAngle = -16 + 13 * ((dP - 0.55) / 0.45); // Counter-steer and settle into parked stance
+          driftAngle = -6.5 + 5.0 * ((dP - 0.6) / 0.4); // counter-steer settle to -1.5°
         }
       }
 
@@ -248,13 +249,35 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
     outputRange: outputRangeScale,
   });
 
+  // Depth effects: start faded/lower contrast (opacity 0.20) in distance, full vibrant contrast in foreground
+  const jeepOpacity = animProgress.interpolate({
+    inputRange: [0, 0.25, 0.65, 1.0],
+    outputRange: [0.20, 0.60, 0.92, 1.0],
+  });
+
+  // Dynamic ground drop shadow: faint and small in background, expanding and dark under tires in foreground
+  const shadowOpacity = animProgress.interpolate({
+    inputRange: [0, 0.35, 1.0],
+    outputRange: [0.15, 0.35, 0.60],
+  });
+
+  const shadowScaleX = animProgress.interpolate({
+    inputRange: [0, 1.0],
+    outputRange: [0.85, 1.15],
+  });
+
+  const shadowScaleY = animProgress.interpolate({
+    inputRange: [0, 1.0],
+    outputRange: [0.70, 1.10],
+  });
+
   useEffect(() => {
     // 5.0 seconds total realistic sequence:
-    // Phase 1 (0.0s - 3.2s): Drives from far end to front, performs stylish drift stop
+    // Phase 1 (0.0s - 3.2s): Drives from far end to front, weight deceleration curve cubic-bezier(0.25, 1, 0.5, 1)
     Animated.timing(animProgress, {
       toValue: 1.0,
       duration: 3200,
-      easing: Easing.bezier(0.22, 0.05, 0.25, 1.0), // Smooth acceleration, controlled cruise, braking drift
+      easing: Easing.bezier(0.25, 1.0, 0.5, 1.0), // Natural weighty approach deceleration
       useNativeDriver: false,
     }).start(({ finished }) => {
       if (finished && !hasFinishedRef.current) {
@@ -282,7 +305,7 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
       }
     });
 
-    // Drift effects trigger around 2400ms (when progress enters the drift phase)
+    // Drift effects trigger around 2150ms (when progress enters the deceleration drift phase)
     const driftTimeout = setTimeout(() => {
       // Fade in tire skid marks on the road
       Animated.timing(skidOpacityAnim, {
@@ -306,7 +329,7 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
           useNativeDriver: false,
         }),
       ]).start();
-    }, 2450);
+    }, 2150);
 
     return () => {
       clearTimeout(driftTimeout);
@@ -521,13 +544,14 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
           </Svg>
         </Animated.View>
 
-        {/* Layer 4: Front-to-Side Perspective Philippine Flag Jeepney with Boy Driver */}
+        {/* Layer 4: Front-to-Side Perspective Philippine Flag Jeepney */}
         <Animated.View
           style={[
             styles.jeepneyWrapper,
             {
               width: JEEP_W,
               height: JEEP_H,
+              opacity: jeepOpacity,
               transform: [
                 { translateX },
                 { translateY },
@@ -538,6 +562,20 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
           ]}
           pointerEvents="none"
         >
+          {/* Dynamic Ground Contact Drop Shadow under the tires */}
+          <Animated.View
+            style={[
+              styles.jeepneyGroundShadow,
+              {
+                opacity: shadowOpacity,
+                transform: [
+                  { scaleX: shadowScaleX },
+                  { scaleY: shadowScaleY },
+                ],
+              },
+            ]}
+          />
+
           {/* Front-to-side perspective jeepney body with boy driving inside cabin */}
           <Image
             source={JEEPNEY_IMAGE}
@@ -561,6 +599,7 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
             <Text style={[styles.smokeEmoji, { fontSize: isTablet ? 30 : 24 }]}>💨</Text>
           </Animated.View>
         </Animated.View>
+
 
         {/* Layer 5: Interactive Comic Speech Bubble ("Tara na! Sakay na!") & Filipino Boy Graphic */}
         <Animated.View
@@ -692,6 +731,20 @@ const styles = StyleSheet.create({
   jeepneyImage: {
     width: '100%',
     height: '100%',
+  },
+  jeepneyGroundShadow: {
+    position: 'absolute',
+    bottom: -4,
+    left: '8%',
+    width: '84%',
+    height: 18,
+    borderRadius: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 6,
   },
   driftSmokePuff: {
     position: 'absolute',
