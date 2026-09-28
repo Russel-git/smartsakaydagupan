@@ -9,6 +9,7 @@ import {
   Modal,
   RefreshControl,
   Share,
+  useWindowDimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -26,6 +27,9 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
 
   const { colors, isDark } = useTheme();
   const { showSuccess, showError, showWarning } = useFeedback();
+
+  const { width, height } = useWindowDimensions();
+  const isTablet = Math.min(width, height) >= 600;
 
   const [complaint, setComplaint] = useState(initialComplaint || null);
   const [loading, setLoading] = useState(!initialComplaint);
@@ -245,7 +249,7 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
         onConfirm={confirmDialog.onConfirm}
       />
 
-      <View style={styles.content}>
+      <View style={[styles.content, { maxWidth: isTablet ? 740 : '100%', alignSelf: 'center', width: '100%' }]}>
         {/* Top Case Identity Card */}
         <Card style={styles.caseHeroCard}>
           <View style={styles.caseHeroTop}>
@@ -778,8 +782,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 38,
     borderRadius: RADIUS.sm,
     borderWidth: 1,
   },
@@ -798,8 +803,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 38,
     borderRadius: RADIUS.sm,
     borderWidth: 1,
   },

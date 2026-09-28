@@ -7,7 +7,8 @@ import {
   TouchableOpacity, 
   Image, 
   Alert, 
-  Platform 
+  Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -24,6 +25,10 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
   const { isGuest } = useAuth();
   const { showSuccess, showError, showWarning } = useFeedback();
+
+  const { width, height } = useWindowDimensions();
+  const isTablet = Math.min(width, height) >= 600;
+
   const [promptVisible, setPromptVisible] = useState(false);
   const [routes, setRoutes] = useState([]);
   const [form, setForm] = useState({
@@ -199,7 +204,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: 40 }}
       >
-        <View style={styles.content}>
+        <View style={[styles.content, { maxWidth: isTablet ? 680 : '100%', alignSelf: 'center', width: '100%' }]}>
           <View style={styles.headerRow}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.title, { color: colors.textPrimary }]}>Report a Grievance</Text>
@@ -250,21 +255,31 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
                 style={[
                   styles.categoryChip,
                   {
+                    width: isTablet ? '23.5%' : '31%',
                     backgroundColor: form.category === cat.value ? colors.primary + '15' : colors.surface,
                     borderColor: form.category === cat.value ? colors.primary : colors.border,
                   },
                 ]}
                 onPress={() => updateField('category', cat.value)}
+                activeOpacity={0.8}
               >
                 <MaterialCommunityIcons
                   name={cat.icon}
                   size={22}
                   color={form.category === cat.value ? colors.primary : colors.textMuted}
                 />
-                <Text style={{
-                  color: form.category === cat.value ? colors.primary : colors.textPrimary,
-                  fontSize: FONTS.sizes.xs, fontWeight: '600', textAlign: 'center',
-                }}>
+                <Text
+                  style={{
+                    color: form.category === cat.value ? colors.primary : colors.textPrimary,
+                    fontSize: FONTS.sizes.xs,
+                    fontWeight: '700',
+                    textAlign: 'center',
+                    marginTop: 2,
+                  }}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
                   {cat.label}
                 </Text>
               </TouchableOpacity>
@@ -404,8 +419,15 @@ const styles = StyleSheet.create({
   label: { fontSize: FONTS.sizes.sm, fontWeight: '600', marginBottom: SPACING.sm },
   photoHelper: { fontSize: FONTS.sizes.xs, marginBottom: SPACING.md, lineHeight: 18 },
   error: { fontSize: FONTS.sizes.xs, marginBottom: SPACING.sm },
-  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.lg },
-  categoryChip: { width: '31%', padding: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1.5, alignItems: 'center', gap: SPACING.xs },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.lg, justifyContent: 'space-between' },
+  categoryChip: {
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 82,
+  },
   photoActionRow: { flexDirection: 'row', gap: SPACING.md, marginBottom: SPACING.lg },
   photoBtn: {
     flex: 1,
@@ -414,8 +436,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
+    minHeight: 48,
     borderRadius: RADIUS.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   photoBtnText: { fontSize: FONTS.sizes.sm, fontWeight: '600' },
   previewContainer: {

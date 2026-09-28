@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, StatusBar, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -16,6 +17,14 @@ const ProfileScreen = ({ navigation }) => {
   const { colors, isDark, themeMode, toggleTheme } = useTheme();
   const { user, logout, isAdmin, refreshProfile } = useAuth();
   const { showSuccess, showError, showInfo } = useFeedback();
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isTablet = Math.min(width, height) >= 600;
+
+  const topInset = Platform.OS === 'android'
+    ? Math.max(insets.top, StatusBar.currentHeight || 28)
+    : insets.top;
+
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ firstName: user?.firstName || '', lastName: user?.lastName || '' });
   const [loading, setLoading] = useState(false);
@@ -58,9 +67,9 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
       {/* Profile Header */}
-      <View style={[styles.header, { backgroundColor: colors.primary }]}>
+      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: topInset + 16 }]}>
         <View style={styles.avatarCircle}>
           <Text style={styles.avatarText}>
             {getInitials(user?.firstName, user?.lastName)}
@@ -75,7 +84,7 @@ const ProfileScreen = ({ navigation }) => {
         </View>
       </View>
 
-      <View style={styles.content}>
+      <View style={[styles.content, { maxWidth: isTablet ? 680 : '100%', alignSelf: 'center', width: '100%' }]}>
         {/* Edit Profile */}
         <Card>
           <View style={styles.cardHeader}>
@@ -131,7 +140,12 @@ const ProfileScreen = ({ navigation }) => {
                   size={18}
                   color={themeMode === mode ? '#FFFFFF' : colors.textSecondary}
                 />
-                <Text style={{ color: themeMode === mode ? '#FFFFFF' : colors.textPrimary, fontSize: FONTS.sizes.sm, fontWeight: '600', textTransform: 'capitalize' }}>
+                <Text
+                  style={{ color: themeMode === mode ? '#FFFFFF' : colors.textPrimary, fontSize: FONTS.sizes.sm, fontWeight: '700', textTransform: 'capitalize' }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
                   {mode}
                 </Text>
               </TouchableOpacity>
@@ -228,10 +242,26 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, marginBottom: SPACING.md },
   infoText: { fontSize: FONTS.sizes.md },
   themeRow: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.sm },
-  themeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs, paddingVertical: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1.5 },
-  linkRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.sm },
-  linkText: { flex: 1, fontSize: FONTS.sizes.md, fontWeight: '500' },
-  logoutBtn: { marginTop: SPACING.md },
+  themeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.md,
+    minHeight: 46,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
+    minHeight: 52,
+  },
+  linkText: { flex: 1, fontSize: FONTS.sizes.md, fontWeight: '600' },
+  logoutBtn: { marginTop: SPACING.lg, minHeight: 52 },
   version: { textAlign: 'center', fontSize: FONTS.sizes.xs, marginTop: SPACING.xl, marginBottom: SPACING.xxxl },
 });
 

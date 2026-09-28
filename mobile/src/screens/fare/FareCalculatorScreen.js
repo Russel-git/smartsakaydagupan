@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Card, LoadingSpinner } from '../../components/common/SharedComponents';
@@ -9,6 +9,9 @@ import { formatPeso } from '../../utils/helpers';
 
 const FareCalculatorScreen = () => {
   const { colors } = useTheme();
+  const { width, height } = useWindowDimensions();
+  const isTablet = Math.min(width, height) >= 600;
+
   const [routes, setRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [vehicleType, setVehicleType] = useState('traditional');
@@ -69,8 +72,8 @@ const FareCalculatorScreen = () => {
   if (loading) return <LoadingSpinner text="Loading routes..." />;
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.content}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
+      <View style={[styles.content, { maxWidth: isTablet ? 720 : '100%', alignSelf: 'center', width: '100%' }]}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Fare Calculator</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           Calculate LTFRB-verified fares for any route
@@ -275,13 +278,40 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: FONTS.sizes.sm, marginTop: SPACING.xs, marginBottom: SPACING.xxl },
   sectionLabel: { fontSize: FONTS.sizes.sm, fontWeight: '700', marginBottom: SPACING.sm, textTransform: 'uppercase', letterSpacing: 0.5 },
   routeScroll: { marginBottom: SPACING.xxl },
-  routeChip: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, borderRadius: RADIUS.lg, borderWidth: 1.5, marginRight: SPACING.sm },
-  routeChipText: { fontSize: FONTS.sizes.sm, fontWeight: '600' },
+  routeChip: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    marginRight: SPACING.sm,
+    minHeight: 54,
+    justifyContent: 'center',
+  },
+  routeChipText: { fontSize: FONTS.sizes.sm, fontWeight: '700' },
   routeChipDist: { fontSize: FONTS.sizes.xs, marginTop: 2 },
   toggleRow: { flexDirection: 'row', gap: SPACING.md, marginBottom: SPACING.xxl },
-  toggle: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm, paddingVertical: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1.5 },
+  toggle: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    minHeight: 48,
+  },
   discountGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.xxl },
-  discountChip: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: RADIUS.full, borderWidth: 1.5 },
+  discountChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.full,
+    borderWidth: 1.5,
+    minHeight: 40,
+  },
   resultCard: { alignItems: 'center', paddingVertical: SPACING.xl, paddingHorizontal: SPACING.lg },
   baseFareBadge: {
     flexDirection: 'row',

@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -21,7 +22,6 @@ import ConfirmDialogModal from '../../components/common/ConfirmDialogModal';
 import { saveRideToHistory } from '../../utils/storage';
 import { FONTS, SPACING, RADIUS, SHADOWS } from '../../utils/constants';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const GPS_ICON = require('../../../assets/gps_access_icon.png');
 
 // Default fallback location: Dagupan City Plaza
@@ -72,6 +72,15 @@ const PinpointFareScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
   const { showSuccess, showWarning, showError, showInfo } = useFeedback();
   const webViewRef = useRef(null);
+
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isTablet = Math.min(windowWidth, windowHeight) >= 600;
+  const isLandscape = windowWidth > windowHeight;
+  const mapHeight = isLandscape
+    ? Math.max(220, windowHeight * 0.44)
+    : isTablet
+    ? Math.min(480, windowHeight * 0.40)
+    : Math.min(360, Math.max(250, windowHeight * 0.38));
 
   // Origin & Destination State
   const [origin, setOrigin] = useState({
@@ -980,7 +989,7 @@ const PinpointFareScreen = ({ navigation }) => {
       )}
 
       {/* Interactive Map with Directional Light Beam, Set Button, and Non-overlapping GPS Access Button */}
-      <View style={styles.mapContainer}>
+      <View style={[styles.mapContainer, { height: mapHeight }]}>
         {Platform.OS === 'web' ? (
           <iframe
             id="solo-ride-pinpoint-map"
@@ -1076,7 +1085,7 @@ const PinpointFareScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.contentPadding}>
+      <View style={[styles.contentPadding, { maxWidth: isTablet ? 780 : '100%', alignSelf: 'center', width: '100%' }]}>
         {/* Real-time Trip Navigation & Time Estimate Card (Private / Solo Visitor) */}
         <Card style={[styles.metricsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.metricsHeader}>
@@ -1302,7 +1311,6 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     width: '100%',
-    height: SCREEN_HEIGHT * 0.40,
     backgroundColor: '#0f172a',
     position: 'relative',
   },
@@ -1484,6 +1492,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
+    minHeight: 52,
     borderRadius: RADIUS.lg,
     marginBottom: SPACING.md,
     ...SHADOWS.md,

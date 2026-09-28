@@ -689,8 +689,11 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: FONTS.sizes.xs, marginTop: 2 },
   markAllBtn: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: RADIUS.full,
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   markAll: { fontSize: FONTS.sizes.xs, fontWeight: '700' },
 
@@ -706,10 +709,11 @@ const styles = StyleSheet.create({
   tabChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: RADIUS.full,
     borderWidth: 1,
+    minHeight: 38,
   },
   tabChipText: {
     fontSize: 12,
@@ -924,7 +928,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    minHeight: 48,
     borderRadius: RADIUS.md,
     flex: 1,
   },
@@ -935,7 +940,8 @@ const styles = StyleSheet.create({
   },
   secondaryCloseBtn: {
     paddingHorizontal: 18,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    minHeight: 48,
     borderRadius: RADIUS.md,
     borderWidth: 1,
     alignItems: 'center',

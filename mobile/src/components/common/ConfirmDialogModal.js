@@ -178,8 +178,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   btnCancel: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    minHeight: 46,
     borderRadius: RADIUS.md,
     borderWidth: 1,
     alignItems: 'center',
@@ -190,8 +191,9 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
   },
   btnConfirm: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    minHeight: 46,
     borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',

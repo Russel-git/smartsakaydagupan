@@ -43,7 +43,7 @@ const AuthPromptModal = ({
         />
         <View style={[styles.card, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
           {/* Close button */}
-          <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+          <TouchableOpacity style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 
@@ -186,7 +186,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 13,
+    paddingVertical: 12,
+    minHeight: 48,
     borderRadius: 12,
   },
   btnPrimaryText: {
@@ -198,6 +199,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
+    minHeight: 48,
     borderRadius: 12,
     borderWidth: 1,
   },
@@ -208,11 +210,12 @@ const styles = StyleSheet.create({
   btnDismiss: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 8,
+    minHeight: 38,
   },
   btnDismissText: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
 });
 

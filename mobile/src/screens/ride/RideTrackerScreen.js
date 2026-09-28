@@ -8,6 +8,7 @@ import {
   Platform,
   Alert,
   Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -23,8 +24,6 @@ import { FONTS, SPACING, RADIUS, VEHICLE_TYPES, DISCOUNT_TYPES } from '../../uti
 import { formatPeso } from '../../utils/helpers';
 import { getRideHistory, saveRideToHistory, clearRideHistory } from '../../utils/storage';
 import PinpointFareScreen from '../fare/PinpointFareScreen';
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Haversine distance in kilometers
 const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
@@ -60,6 +59,15 @@ const RideTrackerScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
   const { isGuest } = useAuth();
   const { showSuccess, showInfo, showWarning } = useFeedback();
+
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isTablet = Math.min(windowWidth, windowHeight) >= 600;
+  const isLandscape = windowWidth > windowHeight;
+  const panelMaxHeight = isLandscape
+    ? Math.max(180, windowHeight * 0.42)
+    : isTablet
+    ? Math.min(520, windowHeight * 0.48)
+    : Math.min(480, Math.max(280, windowHeight * 0.52));
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState({
     visible: false,
@@ -723,7 +731,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
           </View>
 
           {/* Bottom Sheet / Controls Panel */}
-          <View style={[styles.bottomPanel, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <View style={[styles.bottomPanel, { backgroundColor: colors.surface, borderTopColor: colors.border, maxHeight: panelMaxHeight, maxWidth: isTablet ? 780 : '100%', alignSelf: 'center', width: '100%' }]}>
             <ScrollView contentContainerStyle={styles.bottomScroll} keyboardShouldPersistTaps="handled">
               {/* STATE: IDLE (Choose route, vehicle, discount, then Start) */}
               {rideState === 'idle' && (
@@ -1441,7 +1449,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   bottomPanel: {
-    maxHeight: SCREEN_HEIGHT * 0.52,
     borderTopWidth: 1,
   },
   bottomScroll: {
@@ -1562,6 +1569,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: SPACING.sm,
     paddingVertical: SPACING.md,
+    minHeight: 50,
     borderRadius: RADIUS.lg,
     shadowColor: '#16A34A',
     shadowOpacity: 0.3,
@@ -1606,6 +1614,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: SPACING.sm,
     paddingVertical: SPACING.md,
+    minHeight: 50,
     borderRadius: RADIUS.lg,
     shadowColor: '#DC2626',
     shadowOpacity: 0.35,
@@ -1680,6 +1689,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: SPACING.sm,
     paddingVertical: SPACING.md,
+    minHeight: 50,
     borderRadius: RADIUS.lg,
   },
   newRideBtnText: {

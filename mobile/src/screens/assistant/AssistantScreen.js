@@ -1,5 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+  ActivityIndicator,
+  StatusBar,
+  useWindowDimensions,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -10,8 +23,16 @@ import { FONTS, SPACING, RADIUS } from '../../utils/constants';
 import { formatDate } from '../../utils/helpers';
 
 const AssistantScreen = () => {
-  const { colors } = useTheme();
-  const { isGuest, exitGuestMode } = useAuth();
+  const { colors, isDark } = useTheme();
+  const { isGuest } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isTablet = Math.min(width, height) >= 600;
+
+  const topInset = Platform.OS === 'android'
+    ? Math.max(insets.top, StatusBar.currentHeight || 28)
+    : insets.top;
+
   const [promptVisible, setPromptVisible] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -108,20 +129,27 @@ const AssistantScreen = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={90}
     >
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent={Platform.OS === 'android'}
+      />
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.headerLeft}>
-          <View style={[styles.headerAvatar, { backgroundColor: colors.primary + '15' }]}>
-            <MaterialCommunityIcons name="robot" size={24} color={colors.primary} />
+      <View style={[styles.header, { backgroundColor: colors.surface, borderColor: colors.border, paddingTop: topInset + 8 }]}>
+        <View style={[styles.headerInner, { maxWidth: isTablet ? 760 : '100%', alignSelf: 'center', width: '100%' }]}>
+          <View style={styles.headerLeft}>
+            <View style={[styles.headerAvatar, { backgroundColor: colors.primary + '15' }]}>
+              <MaterialCommunityIcons name="robot" size={24} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>AI Transit Assistant</Text>
+              <Text style={[styles.headerStatus, { color: '#16A34A' }]}>● Online • Dagupan Guide</Text>
+            </View>
           </View>
-          <View>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>AI Assistant</Text>
-            <Text style={[styles.headerStatus, { color: colors.accent }]}>● Online</Text>
-          </View>
+          <TouchableOpacity onPress={clearChat} style={styles.clearBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <MaterialCommunityIcons name="delete-outline" size={22} color={colors.textMuted} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={clearChat} style={styles.clearBtn}>
-          <MaterialCommunityIcons name="delete-outline" size={22} color={colors.textMuted} />
-        </TouchableOpacity>
       </View>
 
       {/* Messages */}
@@ -188,21 +216,24 @@ const AssistantScreen = () => {
         </View>
       ) : (
         <View style={[styles.inputBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Input
-            placeholder="Ask me anything about commuting..."
-            value={input}
-            onChangeText={setInput}
-            style={styles.inputField}
-            multiline
-            onSubmitEditing={sendMessage}
-          />
-          <TouchableOpacity
-            onPress={sendMessage}
-            disabled={!input.trim() || loading}
-            style={[styles.sendBtn, { backgroundColor: input.trim() ? colors.primary : colors.border }]}
-          >
-            <MaterialCommunityIcons name="send" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View style={[styles.inputBarInner, { maxWidth: isTablet ? 760 : '100%', alignSelf: 'center', width: '100%' }]}>
+            <Input
+              placeholder="Ask me anything about commuting..."
+              value={input}
+              onChangeText={setInput}
+              style={styles.inputField}
+              multiline
+              onSubmitEditing={sendMessage}
+            />
+            <TouchableOpacity
+              onPress={sendMessage}
+              disabled={!input.trim() || loading}
+              style={[styles.sendBtn, { backgroundColor: input.trim() ? colors.primary : colors.border }]}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="send" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -220,7 +251,16 @@ const AssistantScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 48, paddingBottom: SPACING.md, paddingHorizontal: SPACING.xl, borderBottomWidth: 1 },
+  header: {
+    paddingBottom: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    borderBottomWidth: 1,
+  },
+  headerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   headerAvatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: FONTS.sizes.lg, fontWeight: '700' },
@@ -238,11 +278,12 @@ const styles = StyleSheet.create({
   typingText: { fontSize: FONTS.sizes.sm },
   suggestionsContainer: { paddingVertical: 8, borderTopWidth: 1 },
   suggestionsScroll: { paddingHorizontal: SPACING.md, gap: 8 },
-  suggestionChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
+  suggestionChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, minHeight: 36, justifyContent: 'center' },
   suggestionChipText: { fontSize: 12, fontWeight: '600' },
-  inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: SPACING.sm, padding: SPACING.md, borderTopWidth: 1 },
+  inputBar: { borderTopWidth: 1, padding: SPACING.md },
+  inputBarInner: { flexDirection: 'row', alignItems: 'flex-end', gap: SPACING.sm },
   inputField: { flex: 1, marginBottom: 0 },
-  sendBtn: { width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
   guestLockedBar: {
     flexDirection: 'row',
     alignItems: 'center',

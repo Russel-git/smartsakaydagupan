@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TextInput, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { RADIUS, FONTS, SPACING } from '../../utils/constants';
@@ -23,6 +23,8 @@ const Input = ({
   ...props
 }) => {
   const { colors } = useTheme();
+  const { width, height } = useWindowDimensions();
+  const isTablet = Math.min(width, height) >= 600;
   const [isFocused, setIsFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -35,7 +37,9 @@ const Input = ({
   return (
     <View style={[styles.container, style]}>
       {Boolean(label) ? (
-        <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>
+        <Text style={[styles.label, { color: colors.textPrimary, fontSize: isTablet ? FONTS.sizes.sm + 1 : FONTS.sizes.sm }]}>
+          {label}
+        </Text>
       ) : null}
       <View
         style={[
@@ -43,14 +47,16 @@ const Input = ({
           {
             borderColor,
             backgroundColor: editable ? colors.surface : colors.surfaceElevated,
+            minHeight: multiline ? Math.max(52, numberOfLines * 36) : (isTablet ? 54 : 48),
+            borderRadius: isTablet ? RADIUS.lg : RADIUS.md,
           },
-          multiline && { minHeight: numberOfLines * 40, alignItems: 'flex-start' },
+          multiline && { alignItems: 'flex-start' },
         ]}
       >
         {Boolean(leftIcon) ? (
           <MaterialCommunityIcons
             name={leftIcon}
-            size={20}
+            size={isTablet ? 22 : 20}
             color={isFocused ? colors.primary : colors.textMuted}
             style={styles.leftIcon}
           />
@@ -58,7 +64,10 @@ const Input = ({
         <TextInput
           style={[
             styles.input,
-            { color: colors.textPrimary },
+            {
+              color: colors.textPrimary,
+              fontSize: isTablet ? FONTS.sizes.md + 1 : FONTS.sizes.md,
+            },
             multiline && { textAlignVertical: 'top', paddingTop: SPACING.md },
             inputStyle,
           ]}
@@ -77,10 +86,14 @@ const Input = ({
           {...props}
         />
         {Boolean(secureTextEntry) ? (
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.rightIcon}>
+          <TouchableOpacity
+            onPress={() => setShowPassword(!showPassword)}
+            style={styles.rightIcon}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <MaterialCommunityIcons
               name={showPassword ? 'eye-off' : 'eye'}
-              size={20}
+              size={isTablet ? 22 : 20}
               color={colors.textMuted}
             />
           </TouchableOpacity>
@@ -99,6 +112,7 @@ const Input = ({
 const styles = StyleSheet.create({
   container: {
     marginBottom: SPACING.lg,
+    width: '100%',
   },
   label: {
     fontSize: FONTS.sizes.sm,
@@ -115,7 +129,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: FONTS.sizes.md,
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.md - 2,
   },
   leftIcon: {
     marginRight: SPACING.sm,

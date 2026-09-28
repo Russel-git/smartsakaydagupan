@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Platform, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  Dimensions,
+  Platform,
+  Image,
+  useWindowDimensions,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { WebView } from 'react-native-webview';
@@ -9,7 +19,6 @@ import { Card, LoadingSpinner } from '../../components/common/SharedComponents';
 import { routesAPI } from '../../api/services';
 import { FONTS, SPACING, RADIUS } from '../../utils/constants';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const GPS_ICON = require('../../../assets/gps_access_icon.png');
 
 // Haversine distance calculator in km
@@ -47,6 +56,15 @@ const RouteMapScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const { showWarning } = useFeedback();
   const webViewRef = useRef(null);
+
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isTablet = Math.min(windowWidth, windowHeight) >= 600;
+  const isLandscape = windowWidth > windowHeight;
+  const mapHeight = isLandscape
+    ? Math.max(200, windowHeight * 0.40)
+    : isTablet
+    ? Math.min(420, windowHeight * 0.36)
+    : Math.min(320, Math.max(220, windowHeight * 0.32));
   const [routes, setRoutes] = useState([]);
   const [busTerminals, setBusTerminals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -624,7 +642,7 @@ const RouteMapScreen = ({ navigation }) => {
       </View>
 
       {/* Embedded Interactive Leaflet Map (WebView on Android/iOS, iframe on Web) */}
-      <View style={styles.mapContainer}>
+      <View style={[styles.mapContainer, { height: mapHeight, maxWidth: isTablet ? 840 : '100%', alignSelf: 'center', width: isTablet ? '92%' : undefined }]}>
         {selectedItem && (
           <View style={styles.selectedRouteOverlay}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
@@ -859,7 +877,6 @@ const styles = StyleSheet.create({
     color: '#D97706',
   },
   mapContainer: {
-    height: SCREEN_HEIGHT * 0.32,
     marginHorizontal: SPACING.lg,
     marginTop: SPACING.xs,
     borderRadius: RADIUS.lg,
@@ -942,7 +959,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
+    minHeight: 38,
     borderRadius: RADIUS.sm,
   },
   trackBtnText: {
@@ -965,7 +983,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 8,
+    minHeight: 38,
     borderRadius: RADIUS.sm,
     borderWidth: 1,
   },

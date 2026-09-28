@@ -332,6 +332,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: RADIUS.xl,
     borderTopRightRadius: RADIUS.xl,
     maxHeight: '90%',
+    width: '100%',
+    maxWidth: 540,
+    alignSelf: 'center',
     paddingBottom: 24,
     ...SHADOWS.lg,
   },
@@ -353,6 +356,10 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     padding: 6,
+    minWidth: 36,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   infoBanner: {
     flexDirection: 'row',
@@ -412,8 +419,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 38,
     borderRadius: RADIUS.full,
     borderWidth: 1,
   },
@@ -425,6 +433,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    minHeight: 46,
     fontSize: FONTS.sizes.sm,
   },
   textArea: {
@@ -443,8 +452,10 @@ const styles = StyleSheet.create({
   routePill: {
     borderWidth: 1,
     borderRadius: RADIUS.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minHeight: 32,
+    justifyContent: 'center',
   },
   routePillText: {
     fontSize: 11,
@@ -465,8 +476,11 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
   },
   cancelBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 46,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   cancelBtnText: {
     fontSize: FONTS.sizes.sm,
@@ -475,9 +489,11 @@ const styles = StyleSheet.create({
   saveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    minHeight: 46,
     borderRadius: RADIUS.md,
   },
   saveBtnText: {
