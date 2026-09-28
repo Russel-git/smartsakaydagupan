@@ -24,20 +24,31 @@ const JEEPNEY_IMAGE = require('../../../assets/jeepney_perspective_driver.png');
 const FILIPINO_BOY_AVATAR = require('../../../assets/filipino_boy_avatar.png');
 
 /**
- * Isometric Z/Depth Highway Corridor:
- * Animates directly down along the isometric Z/depth axis (top-right to bottom-left)
- * - Start: Far background depth (top-right), small & faded (scale: 0.4, opacity: 0.2)
- * - Motion: Straight forward/downward toward the viewer along the isometric depth line
- * - End: Lower-center foreground, full size (scale: 1.10, opacity: 1.0) with slight drift finish
+ * Continuous S-Curve Highway Corridor Waypoints:
+ * Extends well off-screen above (y: -0.22) and below (y: 1.35)
+ * so the road is completely seamless with NO visible cutoffs or blunt edges on any device:
+ * - Starts above top-right offscreen (the far end)
+ * - Sweeps west across top forming the top-left crest
+ * - Cuts diagonally southeast across the screen center
+ * - Bends down along the right side
+ * - Sweeps back southwest into the front screen foreground and drifts to a stop
+ * - Continues past screen bottom for an uninterrupted realistic highway
  */
 const WAYPOINTS = [
-  { xOffset: +0.32, y: -0.10 }, // w0: Far background depth spawn
-  { xOffset: +0.26, y: 0.08 },  // w1: Background entrance
-  { xOffset: +0.18, y: 0.28 },  // w2: Mid-distance approach
-  { xOffset: +0.08, y: 0.48 },  // w3: Advancing forward toward viewer
-  { xOffset: -0.03, y: 0.68 },  // w4: Lower-center foreground finish / drift stop
-  { xOffset: -0.10, y: 0.88 },  // w5: Foreground road continuation
-  { xOffset: -0.18, y: 1.15 },  // w6: Past screen bottom
+  { xOffset: +0.24, y: -0.40 }, // w0: Far-end spawn control (above screen)
+  { xOffset: +0.20, y: -0.22 }, // w1: Seamless entrance point well above top
+  { xOffset: +0.16, y: -0.06 }, // w2: Smooth top-right entrance
+  { xOffset: -0.02, y: 0.08 },  // w3: Sweeps toward top-left
+  { xOffset: -0.26, y: 0.18 },  // w4: Top-left crest curve
+  { xOffset: -0.10, y: 0.30 },  // w5: Diagonal sweep southeast
+  { xOffset: +0.20, y: 0.44 },  // w6: Mid-right highway bend
+  { xOffset: +0.24, y: 0.58 },  // w7: Curves downward along right
+  { xOffset: +0.10, y: 0.72 },  // w8: Sweeps back southwest toward center
+  { xOffset: -0.04, y: 0.84 },  // w9: Front screen foreground stop position
+  { xOffset: -0.14, y: 0.98 },  // w10: Lower highway continuation
+  { xOffset: -0.20, y: 1.15 },  // w11: Crosses past screen bottom
+  { xOffset: -0.24, y: 1.35 },  // w12: Seamless exit point well below screen
+  { xOffset: -0.26, y: 1.55 },  // w13: End control point
 ];
 
 function catmullRom(p0, p1, p2, p3, t) {
@@ -89,16 +100,19 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
 
   const centerX = screenW * 0.5;
 
-  // Responsive highway proportions
+  // Broad, authentic highway proportions so lanes are spacious and realistic:
+  // - Phones: ~105px to 118px wide (each lane ~52px to 59px wide)
+  // - Tablets: ~135px to 155px wide (each lane ~67px to 77px wide)
   const ROAD_WIDTH = isTablet
-    ? Math.min(104, Math.max(82, Math.round((isLandscape ? screenH : screenW) * 0.10)))
-    : Math.min(80, Math.max(64, Math.round(screenW * 0.18)));
+    ? Math.min(150, Math.max(125, Math.round(screenW * 0.18)))
+    : Math.min(120, Math.max(100, Math.round(screenW * 0.28)));
 
-  // Exact Right Lane Center: exactly 1/4 of total road width
+  // Center of the Right Lane: exactly 1/4 of total road width
   const RIGHT_LANE_OFFSET = ROAD_WIDTH * 0.25;
 
-  // 3/4 Front-Side Perspective Jeepney Dimensions (427 x 294 aspect ratio)
-  const JEEP_W = isTablet ? 230 : Math.round(screenW * 0.44);
+  // 3/4 Front-Side Perspective Jeepney Dimensions (scaled to fit comfortably inside the lane)
+  // Track length ~95px on phone, with wheels fitting right inside the ~55px lane
+  const JEEP_W = isTablet ? 130 : Math.min(102, Math.max(88, Math.round(ROAD_WIDTH * 0.86)));
   const JEEP_H = Math.round(JEEP_W * (294 / 427));
 
   // SVG Highway Layer Proportions
@@ -120,9 +134,9 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
   }, [centerX, effectiveW, screenH]);
 
   const getPt = (globalT) => {
-    const n = absoluteWaypoints.length - 1;
-    const scaled = Math.max(0, Math.min(1, globalT)) * (n - 2);
-    const i = Math.min(Math.floor(scaled), n - 3);
+    const n = absoluteWaypoints.length - 1; // 13
+    const scaled = Math.max(0, Math.min(1, globalT)) * (n - 2); // 11
+    const i = Math.min(Math.floor(scaled), n - 3); // max 10
     const localT = scaled - i;
     return catmullRom(
       absoluteWaypoints[i],
@@ -133,9 +147,9 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
     );
   };
 
-  // 1. Generate full isometric highway centerline SVG path string
+  // 1. Generate seamless continuous S-curve highway centerline SVG path (120 smooth steps, no cuts or edges)
   const roadPathD = useMemo(() => {
-    const steps = 70;
+    const steps = 120;
     let d = '';
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
@@ -147,12 +161,13 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
     return d;
   }, [absoluteWaypoints]);
 
-  // 2. Trajectory along Isometric Z/Depth Axis (top-right to bottom-left):
-  // - Starts far in background depth (t=0.02, scale=0.40, opacity=0.20)
-  // - Drives straight forward/downward toward the viewer
-  // - Reaches lower-center foreground (t=0.75, scale=1.10, opacity=1.0) and drifts slightly
+  // 2. Trajectory with 3D perspective scale and stylish drift:
+  // - Starts at the far end (t=0.14, y ~ 0px, scale=0.32)
+  // - Follows the serpentine highway locked in the right lane
+  // - Approaches the foreground (t=0.70, y ~ 665px, scale=1.08)
+  // - Drifts into the stop position with counter-steer settle
   const { inputRange, outputRangeX, outputRangeY, outputRangeRot, outputRangeScale, stopPosition } = useMemo(() => {
-    const steps = 90;
+    const steps = 100;
     const inRange = [];
     const outX = [];
     const outY = [];
@@ -165,8 +180,8 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
       const progress = i / steps;
       inRange.push(progress);
 
-      // Map progress to road parameter [0.02..0.75] (stops in lower-center foreground)
-      const t = 0.02 + progress * 0.73;
+      // Map progress to road parameter [0.14..0.70] (starts offscreen top, finishes in front foreground)
+      const t = 0.14 + progress * (0.70 - 0.14);
 
       const dt = 0.005;
       const p1 = getPt(Math.max(0, t - dt));
@@ -177,35 +192,37 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
       const dy = p2.y - p1.y;
       const len = Math.hypot(dx, dy) || 1;
 
+      // Clockwise perpendicular normal pointing to the RIGHT of direction of travel:
       const nx = -dy / len;
       const ny = dx / len;
 
+      // Center of the right lane
       const laneX = p.x + nx * RIGHT_LANE_OFFSET;
       const laneY = p.y + ny * RIGHT_LANE_OFFSET;
 
-      // Realistic 3D perspective scale: 0.40x in the far distance up to 1.10x in the front foreground
-      const scale = 0.40 + 0.70 * Math.pow(progress, 1.35);
+      // Realistic 3D perspective scale: 0.32x at the far end to 1.08x at the front foreground
+      const scale = Number((0.32 + 0.76 * Math.pow(progress, 1.4)).toFixed(3));
 
-      // Orthographic isometric alignment:
-      // - Parallel edges kept orthographic with subtle chassis lean into curves (-2.5° to +2.5°)
-      // - Slight drift slip angle on final deceleration (-6.5° settling to -1.5°)
-      // - Keeps the grille, headlights, and front windshield clearly forward-facing at all times
+      // Drift physics:
+      // Driving phase: subtle banking tilt into curves (-5° to +5°)
+      // Drift into foreground: rear kicks out into stylish drift angle (-15°) and counter-steer settles (-3°)
       let driftAngle = 0;
-      if (progress <= 0.75) {
-        driftAngle = Math.max(-2.5, Math.min(2.5, (dx / len) * 3.5));
+      if (progress <= 0.78) {
+        driftAngle = Math.max(-5, Math.min(5, (dx / len) * 7));
       } else {
-        const dP = (progress - 0.75) / 0.25;
-        if (dP < 0.6) {
-          driftAngle = -2.5 - 4.0 * (dP / 0.6); // slight drift tilt to -6.5°
+        const dP = (progress - 0.78) / 0.22;
+        if (dP < 0.55) {
+          driftAngle = -5 - 10 * (dP / 0.55); // Kicks out into drift
         } else {
-          driftAngle = -6.5 + 5.0 * ((dP - 0.6) / 0.4); // counter-steer settle to -1.5°
+          driftAngle = -15 + 12 * ((dP - 0.55) / 0.45); // Counter-steer and settle into parked stance
         }
       }
 
-      outX.push(laneX - JEEP_W / 2);
-      outY.push(laneY - JEEP_H / 2);
+      // Wheel contact anchor: places tires directly on the asphalt of the right lane
+      outX.push(laneX - JEEP_W * 0.50);
+      outY.push(laneY - JEEP_H * 0.78);
       outRot.push(`${driftAngle.toFixed(1)}deg`);
-      outScale.push(Number(scale.toFixed(3)));
+      outScale.push(scale);
 
       if (i === steps) {
         finalStop = { x: laneX, y: laneY };
@@ -221,7 +238,6 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
       stopPosition: finalStop,
     };
   }, [absoluteWaypoints, RIGHT_LANE_OFFSET, JEEP_W, JEEP_H]);
-
 
   const translateX = animProgress.interpolate({
     inputRange,
@@ -243,39 +259,16 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
     outputRange: outputRangeScale,
   });
 
-  // Depth effects: start faded/lower contrast (opacity 0.20) in distance, full vibrant contrast in foreground
-  const jeepOpacity = animProgress.interpolate({
-    inputRange: [0, 0.25, 0.65, 1.0],
-    outputRange: [0.20, 0.60, 0.92, 1.0],
-  });
-
-  // Dynamic ground drop shadow: faint and small in background, expanding and dark under tires in foreground
-  const shadowOpacity = animProgress.interpolate({
-    inputRange: [0, 0.35, 1.0],
-    outputRange: [0.15, 0.35, 0.60],
-  });
-
-  const shadowScaleX = animProgress.interpolate({
-    inputRange: [0, 1.0],
-    outputRange: [0.85, 1.15],
-  });
-
-  const shadowScaleY = animProgress.interpolate({
-    inputRange: [0, 1.0],
-    outputRange: [0.70, 1.10],
-  });
-
   useEffect(() => {
-    // 5.0 seconds total realistic sequence:
-    // Phase 1 (0.0s - 3.2s): Drives from far end to front, weight deceleration curve cubic-bezier(0.25, 1, 0.5, 1)
+    // Phase 1 (0.0s - 6.0s): Slow, controlled 6-second realistic drive down S-curve with stylish drift stop
     Animated.timing(animProgress, {
       toValue: 1.0,
-      duration: 3200,
-      easing: Easing.bezier(0.25, 1.0, 0.5, 1.0), // Natural weighty approach deceleration
+      duration: 6000,
+      easing: Easing.bezier(0.22, 0.05, 0.25, 1.0), // Smooth start, controlled cruise, braking drift
       useNativeDriver: false,
     }).start(({ finished }) => {
       if (finished && !hasFinishedRef.current) {
-        // Phase 2 (3.2s - 4.6s): Boy avatar waves + "Tara na! Sakay na!" speech bubble springs in
+        // Phase 2 (6.0s - 7.5s): Boy avatar waves + "Tara na! Sakay na!" speech bubble springs in
         Animated.parallel([
           Animated.spring(bubbleAnim, {
             toValue: 1,
@@ -284,27 +277,27 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
             useNativeDriver: false,
           }),
           Animated.sequence([
-            Animated.timing(waveAnim, { toValue: 1, duration: 220, useNativeDriver: false }),
-            Animated.timing(waveAnim, { toValue: -1, duration: 220, useNativeDriver: false }),
-            Animated.timing(waveAnim, { toValue: 1, duration: 220, useNativeDriver: false }),
-            Animated.timing(waveAnim, { toValue: -0.4, duration: 220, useNativeDriver: false }),
-            Animated.timing(waveAnim, { toValue: 0, duration: 220, useNativeDriver: false }),
+            Animated.timing(waveAnim, { toValue: 1, duration: 240, useNativeDriver: false }),
+            Animated.timing(waveAnim, { toValue: -1, duration: 240, useNativeDriver: false }),
+            Animated.timing(waveAnim, { toValue: 1, duration: 240, useNativeDriver: false }),
+            Animated.timing(waveAnim, { toValue: -0.4, duration: 240, useNativeDriver: false }),
+            Animated.timing(waveAnim, { toValue: 0, duration: 240, useNativeDriver: false }),
           ]),
         ]).start();
 
-        // Phase 3 (4.6s - 5.0s): Seamless crossfade into landing page
+        // Phase 3 (7.5s - 7.9s): Seamless crossfade into landing page
         finishTimeoutRef.current = setTimeout(() => {
           triggerTransition();
-        }, 1400);
+        }, 1500);
       }
     });
 
-    // Drift effects trigger around 2150ms (when progress enters the deceleration drift phase)
+    // Drift effects trigger at ~4800ms (when progress enters the drift phase at ~80%)
     const driftTimeout = setTimeout(() => {
       // Fade in tire skid marks on the road
       Animated.timing(skidOpacityAnim, {
         toValue: 1,
-        duration: 400,
+        duration: 500,
         useNativeDriver: false,
       }).start();
 
@@ -312,18 +305,18 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
       Animated.sequence([
         Animated.timing(driftSmokeAnim, {
           toValue: 1,
-          duration: 450,
+          duration: 500,
           easing: Easing.out(Easing.quad),
           useNativeDriver: false,
         }),
         Animated.timing(driftSmokeAnim, {
           toValue: 2,
-          duration: 550,
+          duration: 700,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: false,
         }),
       ]).start();
-    }, 2150);
+    }, 4850);
 
     return () => {
       clearTimeout(driftTimeout);
@@ -374,12 +367,12 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
   const rightSkip = Math.max(insets.right, 20);
 
   // Responsive speech bubble dimensions and positioning directly above stopped vehicle
-  const bubbleW = isTablet ? 310 : 260;
-  const bubbleH = isTablet ? 98 : 86;
+  const bubbleW = isTablet ? 300 : 250;
+  const bubbleH = isTablet ? 96 : 82;
   const bubbleLeft = Math.max(16, Math.min(screenW - bubbleW - 16, stopPosition.x - bubbleW / 2));
   const bubbleTop = Math.max(
     topSkip + 44,
-    stopPosition.y - JEEP_H / 2 - bubbleH - (isTablet ? 30 : 22)
+    stopPosition.y - JEEP_H * 0.78 - bubbleH - (isTablet ? 26 : 18)
   );
 
   // Drift smoke puff animations
@@ -424,7 +417,7 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
           resizeMode="cover"
         />
 
-        {/* Layer 2: Mathematically Exact 2-Lane Highway with S-Curve Pattern */}
+        {/* Layer 2: Mathematically Exact 2-Lane Highway with S-Curve Pattern (Seamless Top to Bottom) */}
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <Svg
             width="100%"
@@ -521,31 +514,30 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
           >
             {/* Outer Rear Tire Skid Mark */}
             <Path
-              d={`M ${stopPosition.x + 18} ${stopPosition.y - 28} Q ${stopPosition.x + 44} ${stopPosition.y + 4}, ${stopPosition.x + 36} ${stopPosition.y + 24}`}
+              d={`M ${stopPosition.x + 14} ${stopPosition.y - 24} Q ${stopPosition.x + 36} ${stopPosition.y + 2}, ${stopPosition.x + 28} ${stopPosition.y + 18}`}
               stroke="rgba(15, 23, 42, 0.40)"
-              strokeWidth={isTablet ? 7 : 5}
+              strokeWidth={isTablet ? 6 : 4.5}
               fill="none"
               strokeLinecap="round"
             />
             {/* Inner Front Tire Skid Mark */}
             <Path
-              d={`M ${stopPosition.x - 14} ${stopPosition.y - 20} Q ${stopPosition.x + 12} ${stopPosition.y + 10}, ${stopPosition.x + 4} ${stopPosition.y + 28}`}
+              d={`M ${stopPosition.x - 12} ${stopPosition.y - 18} Q ${stopPosition.x + 8} ${stopPosition.y + 8}, ${stopPosition.x + 2} ${stopPosition.y + 22}`}
               stroke="rgba(15, 23, 42, 0.35)"
-              strokeWidth={isTablet ? 7 : 5}
+              strokeWidth={isTablet ? 6 : 4.5}
               fill="none"
               strokeLinecap="round"
             />
           </Svg>
         </Animated.View>
 
-        {/* Layer 4: Front-to-Side Perspective Philippine Flag Jeepney */}
+        {/* Layer 4: Front-to-Side Perspective Philippine Flag Jeepney Riding on the RIGHT Lane */}
         <Animated.View
           style={[
             styles.jeepneyWrapper,
             {
               width: JEEP_W,
               height: JEEP_H,
-              opacity: jeepOpacity,
               transform: [
                 { translateX },
                 { translateY },
@@ -556,20 +548,6 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
           ]}
           pointerEvents="none"
         >
-          {/* Dynamic Ground Contact Drop Shadow under the tires */}
-          <Animated.View
-            style={[
-              styles.jeepneyGroundShadow,
-              {
-                opacity: shadowOpacity,
-                transform: [
-                  { scaleX: shadowScaleX },
-                  { scaleY: shadowScaleY },
-                ],
-              },
-            ]}
-          />
-
           {/* Front-to-side perspective jeepney body with boy driving inside cabin */}
           <Image
             source={JEEPNEY_IMAGE}
@@ -590,10 +568,9 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
               },
             ]}
           >
-            <Text style={[styles.smokeEmoji, { fontSize: isTablet ? 30 : 24 }]}>💨</Text>
+            <Text style={[styles.smokeEmoji, { fontSize: isTablet ? 26 : 20 }]}>💨</Text>
           </Animated.View>
         </Animated.View>
-
 
         {/* Layer 5: Interactive Comic Speech Bubble ("Tara na! Sakay na!") & Filipino Boy Graphic */}
         <Animated.View
@@ -638,9 +615,9 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
               style={[
                 styles.driverBadgeImage,
                 {
-                  width: isTablet ? 60 : 50,
-                  height: isTablet ? 60 : 50,
-                  borderRadius: isTablet ? 30 : 25,
+                  width: isTablet ? 56 : 46,
+                  height: isTablet ? 56 : 46,
+                  borderRadius: isTablet ? 28 : 23,
                 },
               ]}
               resizeMode="cover"
@@ -657,7 +634,7 @@ const JeepneyIntroOverlay = ({ onFinish }) => {
               <Text style={styles.speechBubbleSpeaker}>KUYA DRIVER</Text>
               <Text style={styles.speechBubbleLocation}>• DAGUPAN</Text>
             </View>
-            <Text style={[styles.speechBubbleMainText, { fontSize: isTablet ? 17 : 15 }]}>
+            <Text style={[styles.speechBubbleMainText, { fontSize: isTablet ? 16 : 14.5 }]}>
               Tara na! Sakay na!
             </Text>
             <Text style={styles.speechBubbleSubText}>
@@ -725,20 +702,6 @@ const styles = StyleSheet.create({
   jeepneyImage: {
     width: '100%',
     height: '100%',
-  },
-  jeepneyGroundShadow: {
-    position: 'absolute',
-    bottom: -4,
-    left: '8%',
-    width: '84%',
-    height: 18,
-    borderRadius: 12,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-    elevation: 6,
   },
   driftSmokePuff: {
     position: 'absolute',
@@ -866,4 +829,5 @@ const styles = StyleSheet.create({
 });
 
 export default JeepneyIntroOverlay;
+
 
