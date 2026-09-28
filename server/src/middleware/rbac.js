@@ -5,10 +5,10 @@ const rbac = (...allowedRoles) => {
     if (!req.user) {
       return apiResponse.error(res, 'Authentication required.', 401);
     }
-    if (!allowedRoles.includes(req.user.role)) {
-      return apiResponse.error(res, 'You do not have permission to access this resource.', 403);
+    if (req.user.role === 'superadmin' || allowedRoles.includes(req.user.role)) {
+      return next();
     }
-    next();
+    return apiResponse.error(res, 'You do not have permission to access this resource.', 403);
   };
 };
 
