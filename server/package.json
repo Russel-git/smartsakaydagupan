@@ -9,7 +9,10 @@
     "test": "jest --forceExit --detectOpenHandles",
     "test:security": "jest tests/security.test.js --forceExit",
     "seed": "node src/seeds/index.js",
-    "db:users": "node scripts/viewUsers.js"
+    "db:users": "node scripts/viewUsers.js",
+    "db:export": "node scripts/export-database.js",
+    "db:import": "node scripts/import-database.js",
+    "db:view": "node scripts/viewDatabase.js"
   },
   "keywords": [],
   "author": "",

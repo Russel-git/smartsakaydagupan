@@ -10,6 +10,9 @@
     "build": "npm run build:admin",
     "build:admin": "cd admin && npm run build",
     "seed": "cd server && node src/seeds/index.js",
+    "db:import": "cd server && npm run db:import",
+    "db:view": "cd server && npm run db:view",
+    "db:export": "cd server && npm run db:export",
     "test:server": "cd server && npm test"
   },
   "keywords": ["dagupan", "commuter", "jeepney", "fare", "ltfrb"],
