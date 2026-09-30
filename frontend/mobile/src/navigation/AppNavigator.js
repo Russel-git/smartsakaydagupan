@@ -1,51 +1,58 @@
-import React from 'react';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
-import { useNotifications } from '../contexts/NotificationContext';
-import { LoadingSpinner, Badge } from '../components/common/SharedComponents';
-import { View } from 'react-native';
+import React from "react";
+import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
+import { createStackNavigator } from "@react-navigation/stack";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
+import { useNotifications } from "../contexts/NotificationContext";
+import { LoadingSpinner, Badge } from "../components/common/SharedComponents";
+import { View } from "react-native";
+
+// Landing Page Screens
+import WelcomeScreen from "../screens/landing_page/WelcomeScreen";
+import GetStartedScreen from "../screens/landing_page/GetStartedScreen";
 
 // Auth screens
-import WelcomeScreen from '../screens/auth/WelcomeScreen';
-import LoginScreen from '../screens/auth/LoginScreen';
-import RegisterScreen from '../screens/auth/RegisterScreen';
-import OtpScreen from '../screens/auth/OtpScreen';
-import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
+import LoginScreen from "../screens/auth/LoginScreen";
+import RegisterScreen from "../screens/auth/RegisterScreen";
+import OtpScreen from "../screens/auth/OtpScreen";
+import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
 
 // Main screens
-import HomeScreen from '../screens/home/HomeScreen';
-import RoutesAndFaresScreen from '../screens/routes/RoutesAndFaresScreen';
-import RouteDetailScreen from '../screens/map/RouteDetailScreen';
-import FareMatrixScreen from '../screens/fare/FareMatrixScreen';
-import PinpointFareScreen from '../screens/fare/PinpointFareScreen';
-import RideTrackerScreen from '../screens/ride/RideTrackerScreen';
-import RideHistoryScreen from '../screens/ride/RideHistoryScreen';
-import AssistantScreen from '../screens/assistant/AssistantScreen';
-import WeatherScreen from '../screens/weather/WeatherScreen';
-import ComplaintsListScreen from '../screens/complaints/ComplaintsListScreen';
-import SubmitComplaintScreen from '../screens/complaints/SubmitComplaintScreen';
-import ComplaintDetailScreen from '../screens/complaints/ComplaintDetailScreen';
-import NotificationsScreen from '../screens/notifications/NotificationsScreen';
-import ProfileScreen from '../screens/profile/ProfileScreen';
-import ChangePasswordScreen from '../screens/profile/ChangePasswordScreen';
-import CommuterRightsScreen from '../screens/profile/CommuterRightsScreen';
-import GuestProfileScreen from '../screens/profile/GuestProfileScreen';
+import HomeScreen from "../screens/home/HomeScreen";
+import RoutesAndFaresScreen from "../screens/routes/RoutesAndFaresScreen";
+import RouteDetailScreen from "../screens/map/RouteDetailScreen";
+import FareMatrixScreen from "../screens/fare/FareMatrixScreen";
+import PinpointFareScreen from "../screens/fare/PinpointFareScreen";
+import RideTrackerScreen from "../screens/ride/RideTrackerScreen";
+import RideHistoryScreen from "../screens/ride/RideHistoryScreen";
+import AssistantScreen from "../screens/assistant/AssistantScreen";
+import WeatherScreen from "../screens/weather/WeatherScreen";
+import ComplaintsListScreen from "../screens/complaints/ComplaintsListScreen";
+import SubmitComplaintScreen from "../screens/complaints/SubmitComplaintScreen";
+import ComplaintDetailScreen from "../screens/complaints/ComplaintDetailScreen";
+import NotificationsScreen from "../screens/notifications/NotificationsScreen";
+import ProfileScreen from "../screens/profile/ProfileScreen";
+import ChangePasswordScreen from "../screens/profile/ChangePasswordScreen";
+import CommuterRightsScreen from "../screens/profile/CommuterRightsScreen";
+import GuestProfileScreen from "../screens/profile/GuestProfileScreen";
 
 // Admin screens
-import AdminPanelScreen from '../screens/admin/AdminPanelScreen';
-import SendNotificationScreen from '../screens/admin/SendNotificationScreen';
+import AdminPanelScreen from "../screens/admin/AdminPanelScreen";
+import SendNotificationScreen from "../screens/admin/SendNotificationScreen";
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // Auth Stack
-const AuthStack = ({ initialRouteName = 'Welcome' }) => (
-  <Stack.Navigator initialRouteName={initialRouteName} screenOptions={{ headerShown: false }}>
+const AuthStack = ({ initialRouteName = "Welcome" }) => (
+  <Stack.Navigator
+    initialRouteName={initialRouteName}
+    screenOptions={{ headerShown: false }}
+  >
     <Stack.Screen name="Welcome" component={WelcomeScreen} />
+    <Stack.Screen name="GetStarted" component={GetStartedScreen} />
     <Stack.Screen name="Login" component={LoginScreen} />
     <Stack.Screen name="Register" component={RegisterScreen} />
     <Stack.Screen name="Otp" component={OtpScreen} />
@@ -57,14 +64,46 @@ const AuthStack = ({ initialRouteName = 'Welcome' }) => (
 const HomeStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="HomeMain" component={HomeScreen} />
-    <Stack.Screen name="Weather" component={WeatherScreen} options={{ headerShown: true, title: 'Dagupan Weather & Flood Advisory' }} />
-    <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: true, title: 'Notifications' }} />
-    <Stack.Screen name="CommuterRights" component={CommuterRightsScreen} options={{ headerShown: true, title: 'Commuter Rights' }} />
-    <Stack.Screen name="ComplaintsList" component={ComplaintsListScreen} options={{ headerShown: true, title: 'My Complaints' }} />
-    <Stack.Screen name="SubmitComplaint" component={SubmitComplaintScreen} options={{ headerShown: true, title: 'Report Grievance' }} />
-    <Stack.Screen name="ComplaintDetail" component={ComplaintDetailScreen} options={{ headerShown: true, title: 'Complaint Details' }} />
-    <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ headerShown: true, title: 'Change Password' }} />
-    <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ headerShown: true, title: 'Reset Password' }} />
+    <Stack.Screen
+      name="Weather"
+      component={WeatherScreen}
+      options={{ headerShown: true, title: "Dagupan Weather & Flood Advisory" }}
+    />
+    <Stack.Screen
+      name="Notifications"
+      component={NotificationsScreen}
+      options={{ headerShown: true, title: "Notifications" }}
+    />
+    <Stack.Screen
+      name="CommuterRights"
+      component={CommuterRightsScreen}
+      options={{ headerShown: true, title: "Commuter Rights" }}
+    />
+    <Stack.Screen
+      name="ComplaintsList"
+      component={ComplaintsListScreen}
+      options={{ headerShown: true, title: "My Complaints" }}
+    />
+    <Stack.Screen
+      name="SubmitComplaint"
+      component={SubmitComplaintScreen}
+      options={{ headerShown: true, title: "Report Grievance" }}
+    />
+    <Stack.Screen
+      name="ComplaintDetail"
+      component={ComplaintDetailScreen}
+      options={{ headerShown: true, title: "Complaint Details" }}
+    />
+    <Stack.Screen
+      name="ChangePassword"
+      component={ChangePasswordScreen}
+      options={{ headerShown: true, title: "Change Password" }}
+    />
+    <Stack.Screen
+      name="ForgotPassword"
+      component={ForgotPasswordScreen}
+      options={{ headerShown: true, title: "Reset Password" }}
+    />
   </Stack.Navigator>
 );
 
@@ -72,11 +111,31 @@ const HomeStack = () => (
 const RoutesAndFaresStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="RoutesAndFaresMain" component={RoutesAndFaresScreen} />
-    <Stack.Screen name="RouteDetail" component={RouteDetailScreen} options={{ headerShown: true, title: 'Route Details' }} />
-    <Stack.Screen name="FareMatrix" component={FareMatrixScreen} options={{ headerShown: true, title: 'Fare Matrix' }} />
-    <Stack.Screen name="RideHistory" component={RideHistoryScreen} options={{ headerShown: true, title: 'Ride History' }} />
-    <Stack.Screen name="RideTracker" component={RideTrackerScreen} options={{ headerShown: true, title: 'Jeepney Live Tracker' }} />
-    <Stack.Screen name="PinpointFare" component={PinpointFareScreen} options={{ headerShown: true, title: 'Solo Ride / Visitor' }} />
+    <Stack.Screen
+      name="RouteDetail"
+      component={RouteDetailScreen}
+      options={{ headerShown: true, title: "Route Details" }}
+    />
+    <Stack.Screen
+      name="FareMatrix"
+      component={FareMatrixScreen}
+      options={{ headerShown: true, title: "Fare Matrix" }}
+    />
+    <Stack.Screen
+      name="RideHistory"
+      component={RideHistoryScreen}
+      options={{ headerShown: true, title: "Ride History" }}
+    />
+    <Stack.Screen
+      name="RideTracker"
+      component={RideTrackerScreen}
+      options={{ headerShown: true, title: "Jeepney Live Tracker" }}
+    />
+    <Stack.Screen
+      name="PinpointFare"
+      component={PinpointFareScreen}
+      options={{ headerShown: true, title: "Solo Ride / Visitor" }}
+    />
   </Stack.Navigator>
 );
 
@@ -84,15 +143,51 @@ const RoutesAndFaresStack = () => (
 const MoreStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Profile" component={ProfileScreen} />
-    <Stack.Screen name="RideHistory" component={RideHistoryScreen} options={{ headerShown: true, title: 'Ride History' }} />
-    <Stack.Screen name="ComplaintsList" component={ComplaintsListScreen} options={{ headerShown: true, title: 'My Complaints' }} />
-    <Stack.Screen name="SubmitComplaint" component={SubmitComplaintScreen} options={{ headerShown: true, title: 'Report Complaint' }} />
-    <Stack.Screen name="ComplaintDetail" component={ComplaintDetailScreen} options={{ headerShown: true, title: 'Complaint Details' }} />
-    <Stack.Screen name="CommuterRights" component={CommuterRightsScreen} options={{ headerShown: true, title: 'Commuter Rights' }} />
-    <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ headerShown: true, title: 'Change Password' }} />
-    <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ headerShown: true, title: 'Reset Password' }} />
-    <Stack.Screen name="AdminPanel" component={AdminPanelScreen} options={{ headerShown: true, title: 'Admin Panel' }} />
-    <Stack.Screen name="SendNotification" component={SendNotificationScreen} options={{ headerShown: true, title: 'Send Notification' }} />
+    <Stack.Screen
+      name="RideHistory"
+      component={RideHistoryScreen}
+      options={{ headerShown: true, title: "Ride History" }}
+    />
+    <Stack.Screen
+      name="ComplaintsList"
+      component={ComplaintsListScreen}
+      options={{ headerShown: true, title: "My Complaints" }}
+    />
+    <Stack.Screen
+      name="SubmitComplaint"
+      component={SubmitComplaintScreen}
+      options={{ headerShown: true, title: "Report Complaint" }}
+    />
+    <Stack.Screen
+      name="ComplaintDetail"
+      component={ComplaintDetailScreen}
+      options={{ headerShown: true, title: "Complaint Details" }}
+    />
+    <Stack.Screen
+      name="CommuterRights"
+      component={CommuterRightsScreen}
+      options={{ headerShown: true, title: "Commuter Rights" }}
+    />
+    <Stack.Screen
+      name="ChangePassword"
+      component={ChangePasswordScreen}
+      options={{ headerShown: true, title: "Change Password" }}
+    />
+    <Stack.Screen
+      name="ForgotPassword"
+      component={ForgotPasswordScreen}
+      options={{ headerShown: true, title: "Reset Password" }}
+    />
+    <Stack.Screen
+      name="AdminPanel"
+      component={AdminPanelScreen}
+      options={{ headerShown: true, title: "Admin Panel" }}
+    />
+    <Stack.Screen
+      name="SendNotification"
+      component={SendNotificationScreen}
+      options={{ headerShown: true, title: "Send Notification" }}
+    />
   </Stack.Navigator>
 );
 
@@ -112,15 +207,21 @@ const GuestTabs = () => {
           paddingTop: 4,
           height: 58,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
         tabBarIcon: ({ color, size }) => {
           const icons = {
-            Home: 'home',
-            RoutesAndFares: 'routes',
-            Assistant: 'robot',
-            Account: 'account-outline',
+            Home: "home",
+            RoutesAndFares: "routes",
+            Assistant: "robot",
+            Account: "account-outline",
           };
-          return <MaterialCommunityIcons name={icons[route.name]} size={size} color={color} />;
+          return (
+            <MaterialCommunityIcons
+              name={icons[route.name]}
+              size={size}
+              color={color}
+            />
+          );
         },
       })}
     >
@@ -128,7 +229,7 @@ const GuestTabs = () => {
       <Tab.Screen
         name="RoutesAndFares"
         component={RoutesAndFaresStack}
-        options={{ title: 'Routes & Fares' }}
+        options={{ title: "Routes & Fares" }}
       />
       <Tab.Screen name="Assistant" component={AssistantScreen} />
       <Tab.Screen name="Account" component={GuestProfileScreen} />
@@ -154,18 +255,22 @@ const MainTabs = () => {
           paddingTop: 4,
           height: 58,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
         tabBarIcon: ({ color, size }) => {
           const icons = {
-            Home: 'home',
-            RoutesAndFares: 'routes',
-            Assistant: 'robot',
-            More: 'menu',
+            Home: "home",
+            RoutesAndFares: "routes",
+            Assistant: "robot",
+            More: "menu",
           };
           return (
             <View>
-              <MaterialCommunityIcons name={icons[route.name]} size={size} color={color} />
-              {route.name === 'More' && <Badge count={unreadCount} />}
+              <MaterialCommunityIcons
+                name={icons[route.name]}
+                size={size}
+                color={color}
+              />
+              {route.name === "More" && <Badge count={unreadCount} />}
             </View>
           );
         },
@@ -175,7 +280,7 @@ const MainTabs = () => {
       <Tab.Screen
         name="RoutesAndFares"
         component={RoutesAndFaresStack}
-        options={{ title: 'Routes & Fares' }}
+        options={{ title: "Routes & Fares" }}
       />
       <Tab.Screen name="Assistant" component={AssistantScreen} />
       <Tab.Screen name="More" component={MoreStack} />
@@ -205,10 +310,10 @@ const AppNavigator = () => {
       notification: colors.error,
     },
     fonts: DefaultTheme?.fonts || {
-      regular: { fontFamily: 'System', fontWeight: '400' },
-      medium: { fontFamily: 'System', fontWeight: '500' },
-      bold: { fontFamily: 'System', fontWeight: '700' },
-      heavy: { fontFamily: 'System', fontWeight: '900' },
+      regular: { fontFamily: "System", fontWeight: "400" },
+      medium: { fontFamily: "System", fontWeight: "500" },
+      bold: { fontFamily: "System", fontWeight: "700" },
+      heavy: { fontFamily: "System", fontWeight: "900" },
     },
   };
 
@@ -219,7 +324,7 @@ const AppNavigator = () => {
       ) : isGuest ? (
         <GuestTabs />
       ) : (
-        <AuthStack initialRouteName={initialAuthScreen || 'Welcome'} />
+        <AuthStack initialRouteName={initialAuthScreen || "Welcome"} />
       )}
     </NavigationContainer>
   );
