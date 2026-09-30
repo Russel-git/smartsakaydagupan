@@ -90,3 +90,8 @@ export const adminAPI = {
   getStats: () => apiClient.get("/admin/stats"),
   getActivity: () => apiClient.get("/admin/activity"),
 };
+
+export const themeAPI = {
+  getTheme: () => apiClient.get("/theme/"),
+  updateTheme: (theme) => apiClient.patch("/theme", { theme }),
+};

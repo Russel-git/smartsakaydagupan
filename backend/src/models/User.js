@@ -1,38 +1,43 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 
 const userSchema = new mongoose.Schema(
   {
     email: {
       type: String,
-      required: [true, 'Email is required'],
+      required: [true, "Email is required"],
       unique: true,
       lowercase: true,
       trim: true,
     },
     passwordHash: {
       type: String,
-      required: [true, 'Password is required'],
+      required: [true, "Password is required"],
     },
     firstName: {
       type: String,
-      required: [true, 'First name is required'],
+      required: [true, "First name is required"],
       trim: true,
     },
     lastName: {
       type: String,
-      required: [true, 'Last name is required'],
+      required: [true, "Last name is required"],
       trim: true,
     },
     suffix: {
       type: String,
       trim: true,
-      default: '',
+      default: "",
     },
     role: {
       type: String,
-      enum: ['superadmin', 'admin', 'lgu', 'commuter', 'guest'],
-      default: 'commuter',
+      enum: ["superadmin", "admin", "lgu", "commuter", "guest"],
+      default: "commuter",
+    },
+    theme: {
+      type: String,
+      enum: ["theme1", "theme2", "theme3", "theme4"],
+      default: "theme1",
     },
     isVerified: {
       type: Boolean,
@@ -63,11 +68,11 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-userSchema.pre('save', async function () {
-  if (!this.isModified('passwordHash')) return;
+userSchema.pre("save", async function () {
+  if (!this.isModified("passwordHash")) return;
   const salt = await bcrypt.genSalt(12);
   this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
 });
@@ -84,4 +89,4 @@ userSchema.methods.toJSON = function () {
   return obj;
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model("User", userSchema);

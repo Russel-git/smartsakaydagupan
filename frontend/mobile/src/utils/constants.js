@@ -1,5 +1,6 @@
 // SmartSakay Dagupan — Design System Constants
 import { Platform, NativeModules } from "react-native";
+import { getThemeColors } from "./themePalettes";
 
 const getDevServerIp = () => {
   if (Platform.OS === "web") return "localhost";
@@ -23,60 +24,14 @@ const getDevServerIp = () => {
 
 const DEV_IP = getDevServerIp();
 
+export const COLORS = getThemeColors("theme1");
+
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ||
   Platform.select({
     web: "http://localhost:5000/api",
     default: `http://${DEV_IP}:5000/api`,
   });
-
-export const COLORS = {
-  // Primary palette — GoBus-inspired Orange
-  primary: "#f97316",
-  primaryLight: "#ffedd5",
-  primaryDark: "#c2550f",
-
-  // Secondary
-  secondary: "#22c55e",
-  secondaryLight: "#dcfce7",
-  secondaryDark: "#15803d",
-
-  // Accent
-  accent: "#3b82f6",
-  accentLight: "#dbeafe",
-  accentDark: "#1d4ed8",
-
-  // Semantic
-  error: "#ef4444",
-  errorLight: "#fee2e2",
-  warning: "#f59e0b",
-  warningLight: "#fef3c7",
-  success: "#22c55e",
-  successLight: "#dcfce7",
-  info: "#3b82f6",
-  infoLight: "#dbeafe",
-
-  // Neutral — clean light theme
-  white: "#FFFFFF",
-  background: "#f5f6fa",
-  surface: "#FFFFFF",
-  border: "#e5e7eb",
-  textPrimary: "#111827",
-  textSecondary: "#374151",
-  textMuted: "#6b7280",
-  disabled: "#d1d5db",
-
-  // Dark mode
-  dark: {
-    background: "#0F172A",
-    surface: "#1E293B",
-    surfaceElevated: "#334155",
-    border: "#334155",
-    textPrimary: "#F8FAFC",
-    textSecondary: "#94A3B8",
-    textMuted: "#64748B",
-  },
-};
 
 export const FONTS = {
   regular: "System",

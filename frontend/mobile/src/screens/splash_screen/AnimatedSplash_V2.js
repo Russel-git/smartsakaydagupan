@@ -591,7 +591,7 @@ export default function AnimatedSplashV2({ onFinish }) {
 
             <Path
               d={roadPath}
-              stroke={colors.secondary}
+              stroke={"white"}
               strokeWidth={3}
               strokeDasharray="15 18"
               fill="none"
