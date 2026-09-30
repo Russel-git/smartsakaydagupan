@@ -3,19 +3,31 @@
   "version": "1.0.0",
   "private": true,
   "description": "SmartSakay Dagupan - Commuter Application for Dagupan City",
+  "workspaces": [
+    "backend",
+    "frontend/admin",
+    "frontend/mobile"
+  ],
   "scripts": {
-    "dev:server": "cd server && npm run dev",
-    "dev:admin": "cd admin && npm run dev",
-    "dev:mobile": "cd mobile && npm start",
+    "install:all": "npm install",
+    "dev:server": "npm --workspace backend run dev",
+    "dev:admin": "npm --workspace frontend/admin run dev",
+    "dev:mobile": "npm --workspace frontend/mobile start",
     "build": "npm run build:admin",
-    "build:admin": "cd admin && npm run build",
-    "seed": "cd server && node src/seeds/index.js",
-    "db:import": "cd server && npm run db:import",
-    "db:view": "cd server && npm run db:view",
-    "db:export": "cd server && npm run db:export",
-    "test:server": "cd server && npm test"
+    "build:admin": "npm --workspace frontend/admin run build",
+    "seed": "npm --workspace backend run seed",
+    "db:import": "npm --workspace backend run db:import",
+    "db:view": "npm --workspace backend run db:view",
+    "db:export": "npm --workspace backend run db:export",
+    "test:server": "npm --workspace backend test"
   },
-  "keywords": ["dagupan", "commuter", "jeepney", "fare", "ltfrb"],
+  "keywords": [
+    "dagupan",
+    "commuter",
+    "jeepney",
+    "fare",
+    "ltfrb"
+  ],
   "author": "",
   "license": "MIT"
 }
