@@ -1,4 +1,4 @@
-import React from "react";
+import { useState } from "react";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -8,6 +8,9 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useNotifications } from "../contexts/NotificationContext";
 import { LoadingSpinner, Badge } from "../components/common/SharedComponents";
 import { View } from "react-native";
+
+// Splash Screen
+import AnimatedIntroScreen from "../screens/splash_screen/AnimatedIntroScreen";
 
 // Landing Page Screens
 import WelcomeScreen from "../screens/landing_page/WelcomeScreen";
@@ -292,6 +295,12 @@ const MainTabs = () => {
 const AppNavigator = () => {
   const { user, isLoading, isGuest, initialAuthScreen } = useAuth();
   const { colors } = useTheme();
+
+  const [showIntro, setShowIntro] = useState(true);
+
+  if (showIntro) {
+    return <AnimatedIntroScreen onFinish={() => setShowIntro(false)} />;
+  }
 
   if (isLoading) {
     return <LoadingSpinner text="Loading SmartSakay..." />;
