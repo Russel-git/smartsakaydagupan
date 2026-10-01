@@ -66,7 +66,7 @@ export const complaintsAPI = {
 };
 
 export const assistantAPI = {
-  chat: (data) => apiClient.post("/assistant/chat", data),
+  chat: (data) => apiClient.post("/assistant/chat", data, { timeout: 300000 }),
   getHistoryList: () => apiClient.get("/assistant/history"),
   getHistory: (sessionId) => apiClient.get(`/assistant/history/${sessionId}`),
   clearHistory: () => apiClient.delete("/assistant/history"),

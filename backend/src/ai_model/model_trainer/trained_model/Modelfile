@@ -1,0 +1,24 @@
+FROM ./phi-3-mini-4k-instruct.Q4_K_M.gguf
+
+TEMPLATE """{{- if .System }}
+<|system|>
+{{ .System }}<|end|>
+{{- end }}
+{{- range .Messages }}
+{{- if eq .Role "user" }}
+<|user|>
+{{ .Content }}<|end|>
+{{- else if eq .Role "assistant" }}
+<|assistant|>
+{{ .Content }}<|end|>
+{{- end }}
+{{- end }}
+<|assistant|>
+"""
+
+PARAMETER stop "<|end|>"
+PARAMETER stop "<|user|>"
+PARAMETER stop "<|assistant|>"
+
+PARAMETER temperature 0.5
+PARAMETER top_p 0.9
