@@ -41,5 +41,8 @@ server/uploads/
 .superpowers/
 .agents/
 
-
+# GGUF generated files for AI models
 *.gguf
+
+# uploaded photo in file report
+backend/uploads/complaints/

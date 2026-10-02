@@ -27,7 +27,15 @@ const themeRoutes = require("./routes/themeRoutes");
 const app = express();
 
 // Security middleware
-app.use(helmet());
+//app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: {
+      policy: "cross-origin",
+    },
+  }),
+);
+
 app.use(
   cors({
     origin:
