@@ -1,16 +1,17 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './contexts/AuthContext';
-import AdminLayout from './components/layout/AdminLayout';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import FaresPage from './pages/FaresPage';
-import RoutesPage from './pages/RoutesPage';
-import ComplaintsPage from './pages/ComplaintsPage';
-import NotificationsPage from './pages/NotificationsPage';
-import UsersPage from './pages/UsersPage';
-import AuditLogsPage from './pages/AuditLogsPage';
-import TerminalsPage from './pages/TerminalsPage';
+import React from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./contexts/AuthContext";
+import AdminLayout from "./components/layout/AdminLayout";
+import LoginPage from "./pages/LoginPage";
+import DashboardPage from "./pages/DashboardPage";
+import FaresPage from "./pages/FaresPage";
+import RoutesPage from "./pages/RoutesPage";
+import ComplaintsPage from "./pages/ComplaintsPage";
+import NotificationsPage from "./pages/NotificationsPage";
+import UsersPage from "./pages/UsersPage";
+import AuditLogsPage from "./pages/AuditLogsPage";
+import TerminalsPage from "./pages/TerminalsPage";
+import Profile from "./pages/Profile";
 
 const ProtectedRoute = ({ children }) => {
   const { admin } = useAuth();
@@ -47,11 +48,14 @@ const App = () => {
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="audit-logs" element={<AuditLogsPage />} />
+        <Route path="profile" element={<Profile />} />
       </Route>
-      <Route path="*" element={<Navigate to={admin ? "/" : "/login"} replace />} />
+      <Route
+        path="*"
+        element={<Navigate to={admin ? "/" : "/login"} replace />}
+      />
     </Routes>
   );
 };
-
 
 export default App;

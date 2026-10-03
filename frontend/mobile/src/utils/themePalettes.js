@@ -1,12 +1,11 @@
-export const getThemeColors = (theme) => {
+export const getThemeColors = (theme = "theme1") => {
   switch (theme) {
+    // ==========================================================
+    // THEME 1 — ORANGE
+    // ==========================================================
+
     case "theme1":
       return {
-        // ==========================================
-        // THEME 1 — ORANGE
-        // Current SmartSakay default theme
-        // ==========================================
-
         primary: "#F97316",
         primaryLight: "#FFEDD5",
         primaryDark: "#C2550F",
@@ -32,6 +31,7 @@ export const getThemeColors = (theme) => {
         infoLight: "#DBEAFE",
 
         white: "#FFFFFF",
+
         background: "#F5F6FA",
         surface: "#FFFFFF",
         surfaceElevated: "#FFFFFF",
@@ -43,6 +43,11 @@ export const getThemeColors = (theme) => {
         textMuted: "#6B7280",
 
         disabled: "#D1D5DB",
+
+        // Shared aliases
+        card: "#FFFFFF",
+        danger: "#EF4444",
+        dangerLight: "#FEE2E2",
 
         dark: {
           primary: "#F97316",
@@ -70,6 +75,7 @@ export const getThemeColors = (theme) => {
           infoLight: "#1E3A8A",
 
           white: "#FFFFFF",
+
           background: "#0F172A",
           surface: "#1E293B",
           surfaceElevated: "#334155",
@@ -81,15 +87,20 @@ export const getThemeColors = (theme) => {
           textMuted: "#64748B",
 
           disabled: "#475569",
+
+          // Shared aliases
+          card: "#1E293B",
+          danger: "#EF4444",
+          dangerLight: "#7F1D1D",
         },
       };
 
+    // ==========================================================
+    // THEME 2 — YELLOW / GOLDEN
+    // ==========================================================
+
     case "theme2":
       return {
-        // ==========================================
-        // THEME 2 — YELLOW / GOLDEN
-        // ==========================================
-
         primary: "#ECA611",
         primaryLight: "#FFF36A",
         primaryDark: "#CCC805",
@@ -115,6 +126,7 @@ export const getThemeColors = (theme) => {
         infoLight: "#DBEAFE",
 
         white: "#FFFFFF",
+
         background: "#FFF8D6",
         surface: "#FFFFFF",
         surfaceElevated: "#FFFEAF",
@@ -126,6 +138,11 @@ export const getThemeColors = (theme) => {
         textMuted: "#897A35",
 
         disabled: "#D8CC8A",
+
+        // Shared aliases
+        card: "#FFFFFF",
+        danger: "#EF4444",
+        dangerLight: "#FEE2E2",
 
         dark: {
           primary: "#ECA611",
@@ -153,6 +170,7 @@ export const getThemeColors = (theme) => {
           infoLight: "#1E3A8A",
 
           white: "#FFFFFF",
+
           background: "#241E0A",
           surface: "#332B0F",
           surfaceElevated: "#493D15",
@@ -164,15 +182,20 @@ export const getThemeColors = (theme) => {
           textMuted: "#B9A95E",
 
           disabled: "#5A4D20",
+
+          // Shared aliases
+          card: "#332B0F",
+          danger: "#EF4444",
+          dangerLight: "#7F1D1D",
         },
       };
 
+    // ==========================================================
+    // THEME 3 — CHERRY COLA / CREAM VANILLA
+    // ==========================================================
+
     case "theme3":
       return {
-        // ==========================================
-        // THEME 3 — CHERRY COLA / CREAM VANILLA
-        // ==========================================
-
         primary: "#9A0002",
         primaryLight: "#F7F2ED",
         primaryDark: "#6F0001",
@@ -210,6 +233,11 @@ export const getThemeColors = (theme) => {
         textMuted: "#9CA3AF",
 
         disabled: "#D1D5DB",
+
+        // Shared aliases
+        card: "#FFFFFF",
+        danger: "#D32F2F",
+        dangerLight: "#FDE8E8",
 
         dark: {
           primary: "#9A0002",
@@ -249,14 +277,20 @@ export const getThemeColors = (theme) => {
           textMuted: "#95837D",
 
           disabled: "#5A4545",
+
+          // Shared aliases
+          card: "#241818",
+          danger: "#D32F2F",
+          dangerLight: "#7F1D1D",
         },
       };
 
+    // ==========================================================
+    // THEME 4 — BLUE
+    // ==========================================================
+
     case "theme4":
       return {
-        // ==========================================
-        // THEME 4 — BLUE
-        // ==========================================
         primary: "#3D86CB",
         primaryLight: "#CFE4FB",
         primaryDark: "#28409C",
@@ -282,6 +316,7 @@ export const getThemeColors = (theme) => {
         infoLight: "#CFE4FB",
 
         white: "#FFFFFF",
+
         background: "#CFE4FB",
         surface: "#FFFFFF",
         surfaceElevated: "#EAF4FF",
@@ -293,6 +328,11 @@ export const getThemeColors = (theme) => {
         textMuted: "#61799B",
 
         disabled: "#B7C8DD",
+
+        // Shared aliases
+        card: "#FFFFFF",
+        danger: "#EF4444",
+        dangerLight: "#FEE2E2",
 
         dark: {
           primary: "#3D86CB",
@@ -320,6 +360,7 @@ export const getThemeColors = (theme) => {
           infoLight: "#1E4164",
 
           white: "#FFFFFF",
+
           background: "#18233B",
           surface: "#222F49",
           surfaceElevated: "#2A3045",
@@ -331,16 +372,20 @@ export const getThemeColors = (theme) => {
           textMuted: "#7F96B8",
 
           disabled: "#44536D",
+
+          // Shared aliases
+          card: "#222F49",
+          danger: "#EF4444",
+          dangerLight: "#7F1D1D",
         },
       };
 
+    // ==========================================================
+    // DEFAULT — ORANGE
+    // ==========================================================
+
     default:
       return {
-        // ==========================================
-        // DEFAULT — ORANGE
-        // Current SmartSakay default theme
-        // ==========================================
-
         primary: "#F97316",
         primaryLight: "#FFEDD5",
         primaryDark: "#C2550F",
@@ -366,6 +411,7 @@ export const getThemeColors = (theme) => {
         infoLight: "#DBEAFE",
 
         white: "#FFFFFF",
+
         background: "#F5F6FA",
         surface: "#FFFFFF",
         surfaceElevated: "#FFFFFF",
@@ -378,12 +424,17 @@ export const getThemeColors = (theme) => {
 
         disabled: "#D1D5DB",
 
+        // Shared aliases
+        card: "#FFFFFF",
+        danger: "#EF4444",
+        dangerLight: "#FEE2E2",
+
         dark: {
           primary: "#F97316",
           primaryLight: "#9A4D12",
           primaryDark: "#FF8A3D",
 
-          secondary: "#e5f3ea",
+          secondary: "#22C55E",
           secondaryLight: "#14532D",
           secondaryDark: "#4ADE80",
 
@@ -404,6 +455,7 @@ export const getThemeColors = (theme) => {
           infoLight: "#1E3A8A",
 
           white: "#FFFFFF",
+
           background: "#0F172A",
           surface: "#1E293B",
           surfaceElevated: "#334155",
@@ -415,6 +467,11 @@ export const getThemeColors = (theme) => {
           textMuted: "#64748B",
 
           disabled: "#475569",
+
+          // Shared aliases
+          card: "#1E293B",
+          danger: "#EF4444",
+          dangerLight: "#7F1D1D",
         },
       };
   }
