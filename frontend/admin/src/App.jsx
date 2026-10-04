@@ -1,7 +1,9 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
-import AdminLayout from "./components/layout/AdminLayout";
+
+import AppLayout from "./components/layout/AppLayout";
+
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import FaresPage from "./pages/FaresPage";
@@ -28,15 +30,17 @@ const App = () => {
 
   return (
     <Routes>
+      {/* Login */}
       <Route
         path="/login"
         element={admin ? <Navigate to="/" replace /> : <LoginPage />}
       />
+
+      {/* Protected Application */}
       <Route
-        path="/"
         element={
           <ProtectedRoute>
-            <AdminLayout />
+            <AppLayout />
           </ProtectedRoute>
         }
       >
@@ -50,6 +54,8 @@ const App = () => {
         <Route path="audit-logs" element={<AuditLogsPage />} />
         <Route path="profile" element={<Profile />} />
       </Route>
+
+      {/* Fallback */}
       <Route
         path="*"
         element={<Navigate to={admin ? "/" : "/login"} replace />}
