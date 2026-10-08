@@ -1,13 +1,21 @@
 const dotenv = require("dotenv");
 const path = require("path");
+const fs = require("fs");
 
-const envPath = path.resolve(__dirname, "../../../.env");
+const possiblePaths = [
+  path.resolve(__dirname, "../../../.env"),
+  path.resolve(__dirname, "../../.env"),
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(__dirname, "../../../server/.env"),
+];
+
+const envPath = possiblePaths.find((p) => fs.existsSync(p)) || possiblePaths[0];
 
 const result = dotenv.config({
   path: envPath,
 });
 
-if (result.error) {
+if (result.error && !process.env.MONGODB_URI) {
   throw new Error(`❌ Could not load .env file: ${envPath}`);
 }
 

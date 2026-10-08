@@ -1,9 +1,24 @@
 // SmartSakay Dagupan — Design System Constants
 import { Platform, NativeModules } from "react-native";
+import Constants from "expo-constants";
 import { getThemeColors } from "./themePalettes";
 
 const getDevServerIp = () => {
   if (Platform.OS === "web") return "localhost";
+
+  // Check modern Expo hostUri (Expo Go / SDK 49-54+)
+  const debuggerHost =
+    Constants.expoConfig?.hostUri ||
+    Constants.manifest2?.extra?.expoGo?.debuggerHost ||
+    Constants.manifest?.debuggerHost;
+
+  if (debuggerHost) {
+    const ip = debuggerHost.split(":")[0];
+    if (ip && ip !== "localhost" && ip !== "127.0.0.1") {
+      return ip;
+    }
+  }
+
   const scriptURL =
     NativeModules.SourceCode?.scriptURL ||
     NativeModules.ExponentConstants?.manifest?.debuggerHost;
@@ -19,19 +34,34 @@ const getDevServerIp = () => {
       }
     }
   }
-  return "192.168.100.162";
+
+  // Fallback to active local network IP
+  return "192.168.1.16";
 };
 
 const DEV_IP = getDevServerIp();
 
 export const COLORS = getThemeColors("theme1");
 
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ||
-  Platform.select({
-    web: "http://localhost:5000/api",
-    default: `http://${DEV_IP}:5000/api`,
-  });
+export const API_BASE_URL = (() => {
+  // On computer web browser, always use localhost
+  if (Platform.OS === "web") {
+    return "http://localhost:5000/api";
+  }
+
+  // Dynamically resolve laptop's active IP from Expo connection
+  const hostIp = getDevServerIp();
+  if (hostIp && hostIp !== "localhost" && hostIp !== "127.0.0.1") {
+    return `http://${hostIp}:5000/api`;
+  }
+
+  // Fallback to environment variable or default IP
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+
+  return `http://${DEV_IP}:5000/api`;
+})();
 
 export const FONTS = {
   regular: "System",

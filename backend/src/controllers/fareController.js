@@ -24,8 +24,10 @@ const calculateFare = async (req, res, next) => {
     if (routeId) {
       const route = await Route.findById(routeId);
       if (!route) return apiResponse.error(res, 'Route not found', 404);
-      distance = route.distanceKm;
       routeName = route.name;
+      if (!distance || isNaN(distance) || distance <= 0) {
+        distance = route.distanceKm;
+      }
     }
     if (!distance || distance <= 0) return apiResponse.error(res, 'Valid distance is required', 400);
 

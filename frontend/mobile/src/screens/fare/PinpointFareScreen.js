@@ -68,6 +68,18 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   return Math.round(R * c * 10) / 10;
 };
 
+// Calculate initial forward bearing between two coordinates
+const calculateBearing = (lat1, lon1, lat2, lon2) => {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const lat1Rad = (lat1 * Math.PI) / 180;
+  const lat2Rad = (lat2 * Math.PI) / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2Rad);
+  const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+  const brng = (Math.atan2(y, x) * 180) / Math.PI;
+  return (brng + 360) % 360;
+};
+
 const PinpointFareScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
   const { showSuccess, showWarning, showError, showInfo } = useFeedback();
@@ -79,8 +91,8 @@ const PinpointFareScreen = ({ navigation }) => {
   const mapHeight = isLandscape
     ? Math.max(220, windowHeight * 0.44)
     : isTablet
-    ? Math.min(480, windowHeight * 0.40)
-    : Math.min(360, Math.max(250, windowHeight * 0.38));
+      ? Math.min(480, windowHeight * 0.40)
+      : Math.min(360, Math.max(250, windowHeight * 0.38));
 
   // Origin & Destination State
   const [origin, setOrigin] = useState({
@@ -118,9 +130,12 @@ const PinpointFareScreen = ({ navigation }) => {
   const [stopConfirmVisible, setStopConfirmVisible] = useState(false);
   const [currentGpsPos, setCurrentGpsPos] = useState(origin);
   const [lastCompletedRide, setLastCompletedRide] = useState(null);
+  const currentHeadingRef = useRef(0);
+  const lastSentHeadingRef = useRef(-999);
   const timerIntervalRef = useRef(null);
   const lastLocationRef = useRef(null);
   const watchSubscriptionRef = useRef(null);
+  const headingSubRef = useRef(null);
 
   // Calculate Distance (km)
   const effectiveDistanceKm = useMemo(() => {
@@ -139,6 +154,36 @@ const PinpointFareScreen = ({ navigation }) => {
   // Destination arrival lock check: within 150 meters (0.15 km)
   const isNearDestination = remainingDistToDestKm <= 0.15;
 
+  // Forward live compass heading to Leaflet Map without triggering React component re-renders
+  const sendHeadingToMap = (deg) => {
+    if (typeof deg !== 'number' || isNaN(deg)) return;
+    const rounded = Math.round(deg);
+    if (Math.abs(rounded - lastSentHeadingRef.current) < 1) return;
+    lastSentHeadingRef.current = rounded;
+    currentHeadingRef.current = rounded;
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const iframe = document.getElementById('solo-ride-pinpoint-map');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(JSON.stringify({ type: 'UPDATE_HEADING', heading: rounded }), '*');
+      }
+    } else if (webViewRef.current) {
+      webViewRef.current.injectJavaScript(`if (window.updateHeading) { window.updateHeading(${rounded}); } true;`);
+    }
+  };
+
+  // Forward user location and heading to Leaflet Map
+  const sendUserLocationToMap = (lat, lng, heading) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const iframe = document.getElementById('solo-ride-pinpoint-map');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(JSON.stringify({ type: 'UPDATE_USER_LOCATION', lat, lng, heading }), '*');
+      }
+    } else if (webViewRef.current) {
+      webViewRef.current.injectJavaScript(`if (window.updateUserLocation) { window.updateUserLocation(${lat}, ${lng}, ${heading !== undefined ? heading : 'null'}); } true;`);
+    }
+  };
+
   // Request GPS Permission & Initial Location directly from system
   const requestLocation = async () => {
     setGpsLoading(true);
@@ -154,6 +199,7 @@ const PinpointFareScreen = ({ navigation }) => {
             };
             setOrigin(coords);
             setCurrentGpsPos(coords);
+            sendUserLocationToMap(coords.lat, coords.lng, currentHeadingRef.current);
             setPermissionStatus('granted');
             setGpsLoading(false);
             showInfo('GPS Updated', 'Recentered map to your current location.');
@@ -180,6 +226,7 @@ const PinpointFareScreen = ({ navigation }) => {
           };
           setOrigin(coords);
           setCurrentGpsPos(coords);
+          sendUserLocationToMap(coords.lat, coords.lng, currentHeadingRef.current);
           showInfo('GPS Updated', 'Recentered map to your current location.');
         } else {
           setPermissionStatus('denied');
@@ -197,6 +244,60 @@ const PinpointFareScreen = ({ navigation }) => {
   useEffect(() => {
     requestLocation();
   }, []);
+
+  // Watch Device Compass / Orientation in Real-Time (Rotates flashlight as phone turns)
+  useEffect(() => {
+    let isMounted = true;
+
+    const startHeadingWatcher = async () => {
+      try {
+        if (Platform.OS !== 'web') {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (status === 'granted') {
+            if (headingSubRef.current && typeof headingSubRef.current.remove === 'function') {
+              headingSubRef.current.remove();
+            }
+            headingSubRef.current = await Location.watchHeadingAsync((data) => {
+              if (!isMounted) return;
+              const h = data.trueHeading >= 0 ? data.trueHeading : data.magHeading;
+              if (typeof h === 'number' && !isNaN(h)) {
+                sendHeadingToMap(h);
+              }
+            });
+          }
+        } else if (typeof window !== 'undefined') {
+          const handleWebOrientation = (ev) => {
+            if (!isMounted) return;
+            let h = null;
+            if (ev.webkitCompassHeading !== undefined && ev.webkitCompassHeading !== null) {
+              h = ev.webkitCompassHeading;
+            } else if (ev.alpha !== null && ev.alpha !== undefined) {
+              h = (360 - ev.alpha) % 360;
+            }
+            if (h !== null && !isNaN(h)) {
+              sendHeadingToMap(h);
+            }
+          };
+          window.addEventListener('deviceorientationabsolute', handleWebOrientation, false);
+          window.addEventListener('deviceorientation', handleWebOrientation, false);
+        }
+      } catch (err) {
+        console.warn('Heading watch initialization error:', err);
+      }
+    };
+
+    if (permissionStatus === 'granted') {
+      startHeadingWatcher();
+    }
+
+    return () => {
+      isMounted = false;
+      if (headingSubRef.current && typeof headingSubRef.current.remove === 'function') {
+        headingSubRef.current.remove();
+        headingSubRef.current = null;
+      }
+    };
+  }, [permissionStatus]);
 
   // Confirm and set the pinpointed destination
   const handleConfirmSet = (target) => {
@@ -281,7 +382,7 @@ const PinpointFareScreen = ({ navigation }) => {
         try {
           const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
           handleMapEvent(data);
-        } catch (_) {}
+        } catch (_) { }
       };
       window.addEventListener('message', handleWindowMsg);
       return () => window.removeEventListener('message', handleWindowMsg);
@@ -338,26 +439,34 @@ const PinpointFareScreen = ({ navigation }) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && navigator.geolocation) {
       const id = navigator.geolocation.watchPosition(
         (pos) => {
-          handleNextPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          const heading = typeof pos.coords.heading === 'number' && !isNaN(pos.coords.heading) && pos.coords.heading >= 0
+            ? pos.coords.heading
+            : undefined;
+          handleNextPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }, heading);
         },
-        () => {},
+        () => { },
         { enableHighAccuracy: true, maximumAge: 2000, timeout: 5000 }
       );
       watchSubscriptionRef.current = { remove: () => navigator.geolocation.clearWatch(id) };
     } else {
       Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 5 },
+        { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 3 },
         (loc) => {
-          handleNextPosition({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+          const heading = typeof loc.coords.heading === 'number' && !isNaN(loc.coords.heading) && loc.coords.heading >= 0
+            ? loc.coords.heading
+            : undefined;
+          handleNextPosition({ lat: loc.coords.latitude, lng: loc.coords.longitude }, heading);
         }
       ).then((sub) => {
         watchSubscriptionRef.current = sub;
-      }).catch(() => {});
+      }).catch(() => { });
     }
   };
 
-  const handleNextPosition = (nextPos) => {
+  const handleNextPosition = (nextPos, heading) => {
     setCurrentGpsPos(nextPos);
+
+    let effectiveHeading = heading;
     if (lastLocationRef.current) {
       const step = calculateDistanceKm(
         lastLocationRef.current.lat,
@@ -367,11 +476,24 @@ const PinpointFareScreen = ({ navigation }) => {
       );
       if (step > 0.003 && step < 2.0) {
         setDistanceTraveledKm((prev) => parseFloat((prev + step).toFixed(2)));
+        // If GPS heading is not present, calculate bearing from vehicle movement step
+        if (effectiveHeading === undefined) {
+          effectiveHeading = Math.round(
+            calculateBearing(
+              lastLocationRef.current.lat,
+              lastLocationRef.current.lng,
+              nextPos.lat,
+              nextPos.lng
+            )
+          );
+        }
         lastLocationRef.current = nextPos;
       }
     } else {
       lastLocationRef.current = nextPos;
     }
+
+    sendUserLocationToMap(nextPos.lat, nextPos.lng, effectiveHeading);
 
     // Check if reached destination (< 80 meters)
     const distToDest = calculateDistanceKm(nextPos.lat, nextPos.lng, destination.lat, destination.lng);
@@ -440,6 +562,10 @@ const PinpointFareScreen = ({ navigation }) => {
       if (watchSubscriptionRef.current && typeof watchSubscriptionRef.current.remove === 'function') {
         watchSubscriptionRef.current.remove();
       }
+      if (headingSubRef.current && typeof headingSubRef.current.remove === 'function') {
+        headingSubRef.current.remove();
+        headingSubRef.current = null;
+      }
     };
   }, []);
 
@@ -482,11 +608,11 @@ const PinpointFareScreen = ({ navigation }) => {
             background-color: #334155 !important;
           }
 
-          /* Directional Light Pointer Cone from Current Location */
+          /* Google Maps-Style Directional Flashlight Cone & Location Puck (Compact & Sleek) */
           .origin-marker-wrap {
             position: relative;
-            width: 140px;
-            height: 140px;
+            width: 80px;
+            height: 80px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -496,11 +622,11 @@ const PinpointFareScreen = ({ navigation }) => {
             position: absolute;
             top: 0;
             left: 0;
-            width: 140px;
-            height: 140px;
+            width: 80px;
+            height: 80px;
             pointer-events: none;
-            transform-origin: 70px 70px;
-            transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+            transform-origin: 40px 40px;
+            transition: transform 0.2s cubic-bezier(0.2, 0.9, 0.2, 1);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -508,56 +634,61 @@ const PinpointFareScreen = ({ navigation }) => {
           .light-beam-cone {
             width: 100%;
             height: 100%;
-            /* Flashlight beam radiating forward (0deg at top) */
+            border-radius: 50%;
+            /* ~96-degree wide high-contrast emerald green conic beam */
             background: conic-gradient(
-              from -25deg at 50% 50%,
-              transparent 0deg,
-              rgba(14, 165, 233, 0.15) 10deg,
-              rgba(56, 189, 248, 0.55) 20deg,
-              rgba(255, 255, 255, 0.95) 25deg,
-              rgba(56, 189, 248, 0.55) 30deg,
-              rgba(14, 165, 233, 0.15) 40deg,
-              transparent 50deg,
+              from -48deg at 50% 50%,
+              rgba(22, 163, 74, 0) 0deg,
+              rgba(34, 197, 94, 0.35) 14deg,
+              rgba(22, 163, 74, 0.78) 30deg,
+              rgba(240, 253, 244, 0.98) 48deg,
+              rgba(22, 163, 74, 0.78) 66deg,
+              rgba(34, 197, 94, 0.35) 82deg,
+              rgba(22, 163, 74, 0) 96deg,
+              transparent 96deg,
               transparent 360deg
             );
-            border-radius: 50%;
-            filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.9));
-            animation: beamGlow 2.5s infinite ease-in-out;
+            /* Radial mask: concentric fade out ahead of puck with crisp body contrast */
+            -webkit-mask-image: radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0.95) 28%, rgba(0,0,0,0) 60%);
+            mask-image: radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0.95) 28%, rgba(0,0,0,0) 60%);
+            /* Dual drop shadow for high contrast on both light roads and dark map tiles */
+            filter: drop-shadow(0 0 6px rgba(22, 163, 74, 0.9)) drop-shadow(0 0 1.5px rgba(5, 46, 22, 0.65));
+            animation: googleBeamPulse 2.8s infinite ease-in-out;
           }
-          @keyframes beamGlow {
-            0%, 100% { opacity: 0.82; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.06); }
+          @keyframes googleBeamPulse {
+            0%, 100% { opacity: 0.90; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.03); }
           }
 
-          /* Pulsating Origin GPS Radar Core */
-          .origin-beacon {
+          /* Green Location Puck with White Border & Pulse */
+          .google-puck-beacon {
             position: relative;
-            width: 26px;
-            height: 26px;
+            width: 24px;
+            height: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
           }
-          .origin-pulse {
+          .google-puck-pulse {
             position: absolute;
             width: 100%;
             height: 100%;
             border-radius: 50%;
-            background: rgba(14, 165, 233, 0.45);
-            animation: radar 2s infinite ease-out;
+            background: rgba(34, 197, 94, 0.35);
+            animation: googleRadar 2.2s infinite ease-out;
           }
-          .origin-core {
+          .google-puck-core {
             position: relative;
             width: 14px;
             height: 14px;
             border-radius: 50%;
-            background: #0284C7;
+            background: #16A34A;
             border: 2px solid #ffffff;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+            box-shadow: 0 1px 5px rgba(0,0,0,0.35);
           }
-          @keyframes radar {
-            0% { transform: scale(0.5); opacity: 1; }
-            100% { transform: scale(2.2); opacity: 0; }
+          @keyframes googleRadar {
+            0% { transform: scale(0.65); opacity: 0.95; }
+            100% { transform: scale(2.0); opacity: 0; }
           }
 
           /* Compact Destination Pin */
@@ -651,25 +782,67 @@ const PinpointFareScreen = ({ navigation }) => {
             attribution: '&copy; OpenStreetMap'
           }).addTo(map);
 
-          // Origin Marker with Directional Light Beam
-          var initialBearing = Math.round(getBearing(oLat, oLng, dLat, dLng));
+          // Google Maps User Location Puck with Compass Flashlight Cone
+          var currentBeamAngle = 0;
+
           var originIcon = L.divIcon({
             className: '',
             html: 
               '<div class="origin-marker-wrap">' +
-                '<div class="light-beam-rotor" id="directional-light" style="transform: rotate(' + initialBearing + 'deg);">' +
+                '<div class="light-beam-rotor" id="directional-light" style="transform: rotate(0deg);">' +
                   '<div class="light-beam-cone"></div>' +
                 '</div>' +
-                '<div class="origin-beacon">' +
-                  '<div class="origin-pulse"></div>' +
-                  '<div class="origin-core"></div>' +
+                '<div class="google-puck-beacon">' +
+                  '<div class="google-puck-pulse"></div>' +
+                  '<div class="google-puck-core"></div>' +
                 '</div>' +
               '</div>',
-            iconSize: [140, 140],
-            iconAnchor: [70, 70]
+            iconSize: [80, 80],
+            iconAnchor: [40, 40]
           });
           var originMarker = L.marker([oLat, oLng], { icon: originIcon }).addTo(map)
-            .bindPopup('<b>Starting Location</b><br/>Your GPS Position & Directional Beam');
+            .bindPopup('<b>Starting Location</b><br/>Your GPS Position & Compass Flashlight');
+
+          // Smooth shortest-path rotation for flashlight beam
+          window.updateHeading = function(newHeading) {
+            if (typeof newHeading !== 'number' || isNaN(newHeading)) return;
+            var beamEl = document.getElementById('directional-light');
+            if (!beamEl) return;
+            var target = (newHeading % 360 + 360) % 360;
+            var diff = (target - (currentBeamAngle % 360) + 540) % 360 - 180;
+            currentBeamAngle += diff;
+            beamEl.style.transform = 'rotate(' + currentBeamAngle + 'deg)';
+          };
+
+          // Update user location puck on map
+          window.updateUserLocation = function(lat, lng, heading) {
+            if (typeof lat !== 'number' || typeof lng !== 'number') return;
+            oLat = lat;
+            oLng = lng;
+            if (originMarker) {
+              originMarker.setLatLng([lat, lng]);
+            }
+            if (typeof heading === 'number' && !isNaN(heading)) {
+              window.updateHeading(heading);
+            }
+          };
+
+          // Direct browser orientation listener for Web
+          if (window.DeviceOrientationEvent) {
+            var handleOrientation = function(ev) {
+              var h = null;
+              if (ev.webkitCompassHeading !== undefined && ev.webkitCompassHeading !== null) {
+                h = ev.webkitCompassHeading;
+              } else if (ev.alpha !== null && ev.alpha !== undefined) {
+                h = (360 - ev.alpha) % 360;
+              }
+              if (h !== null && !isNaN(h)) {
+                window.updateHeading(h);
+              }
+            };
+            window.addEventListener('deviceorientationabsolute', handleOrientation, false);
+            window.addEventListener('deviceorientation', handleOrientation, false);
+          }
 
           // Smaller Destination Marker
           var destIcon = L.divIcon({
@@ -712,13 +885,6 @@ const PinpointFareScreen = ({ navigation }) => {
             dLat = destLatitude;
             dLng = destLongitude;
             destMarker.setLatLng([dLat, dLng]);
-
-            // Update Directional Light Beam to point from origin to new destination
-            var deg = Math.round(getBearing(oLat, oLng, dLat, dLng));
-            var beamEl = document.getElementById('directional-light');
-            if (beamEl) {
-              beamEl.style.transform = 'rotate(' + deg + 'deg)';
-            }
 
             var hintEl = document.getElementById('status-hint');
             var metaEl = document.getElementById('route-meta');
@@ -827,6 +993,10 @@ const PinpointFareScreen = ({ navigation }) => {
                 updateRoadRoute(d.lat, d.lng, true);
               } else if (d && d.type === 'CONFIRM_SET_PINPOINT') {
                 if (window.onDestinationConfirmed) window.onDestinationConfirmed(d.name);
+              } else if (d && d.type === 'UPDATE_HEADING') {
+                if (window.updateHeading) window.updateHeading(d.heading);
+              } else if (d && d.type === 'UPDATE_USER_LOCATION') {
+                if (window.updateUserLocation) window.updateUserLocation(d.lat, d.lng, d.heading);
               }
             } catch (_) {}
           });
@@ -835,6 +1005,10 @@ const PinpointFareScreen = ({ navigation }) => {
       </html>
     `;
   };
+
+  const leafletHtml = useMemo(() => {
+    return generateLeafletHtml();
+  }, [origin.lat, origin.lng, destination.lat, destination.lng]);
 
   return (
     <ScrollView
@@ -993,23 +1167,23 @@ const PinpointFareScreen = ({ navigation }) => {
         {Platform.OS === 'web' ? (
           <iframe
             id="solo-ride-pinpoint-map"
-            key={`map-${origin.lat}-${origin.lng}`}
+            key="solo-ride-pinpoint-map"
             title="Dagupan Solo Ride / Visitor Pinpoint Map"
-            srcDoc={generateLeafletHtml()}
+            srcDoc={leafletHtml}
             style={{ width: '100%', height: '100%', border: 'none' }}
           />
         ) : (
           <WebView
             ref={webViewRef}
-            key={`native-map-${origin.lat}-${origin.lng}`}
+            key="solo-ride-pinpoint-webview"
             originWhitelist={['*']}
-            source={{ html: generateLeafletHtml() }}
+            source={{ html: leafletHtml }}
             style={{ flex: 1, backgroundColor: '#0f172a' }}
             onMessage={(e) => {
               try {
                 const data = JSON.parse(e.nativeEvent.data);
                 handleMapEvent(data);
-              } catch (_) {}
+              } catch (_) { }
             }}
           />
         )}
@@ -1097,9 +1271,11 @@ const PinpointFareScreen = ({ navigation }) => {
                 Private solo ride & visitor point-to-point road guidance
               </Text>
             </View>
-            <View style={[styles.routingBadge, { backgroundColor: '#0284C715', borderColor: '#0284C750', borderWidth: 1 }]}>
-              <MaterialCommunityIcons name="compass-outline" size={13} color="#0284C7" />
-              <Text style={[styles.routingBadgeText, { color: '#0284C7' }]}>Direction Light</Text>
+            <View style={[styles.routingBadge, { backgroundColor: '#16A34A15', borderColor: '#16A34A50', borderWidth: 1 }]}>
+              <MaterialCommunityIcons name="compass" size={13} color="#16A34A" />
+              <Text style={[styles.routingBadgeText, { color: '#16A34A' }]}>
+                Compass Flashlight
+              </Text>
             </View>
           </View>
 

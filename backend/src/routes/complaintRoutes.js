@@ -21,6 +21,7 @@ router.use(authMiddleware);
 router.post('/upload-photo', rbac('commuter'), uploadEvidence.single('photo'), complaintController.uploadEvidencePhoto);
 router.post('/', rbac('commuter'), validate(createComplaintSchema), complaintController.createComplaint);
 router.get('/my', rbac('commuter'), complaintController.getMyComplaints);
+router.get('/my-complaints', rbac('commuter'), complaintController.getMyComplaints);
 router.put('/my/:id', rbac('commuter'), validate(updateCommuterComplaintSchema), complaintController.updateMyComplaint);
 router.put('/my/:id/archive', rbac('commuter'), complaintController.archiveMyComplaint);
 router.put('/my/:id/unarchive', rbac('commuter'), complaintController.unarchiveMyComplaint);

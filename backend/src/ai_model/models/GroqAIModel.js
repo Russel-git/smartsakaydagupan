@@ -1,12 +1,13 @@
 const Groq = require("groq-sdk");
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
 const GROQ_MODEL = "openai/gpt-oss-120b";
 
 const chatWithGroq = async (messages, systemPrompt) => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey || apiKey === "your-groq-api-key") {
+    throw new Error("GROQ_API_KEY is not configured.");
+  }
+  const groq = new Groq({ apiKey });
   const formattedMessages = [
     {
       role: "system",

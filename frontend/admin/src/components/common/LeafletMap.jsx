@@ -100,6 +100,11 @@ const LeafletMap = ({ selectedRoute = null, onSelectRoute = null }) => {
         DOWNTOWN: "#8B5CF6",
         CALASIAO: "#059669",
         BONUAN_TONDALIGAN: "#EA580C",
+        BOLOSAN_HIGHWAY: "#D97706",
+        SALISAY_BOLOSAN_OLD_ROAD: "#DB2777",
+        BONUAN_BINLOC: "#0D9488",
+        SAN_FABIAN_MANGALDAN_DAGUPAN: "#0284C7",
+        LINGAYEN_BINMALEY_DAGUPAN: "#4F46E5",
       };
 
       const routesToRender = selectedRoute

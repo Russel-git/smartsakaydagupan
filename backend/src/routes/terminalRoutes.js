@@ -9,8 +9,11 @@ const {
   updateTerminalSchema,
 } = require('../validators/terminalValidator');
 
+const { getBusTerminals } = require('../controllers/routeController');
+
 // Public route to fetch terminals (optionally with auth for personalized/admin views)
 router.get('/', optionalAuth, terminalController.getAllTerminals);
+router.get('/bus', optionalAuth, getBusTerminals);
 router.get('/:id', optionalAuth, terminalController.getTerminalById);
 
 // Admin-only management routes

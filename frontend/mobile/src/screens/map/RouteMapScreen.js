@@ -413,11 +413,21 @@ const RouteMapScreen = ({ navigation }) => {
           var userAccuracy = ${accuracy};
           var isRealFix = ${isRealGPS};
 
-          var map = L.map('map', { zoomControl: true }).setView([userLat, userLng], 14);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap',
-            maxZoom: 19
-          }).addTo(map);
+          if (typeof L === 'undefined') {
+            console.error('Leaflet failed to load');
+          } else {
+            var map = L.map('map', { 
+              zoomControl: true,
+              preferCanvas: true 
+            }).setView([userLat, userLng], 14);
+
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; OpenStreetMap',
+              maxZoom: 19
+            }).addTo(map);
+
+            setTimeout(function() { if (map) map.invalidateSize(); }, 200);
+            setTimeout(function() { if (map) map.invalidateSize(); }, 600);
 
           // 1. Accuracy Circle for Commuter GPS
           var commuterCircle = L.circle([userLat, userLng], {
@@ -494,14 +504,20 @@ const RouteMapScreen = ({ navigation }) => {
               'BONUAN_TONDALIGAN': '#EA580C',
               'BOLOSAN_HIGHWAY': '#D97706',
               'SALISAY_BOLOSAN_OLD_ROAD': '#DB2777',
+              'BONUAN_BINLOC': '#0D9488',
+              'SAN_FABIAN_MANGALDAN_DAGUPAN': '#0284C7',
+              'LINGAYEN_BINMALEY_DAGUPAN': '#4F46E5',
             };
 
-            var routesToRender = selectedId
-              ? routes.filter(function(r) { return r.id === selectedId; })
-              : routes;
+            var selectedCat = '${selectedCategory}';
+            var routesToRender = routes.filter(function(r) {
+              if (selectedId) return (r.id === selectedId || String(r.id) === String(selectedId));
+              if (selectedCat !== 'all') return r.category === selectedCat;
+              return true;
+            });
 
             routesToRender.forEach(function(route) {
-              var isSelected = (selectedId && route.id === selectedId);
+              var isSelected = (selectedId && (route.id === selectedId || String(route.id) === String(selectedId)));
               var baseColor = routeColorMap[route.code] || (route.category === 'city' ? '#2563EB' : '#10B981');
               var color = isSelected ? '#F59E0B' : baseColor;
               var weight = isSelected ? 6 : (route.path && route.path.length > 0 ? 4 : 3);
@@ -530,17 +546,36 @@ const RouteMapScreen = ({ navigation }) => {
 
                 if (isSelected) {
                   selectedBounds = poly.getBounds();
+                  // Add clear start and end pin markers for the selected solo route
+                  L.circleMarker(pts[0], { radius: 7, color: '#FFFFFF', fillColor: '#16A34A', fillOpacity: 1, weight: 2.5 })
+                    .bindPopup('<b>🟢 Start: ' + (route.startPoint && route.startPoint.name ? route.startPoint.name : route.name) + '</b>')
+                    .addTo(map);
+                  L.circleMarker(pts[pts.length - 1], { radius: 7, color: '#FFFFFF', fillColor: '#DC2626', fillOpacity: 1, weight: 2.5 })
+                    .bindPopup('<b>🔴 Terminal Depot: ' + (route.endPoint && route.endPoint.name ? route.endPoint.name : route.name) + '</b>')
+                    .addTo(map);
                 }
               }
             });
 
-            if (selectedBounds) {
-              map.fitBounds(selectedBounds, { padding: [40, 40] });
+            function applyRouteBounds() {
+              if (!map) return;
+              map.invalidateSize();
+              if (selectedBounds && selectedBounds.isValid()) {
+                map.fitBounds(selectedBounds, { padding: [40, 40], maxZoom: 16 });
+              }
             }
+
+            if (selectedBounds && selectedBounds.isValid()) {
+              map.fitBounds(selectedBounds, { padding: [40, 40], maxZoom: 16 });
+            }
+            setTimeout(applyRouteBounds, 150);
+            setTimeout(applyRouteBounds, 400);
+            setTimeout(applyRouteBounds, 800);
           }
 
           // 4. Render Dagupan Transit Terminals & Hubs directly on Jeepney Routes map
           busTerminals.forEach(function(t) {
+            if (!t || typeof t.lat !== 'number' || typeof t.lng !== 'number') return;
             var typeEmoji = '🚌';
             var badgeColor = '#3B82F6';
             var badgeLabel = 'BUS TERMINAL';
@@ -590,6 +625,7 @@ const RouteMapScreen = ({ navigation }) => {
               )
               .addTo(map);
           });
+          }
         </script>
       </body>
       </html>
@@ -642,7 +678,7 @@ const RouteMapScreen = ({ navigation }) => {
       </View>
 
       {/* Embedded Interactive Leaflet Map (WebView on Android/iOS, iframe on Web) */}
-      <View style={[styles.mapContainer, { height: mapHeight, maxWidth: isTablet ? 840 : '100%', alignSelf: 'center', width: isTablet ? '92%' : undefined }]}>
+      <View style={[styles.mapContainer, { height: mapHeight, width: '100%' }]}>
         {selectedItem && (
           <View style={styles.selectedRouteOverlay}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
@@ -663,7 +699,7 @@ const RouteMapScreen = ({ navigation }) => {
         )}
         {Platform.OS === 'web' ? (
           <iframe
-            key={`leaflet-map-${activeTab}-${recenterCount}`}
+            key={`leaflet-map-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || 'all'}`}
             title="Dagupan Transit Leaflet Map"
             srcDoc={generateLeafletHtml()}
             style={{ width: '100%', height: '100%', border: 'none' }}
@@ -671,14 +707,13 @@ const RouteMapScreen = ({ navigation }) => {
         ) : (
           <WebView
             ref={webViewRef}
-            key={`leaflet-webview-${activeTab}-${recenterCount}`}
+            key={`leaflet-webview-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || 'all'}`}
             originWhitelist={['*']}
             source={{ html: generateLeafletHtml() }}
-            style={{ flex: 1, backgroundColor: '#0f172a' }}
+            style={{ width: '100%', height: '100%', backgroundColor: '#0f172a' }}
             javaScriptEnabled={true}
             domStorageEnabled={true}
-            startInLoadingState={true}
-            scalesPageToFit={true}
+            geolocationEnabled={true}
             scrollEnabled={false}
           />
         )}
@@ -743,15 +778,17 @@ const RouteMapScreen = ({ navigation }) => {
                 ]}
               >
                 <View style={styles.cardHeader}>
-                  <View style={[styles.categoryBadge, { backgroundColor: item.category === 'city' ? '#DBEAFE' : '#FEF3C7' }]}>
-                    <Text style={{ color: item.category === 'city' ? '#2563EB' : '#D97706', fontSize: FONTS.sizes.xs, fontWeight: '700' }}>
-                      {item.category.toUpperCase()} JEEPNEY • {item.isLoop !== false ? 'LOOP' : 'CORRIDOR'}
+                  <View style={[styles.categoryBadge, { backgroundColor: (item.category || 'city') === 'city' ? '#DBEAFE' : '#FEF3C7' }]}>
+                    <Text style={{ color: (item.category || 'city') === 'city' ? '#2563EB' : '#D97706', fontSize: FONTS.sizes.xs, fontWeight: '700' }}>
+                      {(item.category || 'city').toUpperCase()} JEEPNEY • {item.isLoop !== false ? 'LOOP' : 'CORRIDOR'}
                     </Text>
                   </View>
-                  <Text style={[styles.distanceBadge, { color: colors.textMuted }]}>~{item.distanceKm} km</Text>
+                  {item.distanceKm ? (
+                    <Text style={[styles.distanceBadge, { color: colors.textMuted }]}>~{item.distanceKm} km</Text>
+                  ) : null}
                 </View>
 
-                <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{item.name}</Text>
+                <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{item.name || 'Unnamed Route'}</Text>
 
                 {/* Static Route Corridor */}
                 <View style={styles.corridorContainer}>
@@ -877,14 +914,10 @@ const styles = StyleSheet.create({
     color: '#D97706',
   },
   mapContainer: {
-    marginHorizontal: SPACING.lg,
-    marginTop: SPACING.xs,
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    elevation: 3,
+    width: '100%',
     position: 'relative',
+    backgroundColor: '#0f172a',
+    overflow: 'hidden',
   },
   floatingGpsBtn: {
     position: 'absolute',

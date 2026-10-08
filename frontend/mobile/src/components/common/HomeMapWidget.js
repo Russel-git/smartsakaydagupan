@@ -162,7 +162,10 @@ const HomeMapWidget = ({ navigation, height = 240 }) => {
   var routeColorMap = {
     'CSI_LUCAO':'#f97316','DOWNTOWN':'#8B5CF6',
     'CALASIAO':'#22c55e','BONUAN_TONDALIGAN':'#ea6c0a',
-    'BOLOSAN_HIGHWAY':'#f59e0b','SALISAY_BOLOSAN_OLD_ROAD':'#ec4899'
+    'BOLOSAN_HIGHWAY':'#f59e0b','SALISAY_BOLOSAN_OLD_ROAD':'#ec4899',
+    'BONUAN_BINLOC':'#0D9488',
+    'SAN_FABIAN_MANGALDAN_DAGUPAN':'#0284C7',
+    'LINGAYEN_BINMALEY_DAGUPAN':'#4F46E5'
   };
 
   /* ---- Render jeepney routes ---- */
