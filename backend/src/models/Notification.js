@@ -16,6 +16,26 @@ const notificationSchema = new mongoose.Schema(
       },
     },
     isRead: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ['pending_approval', 'published', 'rejected'],
+      default: 'published',
+    },
+    createdByRole: {
+      type: String,
+      enum: ['admin', 'lgu', 'poso', 'system'],
+      default: 'admin',
+    },
+    authorUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    approvedAt: { type: Date, default: null },
+    rejectionReason: { type: String, default: '', trim: true },
+    severity: {
+      type: String,
+      enum: ['info', 'warning', 'critical'],
+      default: 'info',
+    },
+    locationArea: { type: String, default: '', trim: true },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     expiresAt: {
       type: Date,

@@ -15,6 +15,7 @@ const getNotifications = async (req, res, next) => {
 
     const filter = {
       $or: [{ userId: req.user._id }, { userId: null }],
+      status: 'published',
       $nor: [
         {
           $or: [{ category: 'weather_updates' }, { type: 'weather_alert' }],
@@ -54,6 +55,7 @@ const getUnreadCount = async (req, res, next) => {
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
     const count = await Notification.countDocuments({
       $or: [{ userId: req.user._id }, { userId: null }],
+      status: 'published',
       isRead: false,
       $nor: [
         {
@@ -88,7 +90,7 @@ const markAllAsRead = async (req, res, next) => {
 
 const broadcast = async (req, res, next) => {
   try {
-    const { title, message, type, category } = req.body;
+    const { title, message, type, category, severity = 'info', locationArea = '' } = req.body;
     let finalCategory = category;
     let finalType = type || 'broadcast';
 
@@ -103,6 +105,23 @@ const broadcast = async (req, res, next) => {
       ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
       : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
+    // Save primary broadcast record
+    const primaryAlert = await Notification.create({
+      userId: null,
+      title,
+      message,
+      type: finalType,
+      category: finalCategory,
+      status: 'published',
+      createdByRole: req.user.role || 'admin',
+      authorUser: req.user._id,
+      approvedBy: req.user._id,
+      approvedAt: new Date(),
+      severity,
+      locationArea: locationArea || '',
+      expiresAt,
+    });
+
     const commuters = await User.find({ role: 'commuter', isActive: true }).select('_id');
     const notifications = commuters.map((user) => ({
       userId: user._id,
@@ -110,10 +129,130 @@ const broadcast = async (req, res, next) => {
       message,
       type: finalType,
       category: finalCategory,
+      status: 'published',
+      createdByRole: req.user.role || 'admin',
+      authorUser: req.user._id,
+      approvedBy: req.user._id,
+      approvedAt: new Date(),
+      severity,
+      locationArea: locationArea || '',
       expiresAt,
     }));
     if (notifications.length > 0) await Notification.insertMany(notifications);
-    return apiResponse.success(res, { sentTo: notifications.length }, 'Broadcast sent successfully');
+    return apiResponse.success(res, { primaryAlert, sentTo: notifications.length }, 'Broadcast sent successfully');
+  } catch (error) { next(error); }
+};
+
+const requestRoadAlert = async (req, res, next) => {
+  try {
+    const { title, message, severity = 'warning', locationArea = '' } = req.body;
+    const alert = await Notification.create({
+      userId: null,
+      title: title.trim(),
+      message: message.trim(),
+      type: 'broadcast',
+      category: 'broadcast_by_admin',
+      status: 'pending_approval',
+      createdByRole: 'poso',
+      authorUser: req.user._id,
+      severity,
+      locationArea: locationArea?.trim() || '',
+      metadata: {
+        submittedBy: `${req.user.firstName} ${req.user.lastName}`,
+        badgeNumber: req.user.badgeNumber || 'POSO-ENFORCER',
+        zone: req.user.assignedZone || '',
+      },
+    });
+
+    return apiResponse.success(
+      res,
+      alert,
+      'Road alert drafted and submitted to LGU for verification and broadcast.',
+      201
+    );
+  } catch (error) { next(error); }
+};
+
+const getPendingRoadAlerts = async (req, res, next) => {
+  try {
+    const alerts = await Notification.find({ status: 'pending_approval' })
+      .populate('authorUser', 'firstName lastName badgeNumber department assignedZone email')
+      .sort({ createdAt: -1 });
+
+    return apiResponse.success(res, alerts, 'Pending road alerts retrieved.');
+  } catch (error) { next(error); }
+};
+
+const getAlertFeed = async (req, res, next) => {
+  try {
+    const { status, limit = 50 } = req.query;
+    const filter = {
+      type: 'broadcast',
+      userId: null,
+    };
+    if (status) filter.status = status;
+
+    const alerts = await Notification.find(filter)
+      .populate('authorUser', 'firstName lastName badgeNumber department')
+      .populate('approvedBy', 'firstName lastName department')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+
+    return apiResponse.success(res, alerts, 'Alerts feed retrieved.');
+  } catch (error) { next(error); }
+};
+
+const approveRoadAlert = async (req, res, next) => {
+  try {
+    const alert = await Notification.findById(req.params.id);
+    if (!alert) return apiResponse.error(res, 'Road alert not found.', 404);
+
+    alert.status = 'published';
+    alert.approvedBy = req.user._id;
+    alert.approvedAt = new Date();
+    await alert.save();
+
+    // Broadcast to all active commuters
+    const commuters = await User.find({ role: 'commuter', isActive: true }).select('_id');
+    if (commuters.length > 0) {
+      const commuterNotifs = commuters.map((u) => ({
+        userId: u._id,
+        title: `🚨 ${alert.title}`,
+        message: alert.message,
+        type: 'broadcast',
+        category: 'broadcast_by_admin',
+        status: 'published',
+        createdByRole: alert.createdByRole,
+        authorUser: alert.authorUser,
+        approvedBy: req.user._id,
+        approvedAt: new Date(),
+        severity: alert.severity,
+        locationArea: alert.locationArea,
+        metadata: {
+          originalAlertId: alert._id,
+          verifiedByLgu: true,
+        },
+      }));
+      await Notification.insertMany(commuterNotifs);
+    }
+
+    return apiResponse.success(res, alert, 'Road alert verified and broadcast to all commuters.');
+  } catch (error) { next(error); }
+};
+
+const rejectRoadAlert = async (req, res, next) => {
+  try {
+    const { reason } = req.body;
+    const alert = await Notification.findById(req.params.id);
+    if (!alert) return apiResponse.error(res, 'Road alert not found.', 404);
+
+    alert.status = 'rejected';
+    alert.rejectionReason = reason || 'Declined by City LGU verification desk.';
+    alert.approvedBy = req.user._id;
+    alert.approvedAt = new Date();
+    await alert.save();
+
+    return apiResponse.success(res, alert, 'Road alert rejected.');
   } catch (error) { next(error); }
 };
 
@@ -142,10 +281,23 @@ const sendToUser = async (req, res, next) => {
       message,
       type: finalType,
       category: finalCategory,
+      status: 'published',
       expiresAt,
     });
     return apiResponse.success(res, notification, 'Notification sent', 201);
   } catch (error) { next(error); }
 };
 
-module.exports = { getNotifications, getUnreadCount, markAsRead, markAllAsRead, broadcast, sendToUser };
+module.exports = {
+  getNotifications,
+  getUnreadCount,
+  markAsRead,
+  markAllAsRead,
+  broadcast,
+  sendToUser,
+  requestRoadAlert,
+  getPendingRoadAlerts,
+  getAlertFeed,
+  approveRoadAlert,
+  rejectRoadAlert,
+};
