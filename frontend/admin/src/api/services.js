@@ -76,6 +76,10 @@ export const complaintsAPI = {
 
   addAdminNotes: (id, data) => apiClient.put(`/complaints/${id}/notes`, data),
 
+  // POSO Road Triage & Field Reports
+  endorse: (id, data) => apiClient.patch(`/complaints/${id}/endorse`, data),
+  fileFieldReport: (data) => apiClient.post("/complaints/field-report", data),
+
   // Operator → LGU
   verifyToLgu: (id, data) =>
     apiClient.put(`/complaints/${id}/verify-lgu`, data),
@@ -100,9 +104,12 @@ export const complaintsAPI = {
 
 export const notificationsAPI = {
   getRecent: (params) => apiClient.get("/notifications", { params }),
-
+  getFeed: (params) => apiClient.get("/notifications/feed", { params }),
+  getPending: () => apiClient.get("/notifications/pending"),
+  requestAlert: (data) => apiClient.post("/notifications/request", data),
+  approveAlert: (id) => apiClient.patch(`/notifications/${id}/approve`),
+  rejectAlert: (id, data) => apiClient.patch(`/notifications/${id}/reject`, data),
   broadcast: (data) => apiClient.post("/notifications/broadcast", data),
-
   sendToUser: (data) => apiClient.post("/notifications/send", data),
 };
 
