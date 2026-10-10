@@ -11,10 +11,10 @@ router.get('/me', userController.getProfile);
 router.put('/me', validate(updateProfileSchema), userController.updateProfile);
 router.put('/me/password', validate(changePasswordSchema), userController.changePassword);
 router.delete('/me', userController.deleteMyAccount);
-router.get('/', rbac('superadmin'), userController.getAllUsers);
-router.post('/', rbac('superadmin'), userController.createUser);
-router.put('/:id/role', rbac('superadmin'), userController.updateUserRole);
-router.put('/:id/status', rbac('superadmin'), userController.updateUserStatus);
-router.delete('/:id', rbac('superadmin'), userController.deleteUser);
+router.get('/', rbac('admin', 'lgu'), userController.getAllUsers);
+router.post('/', rbac('admin', 'lgu'), userController.createUser);
+router.put('/:id/role', rbac('admin'), userController.updateUserRole);
+router.put('/:id/status', rbac('admin', 'lgu'), userController.updateUserStatus);
+router.delete('/:id', rbac('admin'), userController.deleteUser);
 
 module.exports = router;

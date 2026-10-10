@@ -36,14 +36,21 @@ describe('User Model & Auth Validation', () => {
     });
   });
 
-  describe('User Model Role Enum & Lockout Fields', () => {
-    it('defines superadmin and lgu roles in schema', () => {
+  describe('User Model Role Enum & Officer Fields', () => {
+    it('defines admin, lgu, poso, commuter, and guest roles without superadmin', () => {
       const roleEnum = User.schema.path('role').enumValues;
-      expect(roleEnum).toContain('superadmin');
       expect(roleEnum).toContain('admin');
       expect(roleEnum).toContain('lgu');
+      expect(roleEnum).toContain('poso');
       expect(roleEnum).toContain('commuter');
       expect(roleEnum).toContain('guest');
+      expect(roleEnum).not.toContain('superadmin');
+    });
+
+    it('defines officer metadata fields (badgeNumber, department, assignedZone)', () => {
+      expect(User.schema.path('badgeNumber')).toBeDefined();
+      expect(User.schema.path('department')).toBeDefined();
+      expect(User.schema.path('assignedZone')).toBeDefined();
     });
 
     it('defines failedLoginAttempts and lockUntil fields', () => {

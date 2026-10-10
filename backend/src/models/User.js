@@ -31,8 +31,23 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["superadmin", "admin", "lgu", "commuter", "guest"],
+      enum: ["admin", "lgu", "poso", "commuter", "guest"],
       default: "commuter",
+    },
+    badgeNumber: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    department: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    assignedZone: {
+      type: String,
+      trim: true,
+      default: "",
     },
     theme: {
       type: String,
