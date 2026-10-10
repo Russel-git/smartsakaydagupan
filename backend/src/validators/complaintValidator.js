@@ -53,10 +53,38 @@ const deleteComplaintSchema = Joi.object({
 
 const lguActionSchema = Joi.object({
   lguActionNotes: Joi.string().trim().min(3).max(2000).required(),
+  sanctionIssued: Joi.string().allow('', null).max(200),
 });
 
 const lguTerminateSchema = Joi.object({
   lguTerminationNotes: Joi.string().allow('', null).max(2000),
+  sanctionIssued: Joi.string().allow('', null).max(200),
+});
+
+const posoFieldReportSchema = Joi.object({
+  subject: Joi.string().trim().min(3).max(200).required(),
+  description: Joi.string().trim().min(5).max(2000).required(),
+  category: Joi.string()
+    .valid('overcharging', 'reckless_driving', 'harassment', 'route_deviation', 'vehicle_condition', 'other')
+    .default('other'),
+  vehiclePlateNumber: Joi.string().allow('').max(20),
+  routeId: Joi.string().allow(null, ''),
+  location: Joi.alternatives().try(
+    Joi.string().allow(''),
+    Joi.object({
+      lat: Joi.number().min(-90).max(90),
+      lng: Joi.number().min(-180).max(180),
+      address: Joi.string().allow(''),
+    })
+  ),
+  attachments: Joi.array().items(Joi.string()).max(5),
+  posoEndorsementNotes: Joi.string().allow('', null).max(2000),
+});
+
+const posoEndorseSchema = Joi.object({
+  endorsementNotes: Joi.string().allow('', null).max(2000),
+  adminNotes: Joi.string().allow('', null).max(2000),
+  notes: Joi.string().allow('', null).max(2000),
 });
 
 const endorseComplaintSchema = Joi.object({
@@ -93,4 +121,6 @@ module.exports = {
   endorseComplaintSchema,
   addAdminNotesSchema,
   updateCommuterComplaintSchema,
+  posoFieldReportSchema,
+  posoEndorseSchema,
 };

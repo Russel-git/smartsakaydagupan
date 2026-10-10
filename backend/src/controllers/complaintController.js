@@ -135,14 +135,23 @@ const getComplaintById = async (req, res, next) => {
 
 const getAllComplaints = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, status, category, startDate, endDate } = req.query;
+    const { page = 1, limit = 20, status, category, startDate, endDate, tab, source } = req.query;
     const filter = {};
 
-    // LGU role only sees verified complaints forwarded to the city authority
+    // Role-specific filtering
     if (req.user.role === 'lgu') {
       filter.status = status ? status : { $in: ['endorsed_to_lgu', 'action_taken', 'terminated'] };
+    } else if (req.user.role === 'poso') {
+      if (tab === 'pending') {
+        filter.status = { $in: ['pending', 'under_review'] };
+      } else if (tab === 'endorsed') {
+        filter.status = { $in: ['endorsed_to_lgu', 'action_taken', 'terminated', 'resolved'] };
+      } else if (status) {
+        filter.status = status;
+      } else {
+        filter.status = { $ne: 'deleted' };
+      }
     } else {
-      // Exclude soft-deleted records by default
       if (status) {
         filter.status = status;
       } else {
@@ -150,6 +159,7 @@ const getAllComplaints = async (req, res, next) => {
       }
     }
 
+    if (source) filter.source = source;
     if (category) filter.category = category;
     if (startDate || endDate) {
       filter.createdAt = {};
@@ -159,10 +169,11 @@ const getAllComplaints = async (req, res, next) => {
 
     const total = await Complaint.countDocuments(filter);
     const complaints = await Complaint.find(filter)
-      .populate('userId', 'firstName lastName email')
+      .populate('userId', 'firstName lastName email badgeNumber')
       .populate('routeId', 'name')
-      .populate('verifiedBy', 'firstName lastName')
-      .populate('lguHandledBy', 'firstName lastName')
+      .populate('verifiedBy', 'firstName lastName badgeNumber')
+      .populate('posoOfficerId', 'firstName lastName badgeNumber department')
+      .populate('lguHandledBy', 'firstName lastName department')
       .sort({ createdAt: -1 }).skip((page - 1) * limit).limit(parseInt(limit));
     return apiResponse.paginated(res, complaints, total, page, limit);
   } catch (error) { next(error); }
@@ -205,6 +216,102 @@ const verifyAndEndorseToLgu = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const createFieldReport = async (req, res, next) => {
+  try {
+    const {
+      vehiclePlateNumber,
+      category = 'other',
+      subject,
+      description,
+      location,
+      attachments = [],
+      routeId,
+      posoEndorsementNotes,
+    } = req.body;
+
+    if (!subject || !description) {
+      return apiResponse.error(res, 'Subject and description are required for field violation report.', 400);
+    }
+
+    const year = new Date().getFullYear();
+    const randHex = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const lguCaseNumber = `POSO-FLD-${year}-${randHex}`;
+
+    const complaint = await Complaint.create({
+      userId: req.user._id,
+      source: 'poso_field_report',
+      category: category || 'other',
+      subject: subject.trim(),
+      description: description.trim(),
+      vehiclePlateNumber: vehiclePlateNumber?.trim() || '',
+      routeId: routeId || null,
+      location: typeof location === 'string' ? { address: location } : location,
+      attachments: attachments || [],
+      status: 'endorsed_to_lgu',
+      posoOfficerId: req.user._id,
+      posoBadgeNumber: req.user.badgeNumber || 'POSO-OFFICER',
+      posoEndorsementNotes: posoEndorsementNotes || 'Direct on-road field enforcement violation report filed by POSO officer.',
+      posoEndorsedAt: new Date(),
+      verifiedBy: req.user._id,
+      lguCaseNumber,
+      lguEndorsedAt: new Date(),
+    });
+
+    await logAuditEvent(req, {
+      action: 'POSO_FIELD_REPORT_CREATED',
+      resourceType: 'complaint',
+      resourceId: complaint._id,
+      details: { subject: complaint.subject, vehiclePlateNumber, lguCaseNumber, officer: req.user.badgeNumber },
+    });
+
+    return apiResponse.success(res, complaint, 'POSO Field Violation report recorded and endorsed to LGU.', 201);
+  } catch (error) { next(error); }
+};
+
+const endorseToLgu = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { endorsementNotes, adminNotes, notes } = req.body;
+    const complaint = await Complaint.findById(id);
+    if (!complaint) return apiResponse.error(res, 'Complaint not found.', 404);
+
+    const year = new Date().getFullYear();
+    const randHex = complaint._id.toString().slice(-6).toUpperCase();
+    const lguCaseNumber = `LGU-DAG-${year}-${randHex}`;
+    const officerNotes = endorsementNotes || notes || adminNotes || '';
+
+    complaint.status = 'endorsed_to_lgu';
+    complaint.lguCaseNumber = lguCaseNumber;
+    complaint.lguEndorsedAt = new Date();
+    complaint.verifiedBy = req.user._id;
+    complaint.posoOfficerId = req.user._id;
+    complaint.posoBadgeNumber = req.user.badgeNumber || '';
+    complaint.posoEndorsementNotes = officerNotes;
+    complaint.posoEndorsedAt = new Date();
+    if (officerNotes) complaint.adminNotes = officerNotes;
+    await complaint.save();
+
+    if (complaint.userId) {
+      await Notification.create({
+        userId: complaint.userId,
+        title: '🏛️ Verified by POSO & Endorsed to Dagupan LGU',
+        message: `Your complaint "${complaint.subject}" has been road-verified by POSO Officers and escalated to Dagupan City LGU. Tracking No: ${lguCaseNumber}.${officerNotes ? ` Notes: ${officerNotes}` : ''}`,
+        type: 'complaint_update',
+        metadata: { complaintId: complaint._id, status: 'endorsed_to_lgu', lguCaseNumber },
+      });
+    }
+
+    await logAuditEvent(req, {
+      action: 'COMPLAINT_VERIFIED_TO_LGU',
+      resourceType: 'complaint',
+      resourceId: complaint._id,
+      details: { subject: complaint.subject, lguCaseNumber, posoBadge: req.user.badgeNumber },
+    });
+
+    return apiResponse.success(res, complaint, 'Complaint road-verified by POSO and endorsed to Dagupan LGU.');
+  } catch (error) { next(error); }
+};
+
 const deleteComplaintWithReason = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -233,12 +340,13 @@ const deleteComplaintWithReason = async (req, res, next) => {
 const lguTakeAction = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { lguActionNotes } = req.body;
+    const { lguActionNotes, sanctionIssued } = req.body;
     const complaint = await Complaint.findById(id);
     if (!complaint) return apiResponse.error(res, 'Complaint not found.', 404);
 
     complaint.status = 'action_taken';
     complaint.lguActionNotes = lguActionNotes;
+    if (sanctionIssued) complaint.sanctionIssued = sanctionIssued;
     complaint.lguActionTakenAt = new Date();
     complaint.lguHandledBy = req.user._id;
     await complaint.save();
@@ -548,6 +656,8 @@ module.exports = {
   updateMyComplaint,
   archiveMyComplaint,
   unarchiveMyComplaint,
+  createFieldReport,
+  endorseToLgu,
   deleteMyComplaint,
   undoMyComplaint,
 };

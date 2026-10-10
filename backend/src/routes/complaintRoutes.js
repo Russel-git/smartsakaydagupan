@@ -13,6 +13,8 @@ const {
   lguTerminateSchema,
   addAdminNotesSchema,
   updateCommuterComplaintSchema,
+  posoFieldReportSchema,
+  posoEndorseSchema,
 } = require('../validators/complaintValidator');
 
 router.use(authMiddleware);
@@ -27,15 +29,21 @@ router.put('/my/:id/archive', rbac('commuter'), complaintController.archiveMyCom
 router.put('/my/:id/unarchive', rbac('commuter'), complaintController.unarchiveMyComplaint);
 router.delete('/my/:id', rbac('commuter'), complaintController.deleteMyComplaint);
 router.put('/my/:id/undo', rbac('commuter'), complaintController.undoMyComplaint);
-router.get('/:id', rbac('commuter', 'admin', 'lgu', 'superadmin'), complaintController.getComplaintById);
+router.get('/:id', rbac('commuter', 'admin', 'lgu', 'poso'), complaintController.getComplaintById);
 
-// Staff / Operator / LGU routes
-router.get('/', rbac('superadmin', 'admin', 'lgu'), complaintController.getAllComplaints);
-router.put('/:id/verify-lgu', rbac('superadmin', 'admin'), complaintController.verifyAndEndorseToLgu);
-router.delete('/:id', rbac('superadmin', 'admin'), validate(deleteComplaintSchema), complaintController.deleteComplaintWithReason);
-router.put('/:id/lgu-action', rbac('superadmin', 'lgu'), validate(lguActionSchema), complaintController.lguTakeAction);
-router.put('/:id/lgu-terminate', rbac('superadmin', 'lgu'), validate(lguTerminateSchema), complaintController.lguTerminate);
-router.put('/:id/status', rbac('superadmin', 'admin'), validate(updateComplaintStatusSchema), complaintController.updateComplaintStatus);
-router.put('/:id/notes', rbac('superadmin', 'admin'), validate(addAdminNotesSchema), complaintController.addAdminNotes);
+// Staff / LGU / POSO routes
+router.get('/', rbac('admin', 'lgu', 'poso'), complaintController.getAllComplaints);
+
+// POSO Field Enforcement & Triage routes
+router.post('/field-report', rbac('poso', 'admin'), validate(posoFieldReportSchema), complaintController.createFieldReport);
+router.patch('/:id/endorse', rbac('poso', 'admin'), validate(posoEndorseSchema), complaintController.endorseToLgu);
+router.put('/:id/verify-lgu', rbac('poso', 'admin'), complaintController.verifyAndEndorseToLgu);
+
+// LGU Action Desk & Admin Management routes
+router.put('/:id/lgu-action', rbac('lgu', 'admin'), validate(lguActionSchema), complaintController.lguTakeAction);
+router.put('/:id/lgu-terminate', rbac('lgu', 'admin'), validate(lguTerminateSchema), complaintController.lguTerminate);
+router.delete('/:id', rbac('admin'), validate(deleteComplaintSchema), complaintController.deleteComplaintWithReason);
+router.put('/:id/status', rbac('admin', 'lgu'), validate(updateComplaintStatusSchema), complaintController.updateComplaintStatus);
+router.put('/:id/notes', rbac('admin', 'lgu', 'poso'), validate(addAdminNotesSchema), complaintController.addAdminNotes);
 
 module.exports = router;

@@ -36,7 +36,19 @@ const complaintSchema = new mongoose.Schema(
     adminNotes: { type: String, default: '' },
     verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
-    // LGU Tracking
+    // POSO Road Triage & Field Report
+    source: {
+      type: String,
+      enum: ['commuter', 'poso_field_report'],
+      default: 'commuter',
+    },
+    posoOfficerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    posoBadgeNumber: { type: String, default: '', trim: true },
+    posoEndorsementNotes: { type: String, default: '' },
+    posoEndorsedAt: { type: Date, default: null },
+
+    // LGU Tracking & Sanctions
+    sanctionIssued: { type: String, default: '', trim: true },
     lguCaseNumber: { type: String, default: '', trim: true },
     lguEndorsedAt: { type: Date, default: null },
     lguActionNotes: { type: String, default: '' },
