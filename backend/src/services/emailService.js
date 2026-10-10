@@ -1,26 +1,41 @@
 const nodemailer = require('nodemailer');
 const config = require('../config/env');
 
-const createTransporter = (options = {}) => {
+const createGmailTransporter = () => {
   const cleanPass = config.gmail.appPassword ? config.gmail.appPassword.replace(/\s+/g, '') : '';
-  const user = config.smtp.user || config.gmail.user;
-  const pass = (config.smtp.pass ? config.smtp.pass.replace(/\s+/g, '') : '') || cleanPass;
-
-  const port = options.port || Number(config.smtp.port) || 465;
-  const secure = options.secure !== undefined ? options.secure : port === 465;
+  const user = config.gmail.user || config.smtp.user || 'flamease.config@gmail.com';
+  const pass = cleanPass || config.smtp.pass || 'oeadbyahwffquxou';
 
   return nodemailer.createTransport({
-    host: options.host || config.smtp.host || 'smtp.gmail.com',
+    service: 'gmail',
+    auth: {
+      user,
+      pass,
+    },
+    family: 4,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+  });
+};
+
+const createSmtpTransporter = (port = 465, secure = true) => {
+  const cleanPass = config.gmail.appPassword ? config.gmail.appPassword.replace(/\s+/g, '') : '';
+  const user = config.smtp.user || config.gmail.user || 'flamease.config@gmail.com';
+  const pass = (config.smtp.pass ? config.smtp.pass.replace(/\s+/g, '') : '') || cleanPass || 'oeadbyahwffquxou';
+
+  return nodemailer.createTransport({
+    host: config.smtp.host || 'smtp.gmail.com',
     port,
     secure,
     auth: {
       user,
       pass,
     },
-    family: 4, // CRITICAL: Force IPv4 to prevent ENETUNREACH on cloud environments like Render
-    connectionTimeout: 4000,
-    greetingTimeout: 4000,
-    socketTimeout: 5000,
+    family: 4,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     tls: {
       rejectUnauthorized: false,
     },
@@ -28,15 +43,6 @@ const createTransporter = (options = {}) => {
 };
 
 const sendOtp = async (email, code, type = 'registration') => {
-  const cleanPass = config.gmail.appPassword ? config.gmail.appPassword.replace(/\s+/g, '') : '';
-  const hasSmtp = Boolean((config.smtp.host || config.gmail.user) && (config.smtp.pass || cleanPass));
-
-  // Allow automated test runner to simulate dispatch without internet
-  if (process.env.NODE_ENV === 'test' && !hasSmtp) {
-    console.log(`[TEST EMAIL] Simulated dispatch to ${email} (code: ${code})`);
-    return true;
-  }
-
   const subjects = {
     registration: 'SmartSakay Dagupan - Email Verification Code',
     password_reset: 'SmartSakay Dagupan - Password Reset Code',
@@ -44,7 +50,7 @@ const sendOtp = async (email, code, type = 'registration') => {
   };
 
   const mailOptions = {
-    from: `"SmartSakay Dagupan" <${config.gmail.user || config.smtp.user || 'no-reply@smartsakay.com'}>`,
+    from: `"SmartSakay Dagupan" <${config.gmail.user || config.smtp.user || 'flamease.config@gmail.com'}>`,
     to: email,
     subject: subjects[type] || subjects.registration,
     html: `
@@ -64,37 +70,29 @@ const sendOtp = async (email, code, type = 'registration') => {
     `,
   };
 
-  // Try Primary: Port 465 SSL with IPv4
+  // Try 1: Nodemailer built-in 'gmail' service (Direct & most reliable)
   try {
-    const transporter = createTransporter({ port: 465, secure: true });
+    const transporter = createGmailTransporter();
     const info = await transporter.sendMail(mailOptions);
-    console.log(`✉️ [EMAIL SENT via 465 SSL] Successfully dispatched to ${email} (MessageId: ${info.messageId})`);
+    console.log(`✉️ [EMAIL SENT via Gmail Service] Successfully dispatched to ${email} (MessageId: ${info.messageId})`);
     return true;
   } catch (error1) {
-    console.warn(`⚠️ [PRIMARY SMTP 465 FAILED] ${error1.message}. Trying port 587 STARTTLS...`);
+    console.warn(`⚠️ [GMAIL SERVICE FAILED] ${error1.message}. Trying port 465 SSL...`);
 
-    // Try Secondary: Port 587 STARTTLS with IPv4
+    // Try 2: Port 465 SSL with IPv4
     try {
-      const transporter587 = createTransporter({ port: 587, secure: false });
-      const info2 = await transporter587.sendMail(mailOptions);
-      console.log(`✉️ [EMAIL SENT via 587 TLS] Successfully dispatched to ${email} (MessageId: ${info2.messageId})`);
+      const transporter465 = createSmtpTransporter(465, true);
+      const info2 = await transporter465.sendMail(mailOptions);
+      console.log(`✉️ [EMAIL SENT via 465 SSL] Successfully dispatched to ${email} (MessageId: ${info2.messageId})`);
       return true;
     } catch (error2) {
-      console.warn(`⚠️ [SECONDARY SMTP 587 FAILED] ${error2.message}. Trying service 'gmail'...`);
+      console.warn(`⚠️ [PORT 465 FAILED] ${error2.message}. Trying port 587 STARTTLS...`);
 
-      // Try Tertiary: Nodemailer built-in 'gmail' service
+      // Try 3: Port 587 STARTTLS with IPv4
       try {
-        const gmailTransporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            user: config.gmail.user || config.smtp.user,
-            pass: cleanPass || config.smtp.pass,
-          },
-          family: 4,
-          connectionTimeout: 8000,
-        });
-        const info3 = await gmailTransporter.sendMail(mailOptions);
-        console.log(`✉️ [EMAIL SENT via service gmail] Successfully dispatched to ${email} (MessageId: ${info3.messageId})`);
+        const transporter587 = createSmtpTransporter(587, false);
+        const info3 = await transporter587.sendMail(mailOptions);
+        console.log(`✉️ [EMAIL SENT via 587 TLS] Successfully dispatched to ${email} (MessageId: ${info3.messageId})`);
         return true;
       } catch (error3) {
         console.error(`⚠️ [ALL SMTP TRANSPORTS FAILED]:`, error3.message);

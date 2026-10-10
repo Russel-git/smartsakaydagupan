@@ -34,15 +34,13 @@ const register = async (req, res, next) => {
       },
     });
 
-    // Dispatch code to user's email via emailService with a 3.5s race to guarantee client never times out
+    // Dispatch code to user's email via emailService
     let emailSent = false;
     try {
-      const emailPromise = emailService.sendOtp(email, otpCode, 'registration');
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP timeout')), 3500));
-      await Promise.race([emailPromise, timeoutPromise]);
+      await emailService.sendOtp(email, otpCode, 'registration');
       emailSent = true;
     } catch (mailErr) {
-      console.warn(`⚠️ [REGISTRATION] Email dispatch issue (${mailErr.message}). Saving pending OTP for verification.`);
+      console.warn(`⚠️ [REGISTRATION] Email dispatch issue (${mailErr.message}).`);
     }
 
     return apiResponse.success(
@@ -53,7 +51,7 @@ const register = async (req, res, next) => {
         demoOtp: emailSent ? undefined : otpCode,
       },
       emailSent
-        ? 'Verification code sent to your email. Please check your inbox and enter the 6-digit code to complete account creation.'
+        ? 'Verification code sent to your email. Please check your inbox to complete account creation.'
         : `Verification code generated (${otpCode}). Please enter it to complete account creation.`,
       201
     );
@@ -162,9 +160,7 @@ const resendOtp = async (req, res, next) => {
 
     let emailSent = false;
     try {
-      const emailPromise = emailService.sendOtp(email, otpCode, type);
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP timeout')), 3500));
-      await Promise.race([emailPromise, timeoutPromise]);
+      await emailService.sendOtp(email, otpCode, type);
       emailSent = true;
     } catch (mailErr) {
       console.warn(`⚠️ [RESEND OTP] Email dispatch issue (${mailErr.message}).`);
