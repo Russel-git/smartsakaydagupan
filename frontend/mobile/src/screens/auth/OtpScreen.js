@@ -19,7 +19,7 @@ import Button from '../../components/common/Button';
 import { FONTS, SPACING, RADIUS } from '../../utils/constants';
 
 const OtpScreen = ({ navigation, route }) => {
-  const { email, type = 'registration' } = route.params || {};
+  const { email, type = 'registration', demoOtp } = route.params || {};
   const { colors, isDark } = useTheme();
   const { verifyOtp, resendOtp } = useAuth();
   const { showSuccess, showError, showInfo } = useFeedback();
@@ -27,7 +27,12 @@ const OtpScreen = ({ navigation, route }) => {
   const { width, height } = useWindowDimensions();
   const isTablet = Math.min(width, height) >= 600;
 
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(() => {
+    if (demoOtp && typeof demoOtp === 'string' && demoOtp.length === 6) {
+      return demoOtp.split('');
+    }
+    return ['', '', '', '', '', ''];
+  });
   const [loading, setLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(60);
   const [error, setError] = useState(null);

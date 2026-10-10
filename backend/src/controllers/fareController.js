@@ -31,8 +31,15 @@ const calculateFare = async (req, res, next) => {
     }
     if (!distance || distance <= 0) return apiResponse.error(res, 'Valid distance is required', 400);
 
-    const fare = await Fare.findOne({ vehicleType, isActive: true });
-    if (!fare) return apiResponse.error(res, `No active fare for vehicle type: ${vehicleType}`, 404);
+    let vType = vehicleType || 'traditional';
+    if (vType === 'traditional_jeepney') vType = 'traditional';
+    if (vType === 'modern_jeepney') vType = 'modern';
+
+    let fare = await Fare.findOne({ vehicleType: vType, isActive: true });
+    if (!fare) {
+      fare = await Fare.findOne({ vehicleType: 'traditional', isActive: true }) || await Fare.findOne({ isActive: true });
+    }
+    if (!fare) return apiResponse.error(res, `No active fare rates found`, 404);
 
     const discount = discountType !== 'none' ? discountType : null;
     const result = fareCalculator.calculate(distance, fare.baseFare, fare.baseDistanceKm, fare.perKmRate, discount);

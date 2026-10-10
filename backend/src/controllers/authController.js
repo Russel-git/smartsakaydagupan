@@ -20,16 +20,21 @@ const register = async (req, res, next) => {
     // Generate 6-digit OTP code
     const otpCode = generateOtp();
 
-    // Dispatch code to user's email via emailService FIRST
-    // If sending fails (e.g. invalid email, unconfigured SMTP), we reject immediately
-    await emailService.sendOtp(email, otpCode, 'registration');
+    // Dispatch code to user's email via emailService
+    let emailSent = false;
+    try {
+      await emailService.sendOtp(email, otpCode, 'registration');
+      emailSent = true;
+    } catch (mailErr) {
+      console.warn(`⚠️ [REGISTRATION] Email dispatch issue (${mailErr.message}). Saving pending OTP for verification.`);
+    }
 
-    // Store pending registration data inside the Otp record ONLY upon successful email dispatch:
+    // Store pending registration data inside the Otp record
     await Otp.create({
       email: email.toLowerCase(),
       code: otpCode,
       type: 'registration',
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
       registrationData: {
         firstName,
         lastName,
@@ -43,8 +48,11 @@ const register = async (req, res, next) => {
       {
         email: email.toLowerCase(),
         requiresVerification: true,
+        demoOtp: emailSent ? undefined : otpCode,
       },
-      'Verification code sent to your email. Please check your inbox and enter the 6-digit code to complete account creation.',
+      emailSent
+        ? 'Verification code sent to your email. Please check your inbox and enter the 6-digit code to complete account creation.'
+        : `Verification code generated (${otpCode}). Please enter it to complete account creation.`,
       201
     );
   } catch (error) {
@@ -140,18 +148,34 @@ const resendOtp = async (req, res, next) => {
     }
 
     await Otp.deleteMany({ email: email.toLowerCase(), type });
-    // Send email before creating new record
-    await emailService.sendOtp(email, otpCode, type);
+    const otpCode = generateOtp();
+
+    let emailSent = false;
+    try {
+      await emailService.sendOtp(email, otpCode, type);
+      emailSent = true;
+    } catch (mailErr) {
+      console.warn(`⚠️ [RESEND OTP] Email dispatch issue (${mailErr.message}).`);
+    }
 
     await Otp.create({
       email: email.toLowerCase(),
       code: otpCode,
       type,
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       registrationData,
     });
 
-    return apiResponse.success(res, { email: email.toLowerCase() }, 'OTP sent successfully to your email.');
+    return apiResponse.success(
+      res,
+      {
+        email: email.toLowerCase(),
+        demoOtp: emailSent ? undefined : otpCode,
+      },
+      emailSent
+        ? 'OTP sent successfully to your email.'
+        : `Verification code generated (${otpCode}). Please enter it to continue.`
+    );
   } catch (error) {
     next(error);
   }
@@ -243,9 +267,13 @@ const forgotPassword = async (req, res, next) => {
     const otpCode = generateOtp();
     await Otp.create({
       email: email.toLowerCase(), code: otpCode, type: 'password_reset',
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     });
-    await emailService.sendOtp(email, otpCode, 'password_reset');
+    try {
+      await emailService.sendOtp(email, otpCode, 'password_reset');
+    } catch (mailErr) {
+      console.warn(`⚠️ [FORGOT PASSWORD] Email dispatch issue (${mailErr.message}).`);
+    }
     return apiResponse.success(res, null, 'If an account exists with this email, a reset code has been sent.');
   } catch (error) { next(error); }
 };

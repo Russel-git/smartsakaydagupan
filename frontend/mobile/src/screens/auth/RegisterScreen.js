@@ -161,6 +161,7 @@ const RegisterScreen = ({ navigation }) => {
         navigation.navigate("Otp", {
           email: form.email.trim(),
           type: "registration",
+          demoOtp: res?.data?.demoOtp,
         });
       }
     } catch (e) {

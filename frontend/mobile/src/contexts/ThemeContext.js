@@ -8,7 +8,7 @@ import React, {
 
 import { useColorScheme } from "react-native";
 
-import { saveTheme, getTheme } from "../utils/storage";
+import { saveTheme, getTheme, getAccessToken } from "../utils/storage";
 
 import { themeAPI } from "../api/services";
 import { getThemeColors } from "../utils/themePalettes";
@@ -59,8 +59,13 @@ export const ThemeProvider = ({ children }) => {
   useEffect(() => {
     const loadAccountTheme = async () => {
       try {
-        const response = await themeAPI.getTheme();
+        const token = await getAccessToken();
+        if (!token) {
+          setIsLoaded(true);
+          return;
+        }
 
+        const response = await themeAPI.getTheme();
         const storedTheme = response?.data?.theme;
 
         if (
