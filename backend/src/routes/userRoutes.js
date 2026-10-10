@@ -10,6 +10,7 @@ router.use(authMiddleware);
 router.get('/me', userController.getProfile);
 router.put('/me', validate(updateProfileSchema), userController.updateProfile);
 router.put('/me/password', validate(changePasswordSchema), userController.changePassword);
+router.delete('/me', userController.deleteMyAccount);
 router.get('/', rbac('superadmin'), userController.getAllUsers);
 router.post('/', rbac('superadmin'), userController.createUser);
 router.put('/:id/role', rbac('superadmin'), userController.updateUserRole);

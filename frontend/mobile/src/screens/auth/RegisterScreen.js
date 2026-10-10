@@ -17,6 +17,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useFeedback } from "../../contexts/FeedbackContext";
 import Button from "../../components/common/Button";
 import Input from "../../components/common/Input";
+import TermsAndConditionsModal from "../../components/legal/TermsAndConditionsModal";
 import { FONTS, SPACING, RADIUS } from "../../utils/constants";
 import { isValidEmail, validatePassword } from "../../utils/helpers";
 
@@ -51,6 +52,8 @@ const RegisterScreen = ({ navigation }) => {
   const [selectedExtension, setSelectedExtension] = useState("None");
   const [customExtension, setCustomExtension] = useState("");
   const [showExtensionDropdown, setShowExtensionDropdown] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -130,6 +133,11 @@ const RegisterScreen = ({ navigation }) => {
     }
     if (form.password !== form.confirmPassword)
       e.confirmPassword = "Passwords do not match";
+
+    if (!termsAccepted) {
+      e.terms = "Please accept the Terms & Conditions and Transit Disclaimers";
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -404,6 +412,56 @@ const RegisterScreen = ({ navigation }) => {
             leftIcon="lock-check-outline"
           />
 
+          {/* Terms & Conditions Agreement Checkbox */}
+          <View style={styles.termsRow}>
+            <TouchableOpacity
+              style={[
+                styles.checkbox,
+                {
+                  borderColor: errors.terms
+                    ? colors.error
+                    : termsAccepted
+                    ? colors.primary
+                    : colors.border,
+                  backgroundColor: termsAccepted ? colors.primary : colors.surface,
+                },
+              ]}
+              onPress={() => {
+                if (!termsAccepted) {
+                  setShowTermsModal(true);
+                } else {
+                  setTermsAccepted(false);
+                }
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.7}
+              accessibilityLabel="Accept Terms and Conditions checkbox"
+            >
+              {termsAccepted && (
+                <MaterialCommunityIcons name="check" size={15} color="#FFFFFF" />
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.termsTextWrapper}>
+              <Text style={[styles.termsText, { color: colors.textSecondary }]}>
+                I have read and agree to the{" "}
+                <Text
+                  style={[styles.termsLink, { color: colors.primary }]}
+                  onPress={() => setShowTermsModal(true)}
+                >
+                  Terms & Conditions
+                </Text>{" "}
+                and Dagupan Transit Disclaimers.
+              </Text>
+            </View>
+          </View>
+
+          {Boolean(errors.terms) && (
+            <Text style={[styles.termsErrorText, { color: colors.error }]}>
+              {errors.terms}
+            </Text>
+          )}
+
           <Button
             title="Create Account"
             onPress={handleRegister}
@@ -429,6 +487,22 @@ const RegisterScreen = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Onboarding Terms & Conditions Modal with Scroll-to-Accept */}
+      <TermsAndConditionsModal
+        visible={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+        onAccept={() => {
+          setTermsAccepted(true);
+          setErrors((prev) => {
+            const next = { ...prev };
+            delete next.terms;
+            return next;
+          });
+        }}
+        readOnly={false}
+        title="Terms & Transit Disclaimers"
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -508,6 +582,38 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   dropdownOptionText: { fontSize: FONTS.sizes.sm },
+  termsRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
+    gap: SPACING.md,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 5,
+    borderWidth: 1.8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  termsTextWrapper: {
+    flex: 1,
+  },
+  termsText: {
+    fontSize: FONTS.sizes.xs,
+    lineHeight: 18,
+  },
+  termsLink: {
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
+  termsErrorText: {
+    fontSize: FONTS.sizes.xs,
+    marginTop: 4,
+    marginBottom: SPACING.xs,
+  },
 });
 
 export default RegisterScreen;

@@ -160,4 +160,55 @@ const deleteUser = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getProfile, updateProfile, changePassword, getAllUsers, createUser, updateUserRole, updateUserStatus, deleteUser };
+const deleteMyAccount = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId);
+    if (!user) return apiResponse.error(res, 'User not found.', 404);
+
+    if (user.role === 'superadmin') {
+      return apiResponse.error(res, 'Superadmin accounts cannot be deleted through this interface.', 403);
+    }
+
+    const { password } = req.body || {};
+    if (password) {
+      const isMatch = await user.comparePassword(password);
+      if (!isMatch) {
+        return apiResponse.error(res, 'Incorrect password. Account deletion aborted.', 401);
+      }
+    }
+
+    const email = user.email.toLowerCase();
+    const fullName = `${user.firstName} ${user.lastName}`;
+
+    await User.findByIdAndDelete(userId);
+    await Otp.deleteMany({ email });
+
+    await logAuditEvent(req, {
+      action: 'USER_SELF_DELETE',
+      resourceType: 'user',
+      resourceId: userId,
+      details: {
+        email,
+        name: fullName,
+        role: user.role,
+        policy: 'AppStore_GooglePlay_Policy_Compliance',
+      },
+    });
+
+    return apiResponse.success(res, null, 'Your commuter account and personal data have been permanently removed.');
+  } catch (error) { next(error); }
+};
+
+module.exports = {
+  getProfile,
+  updateProfile,
+  changePassword,
+  getAllUsers,
+  createUser,
+  updateUserRole,
+  updateUserStatus,
+  deleteUser,
+  deleteMyAccount,
+};
+

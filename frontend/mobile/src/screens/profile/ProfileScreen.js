@@ -19,6 +19,7 @@ import { Card, Divider } from "../../components/common/SharedComponents";
 import Button from "../../components/common/Button";
 import Input from "../../components/common/Input";
 import ConfirmDialogModal from "../../components/common/ConfirmDialogModal";
+import DeleteAccountModal from "../../components/profile/DeleteAccountModal";
 import { usersAPI } from "../../api/services";
 import { FONTS, SPACING, RADIUS } from "../../utils/constants";
 import { getInitials } from "../../utils/helpers";
@@ -44,6 +45,7 @@ const ProfileScreen = ({ navigation }) => {
   });
   const [loading, setLoading] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const handleSave = async () => {
     const lettersRegex = /^[A-Za-z][A-Za-z\s.'’\-]*[A-Za-z.]$/;
@@ -444,6 +446,30 @@ const ProfileScreen = ({ navigation }) => {
               color={colors.textMuted}
             />
           </TouchableOpacity>
+          <Divider />
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => navigation.navigate("Terms")}
+          >
+            <MaterialCommunityIcons
+              name="file-document-outline"
+              size={22}
+              color={colors.primary}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.linkText, { color: colors.textPrimary }]}>
+                Terms & Transit Disclaimers
+              </Text>
+              <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                LTFRB fare rules, route advisories & flood notices
+              </Text>
+            </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={22}
+              color={colors.textMuted}
+            />
+          </TouchableOpacity>
           {isAdmin && (
             <>
               <Divider />
@@ -480,10 +506,53 @@ const ProfileScreen = ({ navigation }) => {
           }
         />
 
+        {/* App Store & Google Play Compliant Account Deletion Row */}
+        {!isAdmin && (
+          <TouchableOpacity
+            style={[
+              styles.deleteAccountRow,
+              {
+                borderColor: isDark ? "#7F1D1D" : "#FECACA",
+                backgroundColor: isDark ? "#450A0A30" : "#FEF2F2",
+              },
+            ]}
+            onPress={() => setShowDeleteModal(true)}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons
+              name="trash-can-outline"
+              size={20}
+              color="#DC2626"
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.deleteAccountTitle}>Delete Account</Text>
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: isDark ? "#F87171" : "#B91C1C",
+                  marginTop: 1,
+                }}
+              >
+                Permanently delete profile and transit data
+              </Text>
+            </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={20}
+              color="#DC2626"
+            />
+          </TouchableOpacity>
+        )}
+
         <Text style={[styles.version, { color: colors.textMuted }]}>
           SmartSakay Dagupan v1.0.0
         </Text>
       </View>
+
+      <DeleteAccountModal
+        visible={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+      />
 
       {/* Modern UI/UX Confirmation Modal */}
       <ConfirmDialogModal
@@ -570,6 +639,22 @@ const styles = StyleSheet.create({
   },
   linkText: { flex: 1, fontSize: FONTS.sizes.md, fontWeight: "600" },
   logoutBtn: { marginTop: SPACING.lg, minHeight: 52 },
+  deleteAccountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    marginTop: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    minHeight: 52,
+  },
+  deleteAccountTitle: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
   version: {
     textAlign: "center",
     fontSize: FONTS.sizes.xs,

@@ -7,7 +7,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useNotifications } from "../contexts/NotificationContext";
 import { LoadingSpinner, Badge } from "../components/common/SharedComponents";
-import { View } from "react-native";
+import { View, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Splash Screen
 import AnimatedIntroScreen from "../screens/splash_screen/AnimatedIntroScreen";
@@ -39,6 +40,7 @@ import NotificationsScreen from "../screens/notifications/NotificationsScreen";
 import ProfileScreen from "../screens/profile/ProfileScreen";
 import ChangePasswordScreen from "../screens/profile/ChangePasswordScreen";
 import CommuterRightsScreen from "../screens/profile/CommuterRightsScreen";
+import TermsScreen from "../screens/profile/TermsScreen";
 import GuestProfileScreen from "../screens/profile/GuestProfileScreen";
 
 // Admin screens
@@ -60,6 +62,7 @@ const AuthStack = ({ initialRouteName = "Welcome" }) => (
     <Stack.Screen name="Register" component={RegisterScreen} />
     <Stack.Screen name="Otp" component={OtpScreen} />
     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    <Stack.Screen name="Terms" component={TermsScreen} />
   </Stack.Navigator>
 );
 
@@ -106,6 +109,11 @@ const HomeStack = () => (
       name="ForgotPassword"
       component={ForgotPasswordScreen}
       options={{ headerShown: true, title: "Reset Password" }}
+    />
+    <Stack.Screen
+      name="Terms"
+      component={TermsScreen}
+      options={{ headerShown: false }}
     />
   </Stack.Navigator>
 );
@@ -191,12 +199,24 @@ const MoreStack = () => (
       component={SendNotificationScreen}
       options={{ headerShown: true, title: "Send Notification" }}
     />
+    <Stack.Screen
+      name="Terms"
+      component={TermsScreen}
+      options={{ headerShown: false }}
+    />
   </Stack.Navigator>
 );
 
 // Guest Tab Navigator (limited access)
 const GuestTabs = () => {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(
+    insets.bottom,
+    Platform.OS === "android" ? 18 : 12,
+  );
+  const tabHeight = 62 + bottomPadding;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -206,11 +226,20 @@ const GuestTabs = () => {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          paddingBottom: 6,
-          paddingTop: 4,
-          height: 58,
+          paddingBottom: bottomPadding,
+          paddingTop: 8,
+          height: tabHeight,
+          elevation: 10,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 4,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600",
+          marginTop: 2,
+        },
         tabBarIcon: ({ color, size }) => {
           const icons = {
             Home: "home",
@@ -244,6 +273,12 @@ const GuestTabs = () => {
 const MainTabs = () => {
   const { colors } = useTheme();
   const { unreadCount } = useNotifications();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(
+    insets.bottom,
+    Platform.OS === "android" ? 18 : 12,
+  );
+  const tabHeight = 62 + bottomPadding;
 
   return (
     <Tab.Navigator
@@ -254,11 +289,20 @@ const MainTabs = () => {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          paddingBottom: 6,
-          paddingTop: 4,
-          height: 58,
+          paddingBottom: bottomPadding,
+          paddingTop: 8,
+          height: tabHeight,
+          elevation: 10,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 4,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600",
+          marginTop: 2,
+        },
         tabBarIcon: ({ color, size }) => {
           const icons = {
             Home: "home",

@@ -15,6 +15,7 @@ export const usersAPI = {
   getProfile: () => apiClient.get("/users/me"),
   updateProfile: (data) => apiClient.put("/users/me", data),
   changePassword: (data) => apiClient.put("/users/me/password", data),
+  deleteMyAccount: (data) => apiClient.delete("/users/me", { data }),
   getAllUsers: (params) => apiClient.get("/users", { params }),
   updateUserStatus: (id, data) => apiClient.put(`/users/${id}/status`, data),
 };

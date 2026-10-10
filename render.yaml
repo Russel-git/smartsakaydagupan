@@ -3,7 +3,7 @@ services:
     name: smartsakay-backend
     env: node
     plan: free
-    rootDir: server
+    rootDir: backend
     buildCommand: npm install
     startCommand: node src/server.js
     autoDeploy: true

@@ -146,6 +146,20 @@ const GuestProfileScreen = ({ navigation }) => {
           <MaterialCommunityIcons name="open-in-new" size={18} color={colors.textMuted} />
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 10 }]}
+          onPress={() => navigation.navigate('Home', { screen: 'Terms' })}
+        >
+          <View style={[styles.menuIcon, { backgroundColor: colors.primary + '20' }]}>
+            <MaterialCommunityIcons name="file-document-outline" size={20} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Terms & Transit Disclaimers</Text>
+            <Text style={[styles.menuSublabel, { color: colors.textMuted }]}>LTFRB fare rules, route advisories & flood notices</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+
         <View style={styles.footerNote}>
           <Text style={[styles.versionText, { color: colors.textMuted }]}>
             SmartSakay Dagupan v1.0.0 • Public Transit Companion
