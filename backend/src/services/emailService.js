@@ -18,9 +18,9 @@ const createTransporter = (options = {}) => {
       pass,
     },
     family: 4, // CRITICAL: Force IPv4 to prevent ENETUNREACH on cloud environments like Render
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 4000,
+    greetingTimeout: 4000,
+    socketTimeout: 5000,
     tls: {
       rejectUnauthorized: false,
     },

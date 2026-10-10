@@ -13,7 +13,7 @@ const getAdminBaseUrl = () => {
 
 const api = axios.create({
   baseURL: getAdminBaseUrl(),
-  timeout: 15000,
+  timeout: 30000,
 });
 
 api.interceptors.request.use((config) => {
