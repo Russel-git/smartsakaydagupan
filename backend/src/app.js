@@ -38,10 +38,22 @@ app.use(
 
 app.use(
   cors({
-    origin:
-      config.nodeEnv === "development"
-        ? true
-        : process.env.ALLOWED_ORIGINS?.split(",") || [],
+    origin: (origin, callback) => {
+      if (!origin || config.nodeEnv === "development") {
+        return callback(null, true);
+      }
+      const allowedList = process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+        : [];
+      if (
+        allowedList.includes("*") ||
+        allowedList.includes(origin) ||
+        origin.endsWith(".vercel.app")
+      ) {
+        return callback(null, true);
+      }
+      callback(new Error(`CORS policy blocked access from origin: ${origin}`));
+    },
     credentials: true,
   }),
 );
