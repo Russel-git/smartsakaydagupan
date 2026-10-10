@@ -1,9 +1,6 @@
 const nodemailer = require('nodemailer');
 const config = require('../config/env');
 
-const nodemailer = require('nodemailer');
-const config = require('../config/env');
-
 const createTransporter = (options = {}) => {
   const cleanPass = config.gmail.appPassword ? config.gmail.appPassword.replace(/\s+/g, '') : '';
   const user = config.smtp.user || config.gmail.user;
