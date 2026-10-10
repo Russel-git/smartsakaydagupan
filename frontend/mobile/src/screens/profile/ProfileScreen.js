@@ -274,9 +274,7 @@ const ProfileScreen = ({ navigation }) => {
                     adjustsFontSizeToFit
                     minimumFontScale={0.8}
                   >
-                    {themeOption === "theme2"
-                      ? "Theme 2"
-                      : themeOption.replace("theme", "Theme ")}
+                    {themeOption.replace("theme", "Theme ")}
                   </Text>
                 </TouchableOpacity>
               ))}

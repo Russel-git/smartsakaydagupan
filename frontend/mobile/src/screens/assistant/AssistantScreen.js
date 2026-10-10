@@ -20,7 +20,6 @@ import { assistantAPI } from "../../api/services";
 import { FONTS, SPACING, RADIUS } from "../../utils/constants";
 import { formatDate } from "../../utils/helpers";
 import Markdown from "react-native-markdown-display";
-import speechService from "../../utils/speechService";
 
 const AssistantScreen = () => {
   const { colors } = useTheme();
@@ -37,11 +36,6 @@ const AssistantScreen = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
 
-  // PWD Voice-Over Accessibility States
-  const [isListening, setIsListening] = useState(false);
-  const [voiceModeActive, setVoiceModeActive] = useState(false);
-  const [speakingIndex, setSpeakingIndex] = useState(null);
-
   const [faqs] = useState([
     "What are the current jeepney fares?",
     "How can I check a jeepney route?",
@@ -50,17 +44,6 @@ const AssistantScreen = () => {
   ]);
 
   const flatListRef = useRef(null);
-
-  // --------------------------------------------------
-  // CLEANUP ON UNMOUNT
-  // --------------------------------------------------
-
-  useEffect(() => {
-    return () => {
-      speechService.stopListening();
-      speechService.stopSpeaking();
-    };
-  }, []);
 
   // --------------------------------------------------
   // AUTO SCROLL
@@ -98,161 +81,183 @@ const AssistantScreen = () => {
   };
 
   // --------------------------------------------------
-  // SEND MESSAGE (SUPPORTS TEXT & PWD VOICE-OVER)
+  // SEND MESSAGE
   // --------------------------------------------------
 
-  const sendMessage = async (overrideText = null, fromVoice = false) => {
-    const textToSend = (overrideText !== null ? overrideText : input).trim();
-    if (!textToSend || loading) return;
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
 
-    speechService.stopListening();
-    setIsListening(false);
     setShowFAQs(false);
 
     const userMsg = {
       role: "user",
-      content: textToSend,
+      content: input.trim(),
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMsg]);
 
-    if (overrideText === null) {
-      setInput("");
-    }
+    const messageToSend = input.trim();
+    setInput("");
     setLoading(true);
 
     try {
       const { data } = await assistantAPI.chat({
-        message: textToSend,
+        message: messageToSend,
         sessionId,
       });
 
       setSessionId(data.data?.sessionId || sessionId);
 
-      const assistantContent =
-        data.data?.response ||
-        data.data?.message ||
-        "I apologize, I could not process that request.";
-
       const assistantMsg = {
         role: "assistant",
-        content: assistantContent,
+        content:
+          data.data?.response ||
+          data.data?.message ||
+          "I apologize, I could not process that request.",
         timestamp: new Date(),
       };
 
-      setMessages((prev) => {
-        const nextList = [...prev, assistantMsg];
-        const newAssistantIndex = nextList.length - 1;
-
-        // Hands-Free PWD Voice-Over: Read response aloud if commuter asked via voice or has Voice Mode enabled
-        if (fromVoice || voiceModeActive) {
-          speechService.speak(assistantContent, {
-            lang: "fil-PH",
-            onStart: () => setSpeakingIndex(newAssistantIndex),
-            onDone: () => setSpeakingIndex(null),
-            onError: () => setSpeakingIndex(null),
-          });
-        }
-
-        return nextList;
-      });
+      setMessages((prev) => [...prev, assistantMsg]);
     } catch (e) {
-      const errContent =
-        "Sorry, I'm having trouble connecting right now. Please try again later.";
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: errContent,
+          content:
+            "Sorry, I'm having trouble connecting right now. Please try again later.",
           timestamp: new Date(),
         },
       ]);
-      if (fromVoice || voiceModeActive) {
-        speechService.speak(errContent);
-      }
     } finally {
       setLoading(false);
     }
   };
 
   // --------------------------------------------------
-  // VOICE RECOGNITION (PWD STT INPUT)
+  // CLEAR CHAT
   // --------------------------------------------------
 
-  const toggleVoiceRecognition = () => {
-    if (isListening) {
-      speechService.stopListening();
-      setIsListening(false);
-      if (input.trim()) {
-        sendMessage(input.trim(), true);
-      }
+  const clearChat = () => {
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(
+        "Are you sure you want to delete all of your chat history? This cannot be undone.",
+      );
+
+      if (!confirmed) return;
+
+      performClearHistory();
     } else {
-      speechService.stopSpeaking();
-      setSpeakingIndex(null);
-
-      const supported = speechService.isRecognitionSupported();
-      if (!supported) {
-        const msg =
-          Platform.OS === "web"
-            ? "Voice recognition requires a compatible browser like Google Chrome or Microsoft Edge. Please verify microphone access in your browser."
-            : "Voice input is currently active in Web mode (Google Chrome/Edge). Please ensure microphone permissions are granted.";
-        if (Platform.OS === "web") {
-          window.alert(msg);
-        } else {
-          Alert.alert("Voice Input Not Supported", msg);
-        }
-        return;
-      }
-
-      setIsListening(true);
-      speechService.startListening({
-        lang: "fil-PH", // Supports Filipino & English seamlessly
-        onResult: (transcript, isFinal) => {
-          setInput(transcript);
-          if (isFinal && transcript.trim()) {
-            setTimeout(() => {
-              sendMessage(transcript.trim(), true);
-            }, 600);
-          }
-        },
-        onError: (err) => {
-          console.warn("Speech recognition warning:", err);
-          setIsListening(false);
-        },
-        onEnd: () => {
-          setIsListening(false);
-        },
-      });
+      Alert.alert(
+        "Clear Chat History",
+        "Are you sure you want to delete all of your chat history? This cannot be undone.",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: performClearHistory,
+          },
+        ],
+      );
     }
   };
 
-  // --------------------------------------------------
-  // VOICE PLAYBACK (PWD TTS OUTPUT)
-  // --------------------------------------------------
+  const performClearHistory = async () => {
+    try {
+      await assistantAPI.clearHistory();
 
-  const handleToggleSpeak = (content, index) => {
-    if (speakingIndex === index) {
-      speechService.stopSpeaking();
-      setSpeakingIndex(null);
-    } else {
-      setSpeakingIndex(index);
-      speechService.speak(content, {
-        lang: "fil-PH",
-        onStart: () => setSpeakingIndex(index),
-        onDone: () => setSpeakingIndex(null),
-        onError: () => setSpeakingIndex(null),
-      });
+      setMessages([]);
+      setSessionId(null);
+      setChatHistory([]);
+      setShowFAQs(true);
+    } catch (error) {
+      console.log("Clear history error:", error);
+
+      if (Platform.OS === "web") {
+        window.alert(
+          "Unable to Clear History\n\nSomething went wrong while clearing your chat history.",
+        );
+      } else {
+        Alert.alert(
+          "Unable to Clear History",
+          "Something went wrong while clearing your chat history.",
+        );
+      }
     }
   };
 
-  // --------------------------------------------------
-  // RENDER MESSAGE
-  // --------------------------------------------------
+  const handleFAQ = async (question) => {
+    if (loading) return;
 
-  const renderMessage = ({ item, index }) => {
+    setShowFAQs(false);
+
+    const userMsg = {
+      role: "user",
+      content: question,
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMsg]);
+    setLoading(true);
+
+    try {
+      const { data } = await assistantAPI.chat({
+        message: question,
+        sessionId,
+      });
+
+      setSessionId(data.data?.sessionId || sessionId);
+
+      const assistantMsg = {
+        role: "assistant",
+        content:
+          data.data?.response ||
+          data.data?.message ||
+          "I apologize, I could not process that request.",
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, assistantMsg]);
+    } catch (e) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "Sorry, I'm having trouble connecting right now. Please try again later.",
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadConversation = async (selectedSessionId) => {
+    try {
+      setHistoryLoading(true);
+
+      const { data } = await assistantAPI.getHistory(selectedSessionId);
+
+      const historyMessages = data.data?.messages || [];
+
+      setSessionId(selectedSessionId);
+      setMessages(historyMessages);
+      setShowFAQs(false);
+      setHistoryVisible(false);
+    } catch (error) {
+      console.log("Failed to load conversation:", error);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const renderMessage = ({ item }) => {
     const isUser = item.role === "user";
-    const isSpeakingThis = speakingIndex === index;
 
     return (
       <View
@@ -354,55 +359,16 @@ const AssistantScreen = () => {
             {item.content}
           </Markdown>
 
-          <View
+          <Text
             style={[
-              styles.messageFooter,
-              { justifyContent: isUser ? "flex-end" : "space-between" },
+              styles.messageTime,
+              {
+                color: isUser ? "rgba(255,255,255,0.65)" : colors.textMuted,
+              },
             ]}
           >
-            {!isUser && (
-              <TouchableOpacity
-                style={[
-                  styles.speakActionBtn,
-                  isSpeakingThis && {
-                    backgroundColor: colors.primary + "18",
-                  },
-                ]}
-                onPress={() => handleToggleSpeak(item.content, index)}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  isSpeakingThis ? "Stop Voice-Over" : "Listen to answer"
-                }
-              >
-                <MaterialCommunityIcons
-                  name={isSpeakingThis ? "volume-high" : "volume-medium"}
-                  size={16}
-                  color={isSpeakingThis ? colors.primary : colors.textMuted}
-                />
-                <Text
-                  style={[
-                    styles.speakActionText,
-                    {
-                      color: isSpeakingThis ? colors.primary : colors.textMuted,
-                    },
-                  ]}
-                >
-                  {isSpeakingThis ? "Speaking..." : "Voice-over"}
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            <Text
-              style={[
-                styles.messageTime,
-                {
-                  color: isUser ? "rgba(255,255,255,0.65)" : colors.textMuted,
-                },
-              ]}
-            >
-              {formatDate(item.timestamp)}
-            </Text>
-          </View>
+            {formatDate(item.timestamp)}
+          </Text>
         </View>
       </View>
     );
@@ -492,40 +458,6 @@ const AssistantScreen = () => {
             </Text>
           </View>
         </View>
-
-        {/* Right Header: PWD Accessibility Voice-Over Switch */}
-        <TouchableOpacity
-          style={[
-            styles.voiceModeToggle,
-            {
-              backgroundColor: voiceModeActive
-                ? colors.primary + "18"
-                : colors.background,
-              borderColor: voiceModeActive ? colors.primary : colors.border,
-            },
-          ]}
-          onPress={() => {
-            const next = !voiceModeActive;
-            setVoiceModeActive(next);
-            if (!next) speechService.stopSpeaking();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Toggle PWD Hands-Free Voice Mode"
-        >
-          <MaterialCommunityIcons
-            name={voiceModeActive ? "volume-high" : "volume-off"}
-            size={18}
-            color={voiceModeActive ? colors.primary : colors.textMuted}
-          />
-          <Text
-            style={[
-              styles.voiceModeText,
-              { color: voiceModeActive ? colors.primary : colors.textMuted },
-            ]}
-          >
-            {voiceModeActive ? "Voice-Over ON" : "Voice-Over"}
-          </Text>
-        </TouchableOpacity>
       </View>
 
       <View
@@ -713,39 +645,6 @@ const AssistantScreen = () => {
               </View>
             )}
 
-            {/* Listening Indicator Banner for PWD Accessibility */}
-            {isListening && (
-              <View
-                style={[
-                  styles.listeningBanner,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: "#EF4444",
-                  },
-                ]}
-              >
-                <View style={styles.listeningLeft}>
-                  <View style={styles.pulsingDot} />
-                  <Text
-                    style={[
-                      styles.listeningText,
-                      { color: colors.textPrimary },
-                    ]}
-                  >
-                    Listening... Speak transit question in Tagalog or English
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={toggleVoiceRecognition}
-                  style={styles.doneListeningBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Stop listening and send"
-                >
-                  <Text style={styles.doneListeningText}>Done</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
             <View
               style={[
                 styles.inputContainer,
@@ -755,68 +654,33 @@ const AssistantScreen = () => {
                 },
               ]}
             >
-              {/* PWD Accessible Voice Microphone Button */}
-              <TouchableOpacity
-                onPress={toggleVoiceRecognition}
-                disabled={loading}
-                style={[
-                  styles.micButton,
-                  isListening && styles.micButtonActive,
-                  {
-                    backgroundColor: isListening
-                      ? "#EF4444"
-                      : colors.primary + "15",
-                    borderColor: isListening ? "#EF4444" : colors.primary,
-                  },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  isListening
-                    ? "Stop voice input"
-                    : "Speak question using voice"
-                }
-              >
-                <MaterialCommunityIcons
-                  name={isListening ? "microphone" : "microphone-outline"}
-                  size={22}
-                  color={isListening ? "#FFFFFF" : colors.primary}
-                />
-              </TouchableOpacity>
-
               <TextInput
                 style={[
                   styles.input,
                   {
                     backgroundColor: colors.background,
-                    borderColor: isListening ? "#EF4444" : colors.border,
+                    borderColor: colors.border,
                     color: colors.textPrimary,
                   },
                 ]}
-                placeholder={
-                  isListening
-                    ? "Listening... Speak your transit question..."
-                    : "Type or tap mic to speak..."
-                }
-                placeholderTextColor={
-                  isListening ? "#EF4444" : colors.textMuted
-                }
+                placeholder="Type your message..."
+                placeholderTextColor={colors.textMuted}
                 value={input}
                 onChangeText={setInput}
                 multiline
-                editable={!loading && !isListening}
-                onSubmitEditing={() => sendMessage()}
+                editable={!loading}
+                onSubmitEditing={sendMessage}
               />
 
               <TouchableOpacity
-                onPress={() => sendMessage()}
-                disabled={!input.trim() || loading || isListening}
+                onPress={sendMessage}
+                disabled={!input.trim() || loading}
                 style={[
                   styles.sendButton,
                   {
-                    backgroundColor:
-                      input.trim() && !loading && !isListening
-                        ? colors.primary
-                        : colors.border,
+                    backgroundColor: input.trim()
+                      ? colors.primary
+                      : colors.border,
                   },
                 ]}
               >
@@ -1440,109 +1304,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
     lineHeight: 16,
-  },
-
-  // --------------------------------------------------------
-  // PWD ACCESSIBILITY VOICE-OVER STYLES
-  // --------------------------------------------------------
-
-  voiceModeToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: RADIUS.md,
-    borderWidth: 1.5,
-    gap: 6,
-  },
-
-  voiceModeText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  listeningBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    marginHorizontal: SPACING.md,
-    marginBottom: 8,
-    borderRadius: RADIUS.md,
-    borderWidth: 1.5,
-  },
-
-  listeningLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-  },
-
-  pulsingDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#EF4444",
-  },
-
-  listeningText: {
-    fontSize: 12,
-    fontWeight: "700",
-    flex: 1,
-  },
-
-  doneListeningBtn: {
-    backgroundColor: "#EF4444",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: RADIUS.sm,
-  },
-
-  doneListeningText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  micButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  micButtonActive: {
-    transform: [{ scale: 1.08 }],
-    shadowColor: "#EF4444",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-
-  messageFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: SPACING.xs,
-    gap: 8,
-  },
-
-  speakActionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: RADIUS.sm,
-    gap: 4,
-  },
-
-  speakActionText: {
-    fontSize: 11,
-    fontWeight: "700",
   },
 });
 

@@ -96,102 +96,96 @@ export const getThemeColors = (theme = "theme1") => {
       };
 
     // ==========================================================
-    // THEME 2 — SENIOR CITIZEN & ACCESSIBILITY (HIGH CONTRAST / ANTI-GLARE)
+    // THEME 2 — YELLOW / GOLDEN
     // ==========================================================
 
     case "theme2":
       return {
-        // Deep High-Contrast Royal Navy Blue (Clear, authoritative, anti-glare)
-        primary: "#1D4ED8",
-        primaryLight: "#DBEAFE",
-        primaryDark: "#1E3A8A",
+        primary: "#ECA611",
+        primaryLight: "#FFF36A",
+        primaryDark: "#CCC805",
 
-        // Warm High-Visibility Transit Amber (easily distinguished by aging eyes)
-        secondary: "#D97706",
-        secondaryLight: "#FEF3C7",
-        secondaryDark: "#B45309",
+        secondary: "#FDC823",
+        secondaryLight: "#FFF8D6",
+        secondaryDark: "#CC9D00",
 
-        accent: "#2563EB",
-        accentLight: "#EFF6FF",
-        accentDark: "#1E40AF",
+        accent: "#ECA611",
+        accentLight: "#FFFEAF",
+        accentDark: "#A87900",
 
-        error: "#DC2626",
+        error: "#EF4444",
         errorLight: "#FEE2E2",
 
-        warning: "#D97706",
+        warning: "#F59E0B",
         warningLight: "#FEF3C7",
 
-        success: "#15803D",
+        success: "#22C55E",
         successLight: "#DCFCE7",
 
-        info: "#0284C7",
-        infoLight: "#E0F2FE",
+        info: "#3B82F6",
+        infoLight: "#DBEAFE",
 
         white: "#FFFFFF",
 
-        // Anti-Glare Soft Foundation (eliminates harsh bright glare for cataracts & photophobia)
-        background: "#F1F5F9",
+        background: "#FFF8D6",
         surface: "#FFFFFF",
-        surfaceElevated: "#FFFFFF",
+        surfaceElevated: "#FFFEAF",
 
-        // High-Definition Structural Borders (keeps cards clearly separated for blurry vision)
-        border: "#94A3B8",
+        border: "#E8D98A",
 
-        // Ultra-High Contrast Typography (>15:1 contrast ratio, WCAG AAA compliant)
-        textPrimary: "#0F172A",
-        textSecondary: "#334155",
-        textMuted: "#475569",
+        textPrimary: "#3D3200",
+        textSecondary: "#665500",
+        textMuted: "#897A35",
 
-        disabled: "#94A3B8",
+        disabled: "#D8CC8A",
 
         // Shared aliases
         card: "#FFFFFF",
-        danger: "#DC2626",
+        danger: "#EF4444",
         dangerLight: "#FEE2E2",
 
         dark: {
-          // Deep Slate Anti-Halation Foundation (prevents text glow & halos)
-          primary: "#38BDF8",
-          primaryLight: "#0284C7",
-          primaryDark: "#7DD3FC",
+          primary: "#ECA611",
+          primaryLight: "#8A6507",
+          primaryDark: "#FFD34E",
 
-          secondary: "#FBBF24",
-          secondaryLight: "#B45309",
-          secondaryDark: "#FDE68A",
+          secondary: "#FDC823",
+          secondaryLight: "#665000",
+          secondaryDark: "#FFD95C",
 
-          accent: "#60A5FA",
-          accentLight: "#1D4ED8",
-          accentDark: "#93C5FD",
+          accent: "#ECA611",
+          accentLight: "#594300",
+          accentDark: "#FFD34E",
 
-          error: "#F87171",
+          error: "#EF4444",
           errorLight: "#7F1D1D",
 
-          warning: "#FBBF24",
+          warning: "#F59E0B",
           warningLight: "#78350F",
 
-          success: "#4ADE80",
+          success: "#22C55E",
           successLight: "#14532D",
 
-          info: "#38BDF8",
-          infoLight: "#0C4A6E",
+          info: "#3B82F6",
+          infoLight: "#1E3A8A",
 
           white: "#FFFFFF",
 
-          background: "#0B132B",
-          surface: "#16233B",
-          surfaceElevated: "#1E293B",
+          background: "#241E0A",
+          surface: "#332B0F",
+          surfaceElevated: "#493D15",
 
-          border: "#475569",
+          border: "#66551C",
 
-          textPrimary: "#F8FAFC",
-          textSecondary: "#E2E8F0",
-          textMuted: "#CBD5E1",
+          textPrimary: "#FFF8D6",
+          textSecondary: "#E8D98A",
+          textMuted: "#B9A95E",
 
-          disabled: "#475569",
+          disabled: "#5A4D20",
 
           // Shared aliases
-          card: "#16233B",
-          danger: "#F87171",
+          card: "#332B0F",
+          danger: "#EF4444",
           dangerLight: "#7F1D1D",
         },
       };

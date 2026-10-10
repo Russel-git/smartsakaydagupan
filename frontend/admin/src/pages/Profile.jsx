@@ -75,7 +75,7 @@ const Profile = () => {
         return "Theme 1";
 
       case "theme2":
-        return "Theme 2 (Senior Friendly)";
+        return "Theme 2";
 
       case "theme3":
         return "Theme 3";
@@ -150,8 +150,8 @@ const Profile = () => {
     },
     {
       id: "theme2",
-      name: "Theme 2 (Senior Friendly)",
-      color: "#1D4ED8",
+      name: "Theme 2",
+      color: "#ECA611",
     },
     {
       id: "theme3",
