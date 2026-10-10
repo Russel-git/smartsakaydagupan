@@ -23,7 +23,14 @@ const getImageUrl = (photoUrl) => {
     return photoUrl;
   }
 
-  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  const apiUrl =
+    import.meta.env.VITE_API_URL ||
+    (typeof window !== "undefined" &&
+    window.location &&
+    window.location.hostname !== "localhost" &&
+    window.location.hostname !== "127.0.0.1"
+      ? "https://smartsakay-backend.onrender.com/api"
+      : "http://localhost:5000/api");
 
   const backendUrl = apiUrl.replace(/\/api\/?$/, "");
 

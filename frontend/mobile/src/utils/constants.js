@@ -44,20 +44,27 @@ const DEV_IP = getDevServerIp();
 export const COLORS = getThemeColors("theme1");
 
 export const API_BASE_URL = (() => {
-  // On computer web browser, always use localhost
+  // 1. Explicit environment variable set at build or runtime
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+
+  // 2. Web browser environment
   if (Platform.OS === "web") {
+    // If deployed on Vercel or any live domain, route to production Render API
+    if (typeof window !== "undefined" && window.location) {
+      const hostname = window.location.hostname;
+      if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+        return "https://smartsakay-backend.onrender.com/api";
+      }
+    }
     return "http://localhost:5000/api";
   }
 
-  // Dynamically resolve laptop's active IP from Expo connection
+  // 3. Dynamically resolve laptop's active IP from Expo connection for local mobile testing
   const hostIp = getDevServerIp();
   if (hostIp && hostIp !== "localhost" && hostIp !== "127.0.0.1") {
     return `http://${hostIp}:5000/api`;
-  }
-
-  // Fallback to environment variable or default IP
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
   }
 
   return `http://${DEV_IP}:5000/api`;
