@@ -5,7 +5,7 @@ import apiClient from "./client";
 // ============================================================
 
 export const usersAPI = {
-  getAll: () => apiClient.get("/users"),
+  getAll: (params) => apiClient.get("/users", { params }),
 
   updateStatus: (id, isActive) =>
     apiClient.put(`/users/${id}/status`, { isActive }),

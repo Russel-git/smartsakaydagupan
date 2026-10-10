@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Search, UserPlus, X, Trash2 } from "lucide-react";
+import {
+  Search,
+  UserPlus,
+  X,
+  Trash2,
+  ShieldCheck,
+  Building2,
+  BadgeAlert,
+  UserCheck,
+  UserX,
+  Power,
+  CheckCircle2,
+} from "lucide-react";
 
 import { usersAPI } from "../api/services";
 import ConfirmModal from "../components/common/ConfirmModal";
@@ -9,13 +21,13 @@ import { useTheme } from "../contexts/theme/ThemeContext";
 
 const UsersPage = () => {
   const { colors } = useTheme();
-  const { admin: currentUser } = useAuth();
+  const { admin: currentUser, isAdmin, isLgu } = useAuth();
   const { showSuccess, showError } = useToast();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   // ============================================================
   // ADD USER MODAL STATE
@@ -29,16 +41,13 @@ const UsersPage = () => {
     suffix: "",
     email: "",
     password: "",
-    role: "admin",
+    role: isAdmin ? "lgu" : "poso",
+    department: isAdmin ? "City Transport & Public Safety Office (CTPSO)" : "Public Order & Safety Office (POSO)",
+    badgeNumber: "",
+    assignedZone: "",
   });
 
   const [submitting, setSubmitting] = useState(false);
-
-  // ============================================================
-  // ROLE EDIT STATE
-  // ============================================================
-
-  const [updatingRoleId, setUpdatingRoleId] = useState(null);
 
   // ============================================================
   // CONFIRMATION MODAL
@@ -56,21 +65,19 @@ const UsersPage = () => {
   });
 
   // ============================================================
-  // FETCH USERS
+  // FETCH USERS (SCOPED)
   // ============================================================
 
   const fetchUsers = async () => {
     try {
-      const res = await usersAPI.getAll();
-
-      setUsers(res.data.data || []);
+      setLoading(true);
+      const targetRole = isLgu ? "poso" : (isAdmin ? "lgu" : "");
+      const res = await usersAPI.getAll({ role: targetRole });
+      const items = res.data?.data?.items || (Array.isArray(res.data?.data) ? res.data.data : []);
+      setUsers(items);
     } catch (err) {
       console.error("Failed to load users:", err);
-
-      showError(
-        "Loading Failed",
-        err.response?.data?.message || "Failed to load user accounts.",
-      );
+      showError("Loading Failed", err.response?.data?.message || "Failed to load user accounts.");
     } finally {
       setLoading(false);
     }
@@ -78,84 +85,53 @@ const UsersPage = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [isAdmin, isLgu]);
 
   // ============================================================
-  // ROLE BADGE STYLE
-  // Roles remain neutral/grey.
+  // TOGGLE ACCOUNT STATUS (SUSPEND / ACTIVATE)
   // ============================================================
 
-  const getRoleBadgeStyle = () => {
-    return {
-      bg: colors.card,
-      text: colors.textSecondary,
-      border: colors.border,
-    };
+  const handleToggleStatus = (user) => {
+    const isActivating = !user.isActive;
+    const actionLabel = isActivating ? "Activate" : "Suspend";
+
+    setConfirmConfig({
+      isOpen: true,
+      title: `${actionLabel} Account Access`,
+      message: `Are you sure you want to ${actionLabel.toLowerCase()} account access for ${user.firstName} ${user.lastName} (${user.email})? ${
+        !isActivating ? "This user will be immediately blocked from signing into the console." : "The user will regain immediate access."
+      }`,
+      confirmText: `${actionLabel} Account`,
+      cancelText: "Cancel",
+      type: isActivating ? "primary" : "danger",
+      loading: false,
+
+      onConfirm: async () => {
+        setConfirmConfig((prev) => ({ ...prev, loading: true }));
+        try {
+          await usersAPI.updateStatus(user._id, isActivating);
+          showSuccess(
+            "Status Updated",
+            `Account for ${user.firstName} ${user.lastName} has been ${isActivating ? "activated" : "suspended"}.`
+          );
+          setConfirmConfig((prev) => ({ ...prev, isOpen: false, loading: false }));
+          fetchUsers();
+        } catch (err) {
+          showError("Action Failed", err.response?.data?.message || "Failed to update account status.");
+          setConfirmConfig((prev) => ({ ...prev, loading: false }));
+        }
+      },
+    });
   };
 
   // ============================================================
-  // TOGGLE ACCOUNT STATUS
-  // ============================================================
-
-  const handleToggleStatus = async (user) => {
-    try {
-      await usersAPI.updateStatus(user._id, !user.isActive);
-
-      showSuccess(
-        "Account Updated",
-        `Account for ${user.firstName} ${user.lastName} has been ${
-          !user.isActive ? "activated" : "deactivated"
-        }.`,
-      );
-
-      fetchUsers();
-    } catch (err) {
-      showError(
-        "Update Failed",
-        err.response?.data?.message || "Failed to update user status.",
-      );
-    }
-  };
-
-  // ============================================================
-  // CHANGE ROLE
-  // ============================================================
-
-  const handleChangeRole = async (user, newRole) => {
-    setUpdatingRoleId(user._id);
-
-    try {
-      await usersAPI.updateRole(user._id, newRole);
-
-      showSuccess(
-        "Role Updated",
-        `${user.firstName} ${user.lastName}'s role was updated to ${newRole}.`,
-      );
-
-      fetchUsers();
-    } catch (err) {
-      showError(
-        "Role Update Failed",
-        err.response?.data?.message || "Could not update role.",
-      );
-    } finally {
-      setUpdatingRoleId(null);
-    }
-  };
-
-  // ============================================================
-  // CREATE STAFF ACCOUNT
+  // CREATE STAFF ACCOUNT (SCOPED: ADMIN->LGU, LGU->POSO)
   // ============================================================
 
   const handleCreateStaff = async (e) => {
     e.preventDefault();
 
-    if (
-      !createForm.firstName ||
-      !createForm.lastName ||
-      !createForm.email ||
-      !createForm.password
-    ) {
+    if (!createForm.firstName || !createForm.lastName || !createForm.email || !createForm.password) {
       showError("Missing Fields", "Please complete all required fields.");
       return;
     }
@@ -163,11 +139,16 @@ const UsersPage = () => {
     setSubmitting(true);
 
     try {
-      await usersAPI.create(createForm);
+      const payload = {
+        ...createForm,
+        role: isAdmin ? "lgu" : "poso",
+      };
+
+      await usersAPI.create(payload);
 
       showSuccess(
-        "Staff Account Created",
-        `New ${createForm.role} account for ${createForm.firstName} ${createForm.lastName} (${createForm.email}) created.`,
+        "Account Created",
+        `New ${payload.role.toUpperCase()} account for ${createForm.firstName} ${createForm.lastName} (${createForm.email}) provisioned successfully.`
       );
 
       setShowAddModal(false);
@@ -178,72 +159,18 @@ const UsersPage = () => {
         suffix: "",
         email: "",
         password: "",
-        role: "admin",
+        role: isAdmin ? "lgu" : "poso",
+        department: isAdmin ? "City Transport & Public Safety Office (CTPSO)" : "Public Order & Safety Office (POSO)",
+        badgeNumber: "",
+        assignedZone: "",
       });
 
       fetchUsers();
     } catch (err) {
-      showError(
-        "Creation Failed",
-        err.response?.data?.message || "Failed to create user account.",
-      );
+      showError("Creation Failed", err.response?.data?.message || "Failed to create user account.");
     } finally {
       setSubmitting(false);
     }
-  };
-
-  // ============================================================
-  // DELETE USER
-  // ============================================================
-
-  const handleDeleteUser = (user) => {
-    const fullName = `${user.firstName || ""} ${user.lastName || ""}${
-      user.suffix ? " " + user.suffix : ""
-    }`.trim();
-
-    setConfirmConfig({
-      isOpen: true,
-      title: "Delete User Account",
-      message: `Are you sure you want to permanently delete account "${fullName}" (${user.email})? This action cannot be undone.`,
-      confirmText: "Delete Account",
-      cancelText: "Cancel",
-      type: "danger",
-      loading: false,
-
-      onConfirm: async () => {
-        setConfirmConfig((prev) => ({
-          ...prev,
-          loading: true,
-        }));
-
-        try {
-          await usersAPI.delete(user._id);
-
-          showSuccess(
-            "Account Deleted",
-            `Account for ${fullName} (${user.email}) has been permanently deleted.`,
-          );
-
-          setConfirmConfig((prev) => ({
-            ...prev,
-            isOpen: false,
-            loading: false,
-          }));
-
-          fetchUsers();
-        } catch (err) {
-          const errMsg =
-            err.response?.data?.message || "Failed to delete user account.";
-
-          showError("Delete Failed", errMsg);
-
-          setConfirmConfig((prev) => ({
-            ...prev,
-            loading: false,
-          }));
-        }
-      },
-    });
   };
 
   // ============================================================
@@ -251,115 +178,97 @@ const UsersPage = () => {
   // ============================================================
 
   const filteredUsers = users.filter((u) => {
-    const fullName = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
+    if (statusFilter === "active" && !u.isActive) return false;
+    if (statusFilter === "suspended" && u.isActive) return false;
 
+    if (!search.trim()) return true;
+    const term = search.toLowerCase();
+    const name = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
     const email = (u.email || "").toLowerCase();
-    const searchValue = search.toLowerCase();
+    const badge = (u.badgeNumber || "").toLowerCase();
+    const dept = (u.department || "").toLowerCase();
 
-    const matchesSearch =
-      fullName.includes(searchValue) || email.includes(searchValue);
-
-    const matchesRole = roleFilter === "all" || u.role === roleFilter;
-
-    return matchesSearch && matchesRole;
+    return name.includes(term) || email.includes(term) || badge.includes(term) || dept.includes(term);
   });
 
-  // ============================================================
-  // RENDER
-  // ============================================================
-
   return (
-    <div>
-      {/* ======================================================
-          PAGE HEADER
-      ====================================================== */}
-
+    <div style={{ padding: "0 0 40px 0" }}>
+      {/* Page Header */}
       <div
         style={{
-          marginBottom: "28px",
           display: "flex",
-          alignItems: "center",
           justifyContent: "space-between",
+          alignItems: "center",
           flexWrap: "wrap",
           gap: "16px",
+          marginBottom: "24px",
         }}
       >
         <div>
-          <h1
-            style={{
-              fontSize: "26px",
-              color: colors.textPrimary,
-              marginBottom: "4px",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-            }}
-          >
-            <span>Account Management & Governance</span>
-
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+            <h1 style={{ fontSize: "24px", fontWeight: "800", color: colors.textPrimary, margin: 0 }}>
+              {isAdmin ? "LGU Account Management" : "POSO Field Enforcers Management"}
+            </h1>
             <span
-              className="badge"
               style={{
-                backgroundColor: colors.accentLight,
-                color: colors.accent,
-                border: `1px solid ${colors.accent}`,
                 fontSize: "11px",
-                fontWeight: "600",
+                fontWeight: "700",
+                padding: "3px 8px",
+                borderRadius: "6px",
+                backgroundColor: isAdmin ? "#EEF2FF" : "#FEF3C7",
+                color: isAdmin ? "#4F46E5" : "#D97706",
+                letterSpacing: "0.05em",
               }}
             >
-              Developer Access
+              {isAdmin ? "LGU GOVERNANCE" : "POSO ENFORCEMENT"}
             </span>
-          </h1>
+          </div>
 
-          <p
-            style={{
-              color: colors.textMuted,
-              fontSize: "14px",
-              margin: 0,
-            }}
-          >
-            Superadmin directory to create administrative roles, govern
-            permissions, and manage user accounts across Dagupan City.
+          <p style={{ color: colors.textMuted, fontSize: "13px", margin: 0 }}>
+            {isAdmin
+              ? "Provision and manage Dagupan City LGU Transport Authority accounts. Control active/suspended status."
+              : "Provision and oversee on-road Public Order & Safety Office (POSO) traffic enforcers and road inspectors."}
           </p>
         </div>
 
         <button
-          onClick={() => setShowAddModal(true)}
-          className="btn"
+          onClick={() => {
+            setCreateForm({
+              firstName: "",
+              lastName: "",
+              suffix: "",
+              email: "",
+              password: "",
+              role: isAdmin ? "lgu" : "poso",
+              department: isAdmin ? "City Transport & Public Safety Office (CTPSO)" : "Public Order & Safety Office (POSO)",
+              badgeNumber: "",
+              assignedZone: "",
+            });
+            setShowAddModal(true);
+          }}
           style={{
             display: "inline-flex",
             alignItems: "center",
             gap: "8px",
+            padding: "10px 18px",
             backgroundColor: colors.primary,
-            color: colors.white,
-            border: `1px solid ${colors.primary}`,
+            color: "#FFFFFF",
+            border: "none",
+            borderRadius: "10px",
+            fontSize: "13px",
+            fontWeight: "600",
+            cursor: "pointer",
+            boxShadow: `0 4px 14px ${colors.primaryDark}30`,
           }}
         >
           <UserPlus size={16} />
-          <span>Add Staff Account</span>
+          <span>{isAdmin ? "Add LGU Account" : "Add POSO Officer"}</span>
         </button>
       </div>
 
-      {/* ======================================================
-          SEARCH + FILTERS
-      ====================================================== */}
-
-      <div
-        style={{
-          display: "flex",
-          gap: "14px",
-          marginBottom: "20px",
-          flexWrap: "wrap",
-        }}
-      >
-        <div
-          style={{
-            position: "relative",
-            flex: 1,
-            minWidth: "260px",
-            maxWidth: "380px",
-          }}
-        >
+      {/* Search and Filters */}
+      <div style={{ display: "flex", gap: "14px", marginBottom: "20px", flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: 1, minWidth: "260px", maxWidth: "380px" }}>
           <Search
             size={16}
             style={{
@@ -369,14 +278,11 @@ const UsersPage = () => {
               color: colors.textMuted,
             }}
           />
-
           <input
             type="text"
-            placeholder="Search by name or email address..."
+            placeholder={isAdmin ? "Search by officer name, email, department..." : "Search by name, email, badge, zone..."}
             className="form-input"
-            style={{
-              paddingLeft: "40px",
-            }}
+            style={{ paddingLeft: "40px" }}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -384,118 +290,80 @@ const UsersPage = () => {
 
         <select
           className="form-select"
-          style={{
-            maxWidth: "200px",
-          }}
-          value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value)}
+          style={{ maxWidth: "180px" }}
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
         >
-          <option value="all">All Roles</option>
-          <option value="superadmin">Superadmins (Developers)</option>
-          <option value="admin">Operators (Admin)</option>
-          <option value="lgu">LGU Authorities</option>
-          <option value="commuter">Commuters</option>
+          <option value="all">All Statuses</option>
+          <option value="active">Active Accounts Only</option>
+          <option value="suspended">Suspended Accounts Only</option>
         </select>
       </div>
 
-      {/* ======================================================
-          USERS TABLE
-      ====================================================== */}
-
-      <div className="card">
+      {/* Accounts Table */}
+      <div
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: "16px",
+          border: `1px solid ${colors.border}`,
+          overflow: "hidden",
+        }}
+      >
         {loading ? (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "40px 0",
-              color: colors.textMuted,
-            }}
-          >
-            Loading user accounts...
+          <div style={{ textAlign: "center", padding: "40px 0", color: colors.textMuted }}>
+            Loading accounts...
           </div>
         ) : filteredUsers.length === 0 ? (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "40px 0",
-              color: colors.textMuted,
-            }}
-          >
-            No user accounts found matching current filters.
+          <div style={{ textAlign: "center", padding: "40px 0", color: colors.textMuted }}>
+            No accounts found matching your query.
           </div>
         ) : (
-          <div className="table-container">
-            <table>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
-                <tr>
-                  <th>User / Profile</th>
-                  <th>Email</th>
-                  <th>System Role</th>
-                  <th>Verification</th>
-                  <th>Status</th>
-                  <th>Registered</th>
-                  <th>Actions</th>
+                <tr style={{ backgroundColor: colors.background, color: colors.textSecondary, textAlign: "left" }}>
+                  <th style={{ padding: "14px 20px", fontWeight: "600" }}>Officer / Name</th>
+                  <th style={{ padding: "14px 20px", fontWeight: "600" }}>Email Address</th>
+                  <th style={{ padding: "14px 20px", fontWeight: "600" }}>
+                    {isLgu ? "Badge & Zone" : "Department"}
+                  </th>
+                  <th style={{ padding: "14px 20px", fontWeight: "600" }}>Status</th>
+                  <th style={{ padding: "14px 20px", fontWeight: "600" }}>Registered Date</th>
+                  <th style={{ padding: "14px 20px", fontWeight: "600", textAlign: "right" }}>Account Actions</th>
                 </tr>
               </thead>
 
               <tbody>
                 {filteredUsers.map((u) => {
-                  const roleStyle = getRoleBadgeStyle();
-
                   const isCurrent = currentUser?._id === u._id;
 
-                  const isSelfSuperAdmin = u.role === "superadmin";
-
                   return (
-                    <tr key={u._id}>
-                      {/* USER / PROFILE */}
-
-                      <td>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "10px",
-                          }}
-                        >
+                    <tr key={u._id} style={{ borderTop: `1px solid ${colors.border}` }}>
+                      {/* Name / Profile */}
+                      <td style={{ padding: "14px 20px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                           <div
                             style={{
-                              width: "34px",
-                              height: "34px",
+                              width: "36px",
+                              height: "36px",
                               borderRadius: "50%",
-                              backgroundColor: roleStyle.bg,
-                              border: `1px solid ${roleStyle.border}`,
+                              backgroundColor: u.role === "lgu" ? "#EEF2FF" : "#FEF3C7",
+                              color: u.role === "lgu" ? "#4F46E5" : "#D97706",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               fontWeight: "700",
                               fontSize: "13px",
-                              color: roleStyle.text,
                             }}
                           >
                             {u.firstName ? u.firstName[0].toUpperCase() : "U"}
                           </div>
-
                           <div>
-                            <span
-                              style={{
-                                fontWeight: "600",
-                                color: colors.textPrimary,
-                                display: "block",
-                              }}
-                            >
-                              {u.firstName} {u.lastName}
-                              {u.suffix ? ` ${u.suffix}` : ""}
+                            <span style={{ fontWeight: "700", color: colors.textPrimary, display: "block" }}>
+                              {u.firstName} {u.lastName} {u.suffix ? ` ${u.suffix}` : ""}
                             </span>
-
                             {isCurrent && (
-                              <span
-                                style={{
-                                  fontSize: "10px",
-                                  color: colors.accent,
-                                  fontWeight: "bold",
-                                }}
-                              >
+                              <span style={{ fontSize: "10px", color: colors.primary, fontWeight: "700" }}>
                                 (Current Session)
                               </span>
                             )}
@@ -503,165 +371,94 @@ const UsersPage = () => {
                         </div>
                       </td>
 
-                      {/* EMAIL */}
+                      {/* Email */}
+                      <td style={{ padding: "14px 20px", color: colors.textSecondary }}>{u.email}</td>
 
-                      <td
-                        style={{
-                          color: colors.textMuted,
-                        }}
-                      >
-                        {u.email}
-                      </td>
-
-                      {/* ROLE */}
-
-                      <td>
-                        <select
-                          value={u.role}
-                          disabled={isCurrent && isSelfSuperAdmin}
-                          onChange={(e) => handleChangeRole(u, e.target.value)}
-                          className="form-select"
-                          style={{
-                            padding: "4px 8px",
-                            fontSize: "12px",
-                            backgroundColor: colors.surface,
-                            color: colors.primary,
-                            borderColor: colors.primary,
-                            borderRadius: "6px",
-                            cursor:
-                              isCurrent && isSelfSuperAdmin
-                                ? "not-allowed"
-                                : "pointer",
-                            opacity: updatingRoleId === u._id ? 0.6 : 1,
-                            fontWeight: "600",
-                          }}
-                        >
-                          <option value="superadmin">Superadmin</option>
-
-                          <option value="admin">Operator (Admin)</option>
-
-                          <option value="lgu">LGU Authority</option>
-
-                          <option value="commuter">Commuter</option>
-                        </select>
-                      </td>
-
-                      {/* VERIFICATION */}
-
-                      <td>
-                        {u.isVerified ? (
-                          <span
-                            className="badge"
-                            style={{
-                              backgroundColor: colors.successLight,
-                              color: colors.success,
-                              border: `1px solid ${colors.success}`,
-                            }}
-                          >
-                            ✓ Verified
-                          </span>
+                      {/* Department or Badge/Zone */}
+                      <td style={{ padding: "14px 20px" }}>
+                        {isLgu ? (
+                          <div>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                backgroundColor: "#FEF3C7",
+                                color: "#B45309",
+                                fontSize: "11px",
+                                fontWeight: "700",
+                                marginBottom: "2px",
+                              }}
+                            >
+                              {u.badgeNumber || "BADGE-PENDING"}
+                            </span>
+                            <div style={{ fontSize: "11px", color: colors.textMuted }}>
+                              Zone: {u.assignedZone || "All Sectors"}
+                            </div>
+                          </div>
                         ) : (
-                          <span
-                            className="badge"
-                            style={{
-                              backgroundColor: colors.warningLight,
-                              color: colors.warning,
-                              border: `1px solid ${colors.warning}`,
-                            }}
-                          >
-                            Unverified
+                          <span style={{ fontSize: "12px", color: colors.textSecondary }}>
+                            {u.department || "City Transport & Public Safety Office (CTPSO)"}
                           </span>
                         )}
                       </td>
 
-                      {/* STATUS */}
-
-                      <td>
+                      {/* Status */}
+                      <td style={{ padding: "14px 20px" }}>
                         <span
-                          className="badge"
                           style={{
-                            backgroundColor: u.isActive
-                              ? colors.warningLight
-                              : colors.primary,
-
-                            color: u.isActive ? colors.warning : colors.white,
-
-                            border: `1px solid ${
-                              u.isActive ? colors.warning : colors.primary
-                            }`,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "4px 10px",
+                            borderRadius: "12px",
+                            fontSize: "11px",
+                            fontWeight: "700",
+                            backgroundColor: u.isActive ? "#ECFDF5" : "#FEF2F2",
+                            color: u.isActive ? "#059669" : "#DC2626",
                           }}
                         >
-                          ● {u.isActive ? "Active" : "Suspended"}
+                          <span
+                            style={{
+                              width: "6px",
+                              height: "6px",
+                              borderRadius: "50%",
+                              backgroundColor: u.isActive ? "#059669" : "#DC2626",
+                            }}
+                          />
+                          {u.isActive ? "ACTIVE" : "SUSPENDED"}
                         </span>
                       </td>
 
-                      {/* REGISTERED */}
-
-                      <td
-                        style={{
-                          fontSize: "12px",
-                          color: colors.textMuted,
-                        }}
-                      >
+                      {/* Created Date */}
+                      <td style={{ padding: "14px 20px", color: colors.textMuted, fontSize: "12px" }}>
                         {new Date(u.createdAt).toLocaleDateString()}
                       </td>
 
-                      {/* ACTIONS */}
-
-                      <td>
-                        {!isCurrent && (
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: "8px",
-                              alignItems: "center",
-                            }}
-                          >
-                            <button
-                              onClick={() => handleToggleStatus(u)}
-                              className="btn btn-sm"
-                              style={{
-                                backgroundColor: u.isActive
-                                  ? colors.warningLight
-                                  : colors.primary,
-
-                                color: u.isActive
-                                  ? colors.warning
-                                  : colors.white,
-
-                                border: `1px solid ${
-                                  u.isActive ? colors.warning : colors.primary
-                                }`,
-                              }}
-                              title={
-                                u.isActive
-                                  ? "Suspend account access"
-                                  : "Reactivate account"
-                              }
-                            >
-                              {u.isActive ? "Deactivate" : "Activate"}
-                            </button>
-
-                            <button
-                              onClick={() => handleDeleteUser(u)}
-                              className="btn btn-sm"
-                              style={{
-                                backgroundColor: colors.dangerLight,
-                                color: colors.danger,
-                                border: `1px solid ${colors.danger}`,
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "4px",
-                                padding: "6px 10px",
-                                cursor: "pointer",
-                              }}
-                              title="Permanently remove account"
-                            >
-                              <Trash2 size={13} />
-                              <span>Delete</span>
-                            </button>
-                          </div>
-                        )}
+                      {/* Actions */}
+                      <td style={{ padding: "14px 20px", textAlign: "right" }}>
+                        <button
+                          onClick={() => handleToggleStatus(u)}
+                          disabled={isCurrent}
+                          title={u.isActive ? "Suspend Account" : "Activate Account"}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: "8px",
+                            border: `1px solid ${u.isActive ? "#FCA5A5" : "#86EFAC"}`,
+                            backgroundColor: u.isActive ? "#FEF2F2" : "#ECFDF5",
+                            color: u.isActive ? "#DC2626" : "#059669",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            cursor: isCurrent ? "not-allowed" : "pointer",
+                            opacity: isCurrent ? 0.5 : 1,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <Power size={14} />
+                          <span>{u.isActive ? "Suspend" : "Activate"}</span>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -673,212 +470,119 @@ const UsersPage = () => {
       </div>
 
       {/* ======================================================
-          ADD STAFF ACCOUNT MODAL
+          ADD ACCOUNT MODAL (SCOPED)
       ====================================================== */}
-
       {showAddModal && (
-        <div className="modal-overlay">
-          <div
-            className="modal-content"
-            style={{
-              maxWidth: "480px",
-              backgroundColor: colors.surface,
-              color: colors.textPrimary,
-            }}
-          >
+        <div className="modal-backdrop">
+          <div className="modal-card" style={{ maxWidth: "520px" }}>
             <div className="modal-header">
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <UserPlus size={20} color={colors.primary} />
-
-                <h2
-                  style={{
-                    fontSize: "18px",
-                    margin: 0,
-                    color: colors.textPrimary,
-                  }}
-                >
-                  Create Staff Account
-                </h2>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                {isAdmin ? (
+                  <Building2 size={20} style={{ color: "#4F46E5" }} />
+                ) : (
+                  <ShieldCheck size={20} style={{ color: "#D97706" }} />
+                )}
+                <h3 className="modal-title" style={{ margin: 0 }}>
+                  {isAdmin ? "Provision New LGU Authority Account" : "Register POSO Field Enforcer"}
+                </h3>
               </div>
-
               <button
-                className="btn btn-ghost btn-icon"
+                type="button"
+                className="btn-icon"
                 onClick={() => setShowAddModal(false)}
-                style={{
-                  color: colors.textSecondary,
-                }}
               >
                 <X size={18} />
               </button>
             </div>
 
             <form onSubmit={handleCreateStaff}>
-              <div
-                className="modal-body"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "14px",
-                }}
-              >
-                {/* FIRST + LAST NAME */}
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "12px",
-                  }}
-                >
+              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div>
                     <label className="form-label">First Name *</label>
-
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="e.g. Maria"
+                      placeholder="e.g. Juan"
                       value={createForm.firstName}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          firstName: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setCreateForm({ ...createForm, firstName: e.target.value })}
                       required
                     />
                   </div>
-
                   <div>
                     <label className="form-label">Last Name *</label>
-
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="e.g. Dela Cruz-Santos"
+                      placeholder="e.g. Dela Cruz"
                       value={createForm.lastName}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          lastName: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setCreateForm({ ...createForm, lastName: e.target.value })}
                       required
                     />
                   </div>
                 </div>
-
-                {/* SUFFIX + ROLE */}
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "12px",
-                  }}
-                >
-                  <div>
-                    <label className="form-label">Suffix (Optional)</label>
-
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. Jr., III"
-                      value={createForm.suffix}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          suffix: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <label className="form-label">Assigned Role *</label>
-
-                    <select
-                      className="form-select"
-                      value={createForm.role}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          role: e.target.value,
-                        })
-                      }
-                      style={{
-                        borderColor: colors.primary,
-                        color: colors.primary,
-                      }}
-                    >
-                      <option value="admin">Operator (Admin)</option>
-
-                      <option value="lgu">LGU Authority (POSO)</option>
-
-                      <option value="superadmin">Superadmin (Developer)</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* EMAIL */}
 
                 <div>
                   <label className="form-label">Email Address *</label>
-
                   <input
                     type="email"
                     className="form-input"
-                    placeholder="officer@dagupan.gov.ph"
+                    placeholder={isAdmin ? "transport@dagupan.gov.ph" : "poso.officer@smartsakay.com"}
                     value={createForm.email}
-                    onChange={(e) =>
-                      setCreateForm({
-                        ...createForm,
-                        email: e.target.value,
-                      })
-                    }
+                    onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
                     required
                   />
                 </div>
 
-                {/* PASSWORD */}
-
                 <div>
                   <label className="form-label">Initial Password *</label>
-
                   <input
                     type="password"
                     className="form-input"
                     placeholder="Min. 8 characters"
                     value={createForm.password}
-                    onChange={(e) =>
-                      setCreateForm({
-                        ...createForm,
-                        password: e.target.value,
-                      })
-                    }
+                    onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
                     required
                   />
-
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      color: colors.textMuted,
-                      marginTop: "4px",
-                      display: "block",
-                    }}
-                  >
-                    Staff member will use these credentials to access the
-                    console.
-                  </span>
                 </div>
-              </div>
 
-              {/* MODAL FOOTER */}
+                {isAdmin ? (
+                  <div>
+                    <label className="form-label">Department / Agency</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="City Transport & Public Safety Office (CTPSO)"
+                      value={createForm.department}
+                      onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label className="form-label">Badge Number *</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. POSO-DAG-05"
+                        value={createForm.badgeNumber}
+                        onChange={(e) => setCreateForm({ ...createForm, badgeNumber: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Assigned Zone / Sector</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. Lucao / Perez Blvd"
+                        value={createForm.assignedZone}
+                        onChange={(e) => setCreateForm({ ...createForm, assignedZone: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div className="modal-footer">
                 <button
@@ -888,19 +592,17 @@ const UsersPage = () => {
                 >
                   Cancel
                 </button>
-
                 <button
                   type="submit"
                   className="btn"
                   disabled={submitting}
                   style={{
                     backgroundColor: colors.primary,
-                    color: colors.white,
-                    border: `1px solid ${colors.primary}`,
+                    color: "#FFFFFF",
                     opacity: submitting ? 0.7 : 1,
                   }}
                 >
-                  {submitting ? "Creating Account..." : "Create Account"}
+                  {submitting ? "Provisioning..." : (isAdmin ? "Provision LGU Account" : "Register POSO Officer")}
                 </button>
               </div>
             </form>
@@ -908,10 +610,7 @@ const UsersPage = () => {
         </div>
       )}
 
-      {/* ======================================================
-          CONFIRMATION MODAL
-      ====================================================== */}
-
+      {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
@@ -920,12 +619,7 @@ const UsersPage = () => {
         cancelText={confirmConfig.cancelText}
         type={confirmConfig.type}
         loading={confirmConfig.loading}
-        onClose={() =>
-          setConfirmConfig((prev) => ({
-            ...prev,
-            isOpen: false,
-          }))
-        }
+        onClose={() => setConfirmConfig((prev) => ({ ...prev, isOpen: false }))}
         onConfirm={confirmConfig.onConfirm}
       />
     </div>
