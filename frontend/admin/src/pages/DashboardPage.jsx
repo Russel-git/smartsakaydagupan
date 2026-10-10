@@ -15,9 +15,21 @@ import {
 
 import api from "../api/client";
 import { useTheme } from "../contexts/theme/ThemeContext";
+import { useAuth } from "../contexts/AuthContext";
+import AdminDashboardView from "../components/dashboard/AdminDashboardView";
+import PosoDashboardView from "../components/dashboard/PosoDashboardView";
 
 const DashboardPage = () => {
   const { colors } = useTheme();
+  const { isAdmin, isPoso } = useAuth();
+
+  if (isAdmin) {
+    return <AdminDashboardView />;
+  }
+
+  if (isPoso) {
+    return <PosoDashboardView />;
+  }
 
   const [stats, setStats] = useState(null);
   const [activity, setActivity] = useState([]);
