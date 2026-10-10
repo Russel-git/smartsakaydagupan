@@ -23,7 +23,7 @@ import { useTheme } from "../../../contexts/theme/ThemeContext";
 import { useSidebar } from "../../../contexts/SidebarContext";
 
 const Sidebar = () => {
-  const { admin, logout, isSuperAdmin, isOperator, isLgu } = useAuth();
+  const { admin, logout, isAdmin, isLgu, isPoso } = useAuth();
 
   const { showInfo } = useToast();
   const { colors } = useTheme();
@@ -65,31 +65,45 @@ const Sidebar = () => {
   // ============================================================
 
   const getNavSections = () => {
-    if (isLgu) {
+    // 1. POSO FIELD ENFORCER NAVIGATION
+    if (isPoso) {
       return [
         {
-          title: "Authority Overview",
+          title: "Field Enforcement",
           items: [
             {
               to: "/",
-              label: "Overview Dashboard",
+              label: "Field Dashboard",
               icon: LayoutDashboard,
               exact: true,
             },
-          ],
-        },
-
-        {
-          title: "Enforcement & Action",
-          items: [
             {
               to: "/complaints",
-              label: "LGU Action Desk",
+              label: "Complaints Hub",
               icon: AlertTriangle,
+            },
+            {
+              to: "/notifications",
+              label: "Road Broadcaster",
+              icon: Bell,
             },
           ],
         },
-
+        {
+          title: "Field Reference",
+          items: [
+            {
+              to: "/routes",
+              label: "Route Directory",
+              icon: MapPin,
+            },
+            {
+              to: "/fares",
+              label: "Fare Matrix",
+              icon: Calculator,
+            },
+          ],
+        },
         {
           title: "Account",
           items: [
@@ -103,25 +117,26 @@ const Sidebar = () => {
       ];
     }
 
-    if (isOperator) {
+    // 2. LGU TRANSPORT AUTHORITY NAVIGATION
+    if (isLgu) {
       return [
         {
           title: "Transit Operations",
           items: [
             {
               to: "/",
-              label: "Operations Dashboard",
+              label: "Master Dashboard",
               icon: LayoutDashboard,
               exact: true,
             },
             {
               to: "/fares",
-              label: "Fare Matrix Management",
+              label: "Fare Management",
               icon: Calculator,
             },
             {
               to: "/routes",
-              label: "Jeepney & Tricycle Routes",
+              label: "Route Directory",
               icon: MapPin,
             },
             {
@@ -131,13 +146,12 @@ const Sidebar = () => {
             },
           ],
         },
-
         {
-          title: "Citizen Grievances",
+          title: "Enforcement & Citizen Desk",
           items: [
             {
               to: "/complaints",
-              label: "Complaints Triage",
+              label: "Complaints Action Desk",
               icon: AlertTriangle,
             },
             {
@@ -145,9 +159,13 @@ const Sidebar = () => {
               label: "City Broadcaster",
               icon: Bell,
             },
+            {
+              to: "/users",
+              label: "POSO Enforcers",
+              icon: Users,
+            },
           ],
         },
-
         {
           title: "Account",
           items: [
@@ -161,56 +179,20 @@ const Sidebar = () => {
       ];
     }
 
+    // 3. SYSTEM ADMINISTRATOR NAVIGATION
     return [
       {
-        title: "System & Transit Core",
+        title: "System Governance",
         items: [
           {
             to: "/",
-            label: "Dashboard",
+            label: "Accounts Dashboard",
             icon: LayoutDashboard,
             exact: true,
           },
           {
-            to: "/fares",
-            label: "Fare Management",
-            icon: Calculator,
-          },
-          {
-            to: "/routes",
-            label: "Route Directory",
-            icon: MapPin,
-          },
-          {
-            to: "/terminals",
-            label: "Terminal Hubs",
-            icon: Navigation,
-          },
-        ],
-      },
-
-      {
-        title: "Complaints & Advisories",
-        items: [
-          {
-            to: "/complaints",
-            label: "Complaints Hub",
-            icon: AlertTriangle,
-          },
-          {
-            to: "/notifications",
-            label: "Broadcaster",
-            icon: Bell,
-          },
-        ],
-      },
-
-      {
-        title: "Developer Control",
-        items: [
-          {
             to: "/users",
-            label: "Account Management",
+            label: "LGU Account Management",
             icon: Users,
           },
           {
@@ -220,7 +202,6 @@ const Sidebar = () => {
           },
         ],
       },
-
       {
         title: "Account",
         items: [
@@ -241,26 +222,26 @@ const Sidebar = () => {
   // ============================================================
 
   const getRoleBadge = () => {
-    if (isSuperAdmin) {
+    if (isPoso) {
       return {
-        text: "Superadmin (Developer)",
-        color: colors.primary,
-        backgroundColor: colors.surfaceElevated,
+        text: "POSO Field Enforcer",
+        color: "#D97706",
+        backgroundColor: "#FEF3C7",
       };
     }
 
     if (isLgu) {
       return {
-        text: "LGU Authority (POSO)",
-        color: colors.success,
-        backgroundColor: colors.successLight,
+        text: "LGU Transport Authority",
+        color: "#059669",
+        backgroundColor: "#D1FAE5",
       };
     }
 
     return {
-      text: "Transit Operator (Admin)",
-      color: colors.info,
-      backgroundColor: colors.infoLight,
+      text: "System Administrator",
+      color: colors.primary,
+      backgroundColor: colors.surfaceElevated || "#EEF2FF",
     };
   };
 

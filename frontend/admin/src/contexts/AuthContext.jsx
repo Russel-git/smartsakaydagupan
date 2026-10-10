@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
     const { data } = await api.post('/auth/login', { email, password });
     const user = data.data.user;
 
-    const allowedRoles = ['superadmin', 'admin', 'lgu'];
+    const allowedRoles = ['admin', 'lgu', 'poso'];
     if (!allowedRoles.includes(user.role)) {
       throw new Error('Access denied. Console access is restricted to authorized administrative personnel.');
     }
@@ -39,9 +39,11 @@ export const AuthProvider = ({ children }) => {
     setAdmin(null);
   };
 
-  const isSuperAdmin = admin?.role === 'superadmin';
-  const isOperator = admin?.role === 'admin';
+  const isAdmin = admin?.role === 'admin';
   const isLgu = admin?.role === 'lgu';
+  const isPoso = admin?.role === 'poso';
+  const isSuperAdmin = isAdmin; // backward compatibility
+  const isOperator = isAdmin;   // backward compatibility
 
   return (
     <AuthContext.Provider
@@ -50,9 +52,11 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         logout,
+        isAdmin,
+        isLgu,
+        isPoso,
         isSuperAdmin,
         isOperator,
-        isLgu,
       }}
     >
       {children}

@@ -11,7 +11,7 @@ const Header = () => {
 
   const { colors } = useTheme();
 
-  const { isSuperAdmin, isOperator, isLgu } = useAuth();
+  const { isAdmin, isLgu, isPoso } = useAuth();
 
   // ============================================================
   // SIDEBAR TOGGLE
@@ -30,19 +30,15 @@ const Header = () => {
   // ============================================================
 
   const getConsoleTitle = () => {
+    if (isPoso) {
+      return "POSO Road Enforcer Console";
+    }
+
     if (isLgu) {
-      return "LGU Transit Action Console";
+      return "LGU Transport Authority Console";
     }
 
-    if (isOperator) {
-      return "Transit Operations Console";
-    }
-
-    if (isSuperAdmin) {
-      return "Master Developer Console";
-    }
-
-    return "Administrator Console";
+    return "System Administration Console";
   };
 
   return (

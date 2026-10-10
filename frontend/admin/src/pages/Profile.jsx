@@ -35,23 +35,19 @@ const Profile = () => {
   // ============================================================
 
   const getRoleName = () => {
-    if (admin?.role === "superadmin") {
-      return "Superadmin";
-    }
-
     if (admin?.role === "admin") {
-      return "Administrator";
-    }
-
-    if (admin?.role === "operator") {
-      return "Transit Operator";
+      return "System Administrator";
     }
 
     if (admin?.role === "lgu") {
-      return "LGU Authority";
+      return "LGU Transport Authority";
     }
 
-    return admin?.role || "Administrator";
+    if (admin?.role === "poso") {
+      return "POSO Field Enforcer";
+    }
+
+    return admin?.role || "Staff User";
   };
 
   // ============================================================
