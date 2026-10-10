@@ -5,10 +5,10 @@ const { authMiddleware } = require('../middleware/auth');
 const rbac = require('../middleware/rbac');
 
 router.use(authMiddleware);
-router.use(rbac('admin'));
-router.get('/stats', adminController.getStats);
-router.get('/activity', adminController.getActivity);
-router.get('/audit-logs', adminController.getAuditLogs);
+router.get('/stats', rbac('admin', 'lgu'), adminController.getStats);
+router.get('/metrics', rbac('admin', 'lgu'), adminController.getAccountMetrics);
+router.get('/activity', rbac('admin', 'lgu'), adminController.getActivity);
+router.get('/audit-logs', rbac('admin'), adminController.getAuditLogs);
 
 module.exports = router;
 

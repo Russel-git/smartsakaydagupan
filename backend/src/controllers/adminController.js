@@ -24,6 +24,39 @@ const getStats = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const getAccountMetrics = async (req, res, next) => {
+  try {
+    const [
+      activeAccounts,
+      suspendedAccounts,
+      lguAccounts,
+      posoAccounts,
+      commuterAccounts,
+      adminAccounts,
+    ] = await Promise.all([
+      User.countDocuments({ isActive: true }),
+      User.countDocuments({ isActive: false }),
+      User.countDocuments({ role: 'lgu' }),
+      User.countDocuments({ role: 'poso' }),
+      User.countDocuments({ role: 'commuter' }),
+      User.countDocuments({ role: 'admin' }),
+    ]);
+
+    return apiResponse.success(
+      res,
+      {
+        activeAccounts,
+        suspendedAccounts,
+        lguAccounts,
+        posoAccounts,
+        commuterAccounts,
+        adminAccounts,
+      },
+      'Account governance metrics retrieved successfully'
+    );
+  } catch (error) { next(error); }
+};
+
 const getActivity = async (req, res, next) => {
   try {
     const [recentUsers, recentComplaints] = await Promise.all([
@@ -66,5 +99,5 @@ const getAuditLogs = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getStats, getActivity, getAuditLogs };
+module.exports = { getStats, getAccountMetrics, getActivity, getAuditLogs };
 

@@ -40,14 +40,32 @@ const changePassword = async (req, res, next) => {
 
 const getAllUsers = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, role, search } = req.query;
+    const { page = 1, limit = 50, role, search, status } = req.query;
     const filter = {};
-    if (role) filter.role = role;
-    if (search) {
+
+    // Role-scoped visibility
+    if (req.user.role === 'lgu') {
+      filter.role = 'poso';
+    } else if (req.user.role === 'admin') {
+      if (role && role !== 'all') {
+        filter.role = role;
+      } else if (!role) {
+        filter.role = 'lgu';
+      }
+    } else if (role) {
+      filter.role = role;
+    }
+
+    if (status === 'active') filter.isActive = true;
+    if (status === 'suspended') filter.isActive = false;
+
+    if (search && search.trim()) {
       filter.$or = [
-        { firstName: { $regex: search, $options: 'i' } },
-        { lastName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
+        { firstName: { $regex: search.trim(), $options: 'i' } },
+        { lastName: { $regex: search.trim(), $options: 'i' } },
+        { email: { $regex: search.trim(), $options: 'i' } },
+        { badgeNumber: { $regex: search.trim(), $options: 'i' } },
+        { department: { $regex: search.trim(), $options: 'i' } },
       ];
     }
 
@@ -60,20 +78,48 @@ const getAllUsers = async (req, res, next) => {
 
 const createUser = async (req, res, next) => {
   try {
-    const { email, password, firstName, lastName, suffix = '', role = 'admin' } = req.body;
-    if (!['superadmin', 'admin', 'lgu', 'commuter'].includes(role)) {
-      return apiResponse.error(res, 'Invalid role specified.', 400);
+    const {
+      email,
+      password,
+      firstName,
+      lastName,
+      suffix = '',
+      role,
+      department = '',
+      badgeNumber = '',
+      assignedZone = '',
+    } = req.body;
+
+    // Enforce role-scoped provisioning
+    let targetRole = role;
+    if (req.user.role === 'admin') {
+      // Admin is strictly scoped to provisioning LGU accounts
+      targetRole = 'lgu';
+    } else if (req.user.role === 'lgu') {
+      // LGU is strictly scoped to provisioning POSO accounts
+      targetRole = 'poso';
+    } else {
+      return apiResponse.error(res, 'You do not have permission to provision staff accounts.', 403);
     }
+
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) return apiResponse.error(res, 'Email already registered.', 409);
+
+    const defaultDept =
+      targetRole === 'lgu'
+        ? 'City Transport & Public Safety Office (CTPSO)'
+        : 'Public Order & Safety Office (POSO)';
 
     const user = await User.create({
       email: email.toLowerCase(),
       passwordHash: password,
-      firstName,
-      lastName,
+      firstName: firstName?.trim(),
+      lastName: lastName?.trim(),
       suffix: suffix?.trim() || '',
-      role,
+      role: targetRole,
+      department: department?.trim() || defaultDept,
+      badgeNumber: badgeNumber?.trim() || '',
+      assignedZone: assignedZone?.trim() || '',
       isVerified: true,
       isActive: true,
     });
@@ -82,10 +128,10 @@ const createUser = async (req, res, next) => {
       action: 'USER_CREATE_STAFF',
       resourceType: 'user',
       resourceId: user._id,
-      details: { email: user.email, name: `${user.firstName} ${user.lastName}`, role: user.role },
+      details: { email: user.email, name: `${user.firstName} ${user.lastName}`, role: user.role, badge: user.badgeNumber },
     });
 
-    return apiResponse.success(res, user.toJSON(), 'User account created successfully.', 201);
+    return apiResponse.success(res, user.toJSON(), `${targetRole.toUpperCase()} account created successfully.`, 201);
   } catch (error) { next(error); }
 };
 
@@ -93,13 +139,13 @@ const updateUserRole = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
-    if (!['superadmin', 'admin', 'lgu', 'commuter'].includes(role)) {
+    if (!['admin', 'lgu', 'poso', 'commuter'].includes(role)) {
       return apiResponse.error(res, 'Invalid role specified.', 400);
     }
     const user = await User.findById(id);
     if (!user) return apiResponse.error(res, 'User not found.', 404);
-    if (user._id.toString() === req.user._id.toString() && role !== 'superadmin') {
-      return apiResponse.error(res, 'Superadmin cannot revoke their own developer privileges.', 400);
+    if (user._id.toString() === req.user._id.toString() && role !== 'admin') {
+      return apiResponse.error(res, 'Administrators cannot revoke their own administrative privileges.', 400);
     }
 
     user.role = role;
@@ -120,17 +166,31 @@ const updateUserStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { isActive } = req.body;
-    const user = await User.findByIdAndUpdate(id, { isActive }, { new: true }).select('-passwordHash -refreshToken');
+    const user = await User.findById(id);
     if (!user) return apiResponse.error(res, 'User not found.', 404);
+
+    // Permission checks
+    if (req.user.role === 'lgu') {
+      if (user.role !== 'poso') {
+        return apiResponse.error(res, 'LGU can only activate or suspend POSO officer accounts.', 403);
+      }
+    } else if (req.user.role === 'admin') {
+      if (user._id.toString() === req.user._id.toString()) {
+        return apiResponse.error(res, 'Administrators cannot suspend their own account.', 400);
+      }
+    }
+
+    user.isActive = Boolean(isActive);
+    await user.save();
 
     await logAuditEvent(req, {
       action: 'USER_STATUS_UPDATE',
       resourceType: 'user',
       resourceId: user._id,
-      details: { email: user.email, name: `${user.firstName} ${user.lastName}`, isActive },
+      details: { email: user.email, name: `${user.firstName} ${user.lastName}`, isActive: user.isActive },
     });
 
-    return apiResponse.success(res, user, `User ${isActive ? 'activated' : 'deactivated'} successfully`);
+    return apiResponse.success(res, user.toJSON(), `User ${user.isActive ? 'activated' : 'suspended'} successfully`);
   } catch (error) { next(error); }
 };
 
@@ -142,8 +202,8 @@ const deleteUser = async (req, res, next) => {
     }
     const user = await User.findById(id);
     if (!user) return apiResponse.error(res, 'User not found.', 404);
-    if (user.role === 'superadmin') {
-      return apiResponse.error(res, 'Cannot delete a Superadmin account.', 403);
+    if (user.role === 'admin') {
+      return apiResponse.error(res, 'Cannot delete an Admin account.', 403);
     }
 
     await User.findByIdAndDelete(id);
@@ -166,8 +226,8 @@ const deleteMyAccount = async (req, res, next) => {
     const user = await User.findById(userId);
     if (!user) return apiResponse.error(res, 'User not found.', 404);
 
-    if (user.role === 'superadmin') {
-      return apiResponse.error(res, 'Superadmin accounts cannot be deleted through this interface.', 403);
+    if (user.role === 'admin') {
+      return apiResponse.error(res, 'Admin accounts cannot be deleted through this interface.', 403);
     }
 
     const { password } = req.body || {};
