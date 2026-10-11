@@ -6,6 +6,7 @@ import {
   Check,
   AlertCircle,
   X,
+  RotateCcw,
 } from "lucide-react";
 
 import { faresAPI } from "../api/services";
@@ -22,6 +23,7 @@ const FaresPage = () => {
   const [editingFare, setEditingFare] = useState(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+  const [revertTarget, setRevertTarget] = useState(null);
 
   // Live calculator test state
   const [calcDistance, setCalcDistance] = useState(7.5);
@@ -40,7 +42,10 @@ const FaresPage = () => {
         })),
       ]);
 
-      setFares(faresRes.data?.data || []);
+      const activeLtfrbFares = (faresRes.data?.data || []).filter(
+        (f) => f.vehicleType !== "tricycle"
+      );
+      setFares(activeLtfrbFares);
       setHistory(historyRes.data?.data || []);
     } catch (err) {
       console.error("Error fetching fares:", err);
@@ -64,7 +69,10 @@ const FaresPage = () => {
       baseFare: fare.baseFare,
       baseDistanceKm: fare.baseDistanceKm,
       perKmRate: fare.perKmRate,
-      reason: "",
+      effectiveDate: fare.effectiveDate
+        ? new Date(fare.effectiveDate).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0],
+      reason: fare.memorandumRef || "",
     });
   };
 
@@ -82,17 +90,18 @@ const FaresPage = () => {
         baseFare: Number(editingFare.baseFare),
         baseDistanceKm: Number(editingFare.baseDistanceKm),
         perKmRate: Number(editingFare.perKmRate),
+        effectiveDate: editingFare.effectiveDate || new Date().toISOString(),
         reason: editingFare.reason || "LTFRB Fare Matrix Revision",
       });
 
       showSuccess(
         "Fare Matrix Updated",
-        `Tariff rates for ${editingFare.vehicleType} PUVs published and synchronized.`,
+        `Tariff rates for ${editingFare.vehicleType} PUVs published and synchronized with Commuter Dashboard.`,
       );
 
       setMessage({
         type: "success",
-        text: "Fare updated successfully! Route matrices recalculated.",
+        text: `Fare updated successfully! Effective from ${new Date(editingFare.effectiveDate).toLocaleDateString()}. Route matrices recalculated and synced to commuter dashboards.`,
       });
 
       setEditingFare(null);
@@ -107,6 +116,49 @@ const FaresPage = () => {
         type: "error",
         text: errText,
       });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ==========================================================
+  // Undo / Revert fare to previous revision
+  // ==========================================================
+
+  const handleRevertFare = (vehicleType) => {
+    setRevertTarget(vehicleType);
+  };
+
+  const confirmRevertFare = async () => {
+    if (!revertTarget) return;
+    const vehicleType = revertTarget;
+    const typeLabel = vehicleType === "modern" ? "Modern" : "Traditional";
+
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const res = await faresAPI.revertFare(vehicleType);
+      const restored = res.data?.data;
+
+      showSuccess(
+        "Tariff Reverted",
+        `Tariff rates for ${typeLabel} PUVs restored to: ₱${restored?.baseFare} base, ₱${restored?.perKmRate}/km.`,
+      );
+
+      setMessage({
+        type: "success",
+        text: `Successfully undone! Restored former ${typeLabel} tariff rates (₱${restored?.baseFare} base, ₱${restored?.perKmRate}/km) and synced to commuter app.`,
+      });
+
+      setEditingFare(null);
+      setRevertTarget(null);
+
+      await fetchFares();
+    } catch (err) {
+      const errText = err.response?.data?.message || "Failed to revert fare";
+      showError("Revert Failed", errText);
+      setMessage({ type: "error", text: errText });
     } finally {
       setSaving(false);
     }
@@ -300,13 +352,38 @@ const FaresPage = () => {
                   </td>
 
                   <td>
-                    <button
-                      onClick={() => handleEditClick(f)}
-                      className="btn btn-secondary btn-sm"
-                    >
-                      <Edit3 size={14} />
-                      <span>Adjust Rate</span>
-                    </button>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <button
+                        onClick={() => handleEditClick(f)}
+                        className="btn btn-secondary btn-sm"
+                      >
+                        <Edit3 size={14} />
+                        <span>Adjust Rate</span>
+                      </button>
+
+                      {history.some(
+                        (h) => h.vehicleType === f.vehicleType && !h.isActive,
+                      ) && (
+                        <button
+                          onClick={() => handleRevertFare(f.vehicleType)}
+                          disabled={saving}
+                          className="btn btn-sm"
+                          style={{
+                            backgroundColor: "rgba(245, 158, 11, 0.12)",
+                            color: "#D97706",
+                            border: "1px solid rgba(245, 158, 11, 0.3)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            fontWeight: "600",
+                          }}
+                          title="Undo / Revert to previous tariff revision"
+                        >
+                          <RotateCcw size={13} />
+                          <span>Undo</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -367,11 +444,9 @@ const FaresPage = () => {
                 value={calcVehicle}
                 onChange={(e) => setCalcVehicle(e.target.value)}
               >
-                <option value="traditional">Traditional Jeepney</option>
+                <option value="traditional">Traditional Jeepney (PUJ)</option>
 
-                <option value="modern">Modern Jeepney</option>
-
-                <option value="tricycle">Dagupan Tricycle</option>
+                <option value="modern">Modern Jeepney (PUJ)</option>
               </select>
             </div>
 
@@ -649,13 +724,42 @@ const FaresPage = () => {
 
                 <div className="form-group">
                   <label className="form-label">
+                    Effective Date of Fare Rate Changes
+                  </label>
+
+                  <input
+                    type="date"
+                    required
+                    className="form-input"
+                    value={editingFare.effectiveDate}
+                    onChange={(e) =>
+                      setEditingFare({
+                        ...editingFare,
+                        effectiveDate: e.target.value,
+                      })
+                    }
+                  />
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: colors.textMuted,
+                      marginTop: "4px",
+                      display: "block",
+                    }}
+                  >
+                    Automatically reflects in the commuter dashboard and notifies riders.
+                  </span>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
                     Reason / Memorandum Circular
                   </label>
 
                   <input
                     type="text"
                     required
-                    placeholder="e.g. LTFRB Resolution 2026-03"
+                    placeholder="e.g. LTFRB Memorandum Circular 2026-03"
                     className="form-input"
                     value={editingFare.reason}
                     onChange={(e) =>
@@ -668,24 +772,141 @@ const FaresPage = () => {
                 </div>
               </div>
 
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  onClick={() => setEditingFare(null)}
-                  className="btn btn-secondary"
-                >
-                  Cancel
-                </button>
+              <div
+                className="modal-footer"
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  {history.some(
+                    (h) =>
+                      h.vehicleType === editingFare.vehicleType && !h.isActive,
+                  ) && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => handleRevertFare(editingFare.vehicleType)}
+                      className="btn"
+                      style={{
+                        backgroundColor: "rgba(245, 158, 11, 0.12)",
+                        color: "#D97706",
+                        border: "1px solid rgba(245, 158, 11, 0.3)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontWeight: "600",
+                        fontSize: "13px",
+                      }}
+                      title="Undo to previous tariff rate in history"
+                    >
+                      <RotateCcw size={14} />
+                      <span>Undo to Previous Tariff</span>
+                    </button>
+                  )}
+                </div>
 
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="btn btn-primary"
-                >
-                  {saving ? "Updating..." : "Save & Recalculate Matrices"}
-                </button>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setEditingFare(null)}
+                    className="btn btn-secondary"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="btn btn-primary"
+                  >
+                    {saving ? "Updating..." : "Save & Synchronize"}
+                  </button>
+                </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* REVERT / UNDO TARIFF MODAL */}
+      {revertTarget && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: "460px" }}>
+            <div className="modal-header">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  color: "#D97706",
+                }}
+              >
+                <RotateCcw size={20} />
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "17px",
+                    color: colors.textPrimary,
+                  }}
+                >
+                  Undo Tariff Revision
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon"
+                onClick={() => setRevertTarget(null)}
+                disabled={saving}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: "16px 0" }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "13px",
+                  color: colors.textSecondary,
+                  lineHeight: "1.5",
+                }}
+              >
+                Are you sure you want to undo and restore the previous{" "}
+                <strong>
+                  {revertTarget === "modern" ? "Modern" : "Traditional"} Jeepney
+                </strong>{" "}
+                tariff? This will restore former base rates and immediately recalculate all commuter fare tables.
+              </p>
+            </div>
+
+            <div
+              className="modal-footer"
+              style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}
+            >
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={saving}
+                onClick={() => setRevertTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={saving}
+                onClick={confirmRevertFare}
+                style={{
+                  backgroundColor: "#D97706",
+                  color: "#FFFFFF",
+                  fontWeight: "600",
+                }}
+              >
+                {saving ? "Reverting..." : "Confirm Undo"}
+              </button>
+            </div>
           </div>
         </div>
       )}

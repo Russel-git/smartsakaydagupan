@@ -8,7 +8,7 @@ const notificationSchema = new mongoose.Schema(
     type: { type: String, enum: ['fare_update', 'weather_alert', 'complaint_update', 'system', 'broadcast'], required: true },
     category: {
       type: String,
-      enum: ['weather_updates', 'complaint_updates', 'broadcast_by_admin'],
+      trim: true,
       default: function () {
         if (this.type === 'weather_alert') return 'weather_updates';
         if (this.type === 'complaint_update') return 'complaint_updates';
@@ -18,7 +18,7 @@ const notificationSchema = new mongoose.Schema(
     isRead: { type: Boolean, default: false },
     status: {
       type: String,
-      enum: ['pending_approval', 'published', 'rejected'],
+      enum: ['pending_approval', 'published', 'rejected', 'archived'],
       default: 'published',
     },
     createdByRole: {

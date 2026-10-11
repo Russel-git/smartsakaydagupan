@@ -9,7 +9,8 @@ const { updateFareSchema } = require('../validators/fareValidator');
 router.get('/', fareController.getActiveFares);
 router.get('/calculate', fareController.calculateFare);
 router.get('/matrix', fareController.getFareMatrix);
-router.put('/:id', authMiddleware, rbac('admin'), validate(updateFareSchema), fareController.updateFare);
-router.get('/history', authMiddleware, rbac('admin'), fareController.getFareHistory);
+router.put('/:id', authMiddleware, rbac('admin', 'lgu'), validate(updateFareSchema), fareController.updateFare);
+router.post('/revert/:vehicleType', authMiddleware, rbac('admin', 'lgu'), fareController.revertFare);
+router.get('/history', authMiddleware, rbac('admin', 'lgu'), fareController.getFareHistory);
 
 module.exports = router;

@@ -19,8 +19,8 @@ const {
 
 router.use(authMiddleware);
 
-// Commuter routes
-router.post('/upload-photo', rbac('commuter'), uploadEvidence.single('photo'), complaintController.uploadEvidencePhoto);
+// Commuter & Staff evidence upload route
+router.post('/upload-photo', rbac('commuter', 'admin', 'lgu', 'poso'), uploadEvidence.single('photo'), complaintController.uploadEvidencePhoto);
 router.post('/', rbac('commuter'), validate(createComplaintSchema), complaintController.createComplaint);
 router.get('/my', rbac('commuter'), complaintController.getMyComplaints);
 router.get('/my-complaints', rbac('commuter'), complaintController.getMyComplaints);
@@ -42,7 +42,9 @@ router.put('/:id/verify-lgu', rbac('poso', 'admin'), complaintController.verifyA
 // LGU Action Desk & Admin Management routes
 router.put('/:id/lgu-action', rbac('lgu', 'admin'), validate(lguActionSchema), complaintController.lguTakeAction);
 router.put('/:id/lgu-terminate', rbac('lgu', 'admin'), validate(lguTerminateSchema), complaintController.lguTerminate);
-router.delete('/:id', rbac('admin'), validate(deleteComplaintSchema), complaintController.deleteComplaintWithReason);
+router.delete('/:id', rbac('admin', 'lgu'), validate(deleteComplaintSchema), complaintController.deleteComplaintWithReason);
+router.patch('/:id/restore', rbac('admin', 'lgu'), complaintController.restoreComplaint);
+router.delete('/:id/permanent', rbac('admin', 'lgu'), complaintController.permanentDeleteComplaint);
 router.put('/:id/status', rbac('admin', 'lgu'), validate(updateComplaintStatusSchema), complaintController.updateComplaintStatus);
 router.put('/:id/notes', rbac('admin', 'lgu', 'poso'), validate(addAdminNotesSchema), complaintController.addAdminNotes);
 

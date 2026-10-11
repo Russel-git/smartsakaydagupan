@@ -8,13 +8,29 @@ import {
   Modal,
   ScrollView,
   SafeAreaView,
+  Image,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { EmptyState } from '../../components/common/SharedComponents';
-import { FONTS, SPACING, RADIUS } from '../../utils/constants';
+import { FONTS, SPACING, RADIUS, API_BASE_URL } from '../../utils/constants';
 import { formatDate, formatDateTime } from '../../utils/helpers';
+
+const getMediaUrl = (url) => {
+  if (!url) return null;
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('file:')
+  ) {
+    return url;
+  }
+  const baseUrl = (API_BASE_URL || '').replace(/\/api\/?$/, '');
+  const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+  return `${baseUrl}${cleanUrl}`;
+};
 
 // Helper to determine notification category
 export const getNotificationCategory = (item) => {
@@ -61,14 +77,14 @@ const CATEGORY_TABS = [
   },
   {
     id: 'broadcast_by_admin',
-    label: 'Broadcast by Admin',
+    label: 'Broadcast by LGU',
     icon: 'bullhorn-variant',
     color: '#EA580C',
     badgeBg: '#FFEDD5',
     badgeBorder: '#FED7AA',
     badgeText: '#C2410C',
-    emptyTitle: 'No Admin Broadcasts',
-    emptyMessage: 'There are no official transit broadcasts or announcements from city administrators at this moment.',
+    emptyTitle: 'No LGU Broadcasts',
+    emptyMessage: 'There are no official transit broadcasts or road advisories from Dagupan LGU at this moment.',
   },
 ];
 
@@ -112,21 +128,21 @@ const NOTIF_CONFIG = {
   },
   broadcast: {
     categoryKey: 'broadcast_by_admin',
-    categoryLabel: 'Broadcast by Admin',
+    categoryLabel: 'Broadcast by LGU',
     icon: 'bullhorn-variant',
     color: '#EA580C',
     bg: '#FFEDD5',
   },
   broadcast_by_admin: {
     categoryKey: 'broadcast_by_admin',
-    categoryLabel: 'Broadcast by Admin',
+    categoryLabel: 'Broadcast by LGU',
     icon: 'bullhorn-variant',
     color: '#EA580C',
     bg: '#FFEDD5',
   },
   fare_update: {
     categoryKey: 'broadcast_by_admin',
-    categoryLabel: 'Broadcast by Admin',
+    categoryLabel: 'Broadcast by LGU',
     subLabel: 'LTFRB Fare Revision',
     icon: 'cash-multiple',
     color: '#D97706',
@@ -137,7 +153,7 @@ const NOTIF_CONFIG = {
   },
   system: {
     categoryKey: 'broadcast_by_admin',
-    categoryLabel: 'Broadcast by Admin',
+    categoryLabel: 'Broadcast by LGU',
     icon: 'shield-account',
     color: '#4B5563',
     bg: '#F3F4F6',
@@ -617,6 +633,54 @@ const NotificationsScreen = ({ navigation }) => {
                         {selectedNotif.message}
                       </Text>
                     </View>
+
+                    {/* Official Evidence Photo attached by LGU */}
+                    {Boolean(
+                      selectedNotif.metadata?.photoUrl ||
+                        selectedNotif.photoUrl ||
+                        selectedNotif.metadata?.lguEvidencePhoto ||
+                        selectedNotif.metadata?.evidencePhoto
+                    ) ? (
+                      <View style={{ marginBottom: 16 }}>
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <MaterialCommunityIcons name="image-check" size={16} color="#10B981" />
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: '700',
+                              color: '#10B981',
+                              letterSpacing: 0.5,
+                            }}
+                          >
+                            OFFICIAL VERIFIED EVIDENCE PHOTO
+                          </Text>
+                        </View>
+                        <Image
+                          source={{
+                            uri: getMediaUrl(
+                              selectedNotif.metadata?.photoUrl ||
+                                selectedNotif.photoUrl ||
+                                selectedNotif.metadata?.lguEvidencePhoto ||
+                                selectedNotif.metadata?.evidencePhoto
+                            ),
+                          }}
+                          style={{
+                            width: '100%',
+                            height: 200,
+                            borderRadius: RADIUS.md,
+                            backgroundColor: colors.border,
+                          }}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    ) : null}
 
                     {/* Dagupan City Transit Advisory Footer Notice */}
                     <View style={styles.footerNoticeRow}>

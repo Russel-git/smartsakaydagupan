@@ -1,25 +1,55 @@
 const User = require('../models/User');
 const Complaint = require('../models/Complaint');
 const Route = require('../models/Route');
+const Terminal = require('../models/Terminal');
+const Notification = require('../models/Notification');
 const apiResponse = require('../utils/apiResponse');
 
 const getStats = async (req, res, next) => {
   try {
-    const [totalUsers, totalCommuters, totalComplaints, pendingComplaints, underReviewComplaints, resolvedComplaints, totalRoutes] =
-      await Promise.all([
-        User.countDocuments({ isActive: true }),
-        User.countDocuments({ role: 'commuter', isActive: true }),
-        Complaint.countDocuments(),
-        Complaint.countDocuments({ status: 'pending' }),
-        Complaint.countDocuments({ status: 'under_review' }),
-        Complaint.countDocuments({ status: 'resolved' }),
-        Route.countDocuments({ isActive: true }),
-      ]);
+    const [
+      totalUsers,
+      totalCommuters,
+      verifiedUsers,
+      posoOfficersCount,
+      totalComplaints,
+      pendingComplaints,
+      underReviewComplaints,
+      endorsedComplaints,
+      resolvedComplaints,
+      totalRoutes,
+      activeRoutes,
+      totalTerminals,
+      pendingAlertsCount,
+    ] = await Promise.all([
+      User.countDocuments({ isActive: true }),
+      User.countDocuments({ role: 'commuter', isActive: true }),
+      User.countDocuments({ isVerified: true }),
+      User.countDocuments({ role: 'poso', isActive: true }),
+      Complaint.countDocuments(),
+      Complaint.countDocuments({ status: 'pending' }),
+      Complaint.countDocuments({ status: 'under_review' }),
+      Complaint.countDocuments({ status: 'endorsed_to_lgu' }),
+      Complaint.countDocuments({ status: 'resolved' }),
+      Route.countDocuments(),
+      Route.countDocuments({ isActive: true }),
+      Terminal.countDocuments(),
+      Notification.countDocuments({ status: 'pending_approval' }),
+    ]);
 
     return apiResponse.success(res, {
-      users: { total: totalUsers, commuters: totalCommuters },
-      complaints: { total: totalComplaints, pending: pendingComplaints, underReview: underReviewComplaints, resolved: resolvedComplaints },
-      routes: { total: totalRoutes },
+      users: { total: totalUsers, commuters: totalCommuters, verified: verifiedUsers, poso: posoOfficersCount },
+      complaints: {
+        total: totalComplaints,
+        pending: pendingComplaints,
+        underReview: underReviewComplaints,
+        under_review: underReviewComplaints,
+        endorsed: endorsedComplaints,
+        resolved: resolvedComplaints,
+      },
+      routes: { total: totalRoutes, active: activeRoutes },
+      terminals: { total: totalTerminals },
+      alerts: { pendingApproval: pendingAlertsCount },
     }, 'Dashboard stats retrieved');
   } catch (error) { next(error); }
 };

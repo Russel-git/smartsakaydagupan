@@ -42,6 +42,7 @@ const FareCalculatorScreen = () => {
   const [vehicleType, setVehicleType] = useState('traditional');
   const [discount, setDiscount] = useState('none');
   const [loading, setLoading] = useState(true);
+  const [activeFares, setActiveFares] = useState([]);
 
   // Trip Distance State
   const [tripDistanceKm, setTripDistanceKm] = useState(4.0);
@@ -59,21 +60,29 @@ const FareCalculatorScreen = () => {
   const timerIntervalRef = useRef(null);
 
   useEffect(() => {
-    const loadRoutes = async () => {
+    const loadData = async () => {
       try {
-        const { data } = await routesAPI.getAllRoutes();
-        const routeList = data.data || [];
-        setRoutes(routeList);
-        if (routeList.length > 0) {
-          setSelectedRoute(routeList[0]);
-          setTripDistanceKm(Math.min(routeList[0].distanceKm || 4, 4.0));
+        const [routesRes, faresRes] = await Promise.allSettled([
+          routesAPI.getAllRoutes(),
+          faresAPI.getActiveFares(),
+        ]);
+        if (routesRes.status === 'fulfilled') {
+          const routeList = routesRes.value.data?.data || [];
+          setRoutes(routeList);
+          if (routeList.length > 0) {
+            setSelectedRoute(routeList[0]);
+            setTripDistanceKm(Math.min(routeList[0].distanceKm || 4, 4.0));
+          }
+        }
+        if (faresRes.status === 'fulfilled') {
+          setActiveFares(faresRes.value.data?.data || []);
         }
       } catch (e) {
         /* Fail silently */
       }
       setLoading(false);
     };
-    loadRoutes();
+    loadData();
 
     return () => {
       stopLiveMeter();
@@ -191,9 +200,10 @@ const FareCalculatorScreen = () => {
   // LTFRB Official Calculation Engine
   const computeFare = (distance) => {
     const isModern = vehicleType === 'modern';
-    const baseFare = isModern ? 17.0 : 14.0;
-    const baseDistanceKm = 4.0;
-    const perKmRate = isModern ? 2.4 : 2.0;
+    const fareRecord = activeFares.find((f) => f.vehicleType === (isModern ? 'modern' : 'traditional'));
+    const baseFare = fareRecord?.baseFare ?? (isModern ? 15.0 : 13.0);
+    const baseDistanceKm = fareRecord?.baseDistanceKm ?? 4.0;
+    const perKmRate = fareRecord?.perKmRate ?? (isModern ? 2.2 : 1.8);
 
     let subtotal = 0;
     let extraKm = 0;

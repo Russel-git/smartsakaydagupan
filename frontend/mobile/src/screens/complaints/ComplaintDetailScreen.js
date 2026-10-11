@@ -17,9 +17,23 @@ import { useFeedback } from '../../contexts/FeedbackContext';
 import { Card, StatusBadge, Divider, LoadingSpinner } from '../../components/common/SharedComponents';
 import ConfirmDialogModal from '../../components/common/ConfirmDialogModal';
 import EditComplaintModal from './EditComplaintModal';
-import { complaintsAPI } from '../../api/services';
-import { FONTS, SPACING, RADIUS, SHADOWS, COMPLAINT_STATUS, COMPLAINT_CATEGORIES } from '../../utils/constants';
+import { FONTS, SPACING, RADIUS, SHADOWS, COMPLAINT_STATUS, COMPLAINT_CATEGORIES, API_BASE_URL } from '../../utils/constants';
 import { formatDate, formatDateTime } from '../../utils/helpers';
+
+const getMediaUrl = (url) => {
+  if (!url) return null;
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('file:')
+  ) {
+    return url;
+  }
+  const baseUrl = (API_BASE_URL || '').replace(/\/api\/?$/, '');
+  const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+  return `${baseUrl}${cleanUrl}`;
+};
 
 const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
   const initialComplaint = navRoute.params?.complaint;
@@ -512,6 +526,24 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
             <Text style={[styles.actionBannerBody, { color: isDark ? '#E2E8F0' : '#064E3B' }]}>
               {complaint.lguActionNotes}
             </Text>
+
+            {Boolean(complaint.lguEvidencePhoto) ? (
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#6EE7B7' : '#047857', marginBottom: 6, letterSpacing: 0.5 }}>
+                  OFFICIAL LGU ACTION EVIDENCE PHOTO
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setSelectedPhoto(complaint.lguEvidencePhoto)}
+                  activeOpacity={0.85}
+                  style={styles.thumbnailWrapper}
+                >
+                  <Image source={{ uri: getMediaUrl(complaint.lguEvidencePhoto) }} style={styles.thumbnail} />
+                  <View style={styles.zoomIconPill}>
+                    <MaterialCommunityIcons name="magnify-plus" size={14} color="#FFFFFF" />
+                  </View>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -616,7 +648,7 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
                   activeOpacity={0.85}
                   style={styles.thumbnailWrapper}
                 >
-                  <Image source={{ uri: url }} style={styles.thumbnail} />
+                  <Image source={{ uri: getMediaUrl(url) }} style={styles.thumbnail} />
                   <View style={styles.zoomIconPill}>
                     <MaterialCommunityIcons name="magnify-plus" size={14} color="#FFFFFF" />
                   </View>
@@ -647,7 +679,7 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
             <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedPhoto(null)}>
               <MaterialCommunityIcons name="close-circle" size={36} color="#FFFFFF" />
             </TouchableOpacity>
-            <Image source={{ uri: selectedPhoto }} style={styles.modalFullImage} resizeMode="contain" />
+            <Image source={{ uri: getMediaUrl(selectedPhoto) }} style={styles.modalFullImage} resizeMode="contain" />
           </View>
         </Modal>
       )}

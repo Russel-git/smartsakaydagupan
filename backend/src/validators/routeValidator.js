@@ -32,12 +32,15 @@ const createRouteSchema = Joi.object({
     start: Joi.string().pattern(/^\d{2}:\d{2}$/),
     end: Joi.string().pattern(/^\d{2}:\d{2}$/),
   }),
+  isActive: Joi.boolean(),
 });
 
 const updateRouteSchema = createRouteSchema.fork(
   ['name', 'code', 'category', 'distanceKm'],
   (field) => field.optional()
-);
+).keys({
+  isActive: Joi.boolean(),
+});
 
 
 module.exports = { createRouteSchema, updateRouteSchema };

@@ -4,7 +4,6 @@ const path = require("path");
 const Route = require("../models/Route");
 const Fare = require("../models/Fare");
 
-const { chatWithGemini } = require("../ai_model/models/GeminiAIModel");
 const { chatWithOllama } = require("../ai_model/models/SmartSakayAIModel");
 const { chatWithGroq } = require("../ai_model/models/GroqAIModel");
 
@@ -356,27 +355,27 @@ const chat = async (messages) => {
   }
 
   // ----------------------------------------------------
-  // TIER 1: GOOGLE GEMINI (Fast Cloud LLM with Active Key)
+  // TIER 1: GROQ CLOUD LLM (Primary AI Engine)
   // ----------------------------------------------------
   if (
-    process.env.GEMINI_API_KEY &&
-    process.env.GEMINI_API_KEY !== "your-gemini-api-key"
+    process.env.GROQ_API_KEY &&
+    process.env.GROQ_API_KEY !== "your-groq-api-key"
   ) {
     try {
-      console.log("[AI] Trying Primary AI: Google Gemini...");
-      const response = await chatWithGemini(messages, systemPrompt);
-      console.log("[AI] Google Gemini response succeeded.");
+      console.log("[AI] Trying Primary AI: Groq Cloud LLM...");
+      const response = await chatWithGroq(messages, systemPrompt);
+      console.log("[AI] Groq Cloud response succeeded.");
       return response;
-    } catch (geminiError) {
+    } catch (groqError) {
       console.warn(
-        "[AI] Google Gemini failed:",
-        geminiError?.message || geminiError,
+        "[AI] Groq Cloud failed:",
+        groqError?.message || groqError,
       );
     }
   }
 
   // ----------------------------------------------------
-  // TIER 2: LOCAL OLLAMA (If Running On Localhost)
+  // TIER 2: LOCAL OLLAMA (If Running Local SmartSakay Model)
   // ----------------------------------------------------
   try {
     console.log("[AI] Trying Local Ollama model...");
@@ -391,27 +390,7 @@ const chat = async (messages) => {
   }
 
   // ----------------------------------------------------
-  // TIER 3: GROQ CLOUD (If Configured)
-  // ----------------------------------------------------
-  if (
-    process.env.GROQ_API_KEY &&
-    process.env.GROQ_API_KEY !== "your-groq-api-key"
-  ) {
-    try {
-      console.log("[AI] Trying Groq Cloud AI...");
-      const response = await chatWithGroq(messages, systemPrompt);
-      console.log("[AI] Groq fallback succeeded.");
-      return response;
-    } catch (groqError) {
-      console.warn(
-        "[AI] Groq fallback failed:",
-        groqError?.message || groqError,
-      );
-    }
-  }
-
-  // ----------------------------------------------------
-  // TIER 4: GUARANTEED LOCAL KNOWLEDGE ENGINE (Zero-Crash Fallback)
+  // TIER 3: GUARANTEED LOCAL KNOWLEDGE ENGINE (Zero-Crash Fallback)
   // ----------------------------------------------------
   console.log(
     "[AI] Serving response via SmartSakay Local Knowledge Engine...",
@@ -426,16 +405,14 @@ const chat = async (messages) => {
 const checkAiStatus = async () => {
   return {
     online: true,
-    gemini: Boolean(
-      process.env.GEMINI_API_KEY &&
-        process.env.GEMINI_API_KEY !== "your-gemini-api-key",
-    ),
+    gemini: false,
     groq: Boolean(
       process.env.GROQ_API_KEY &&
         process.env.GROQ_API_KEY !== "your-groq-api-key",
     ),
+    ollama: true,
     knowledgeBase: true,
-    provider: "Google Gemini 3.5 Flash (with Local Knowledge Fallback)",
+    provider: "Groq Cloud AI (openai/gpt-oss-120b) + SmartSakay LLM",
   };
 };
 

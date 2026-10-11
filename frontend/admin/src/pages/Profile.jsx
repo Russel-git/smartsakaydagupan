@@ -9,14 +9,18 @@ import {
   Monitor,
   LogOut,
   UserCircle,
+  Camera,
+  Upload,
 } from "lucide-react";
 
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/theme/ThemeContext";
 import { useToast } from "../contexts/ToastContext";
+import { usersAPI } from "../api/services";
+import ConfirmModal from "../components/common/ConfirmModal";
 
 const Profile = () => {
-  const { admin, logout } = useAuth();
+  const { admin, logout, updateUser } = useAuth();
   const {
     colors,
     theme,
@@ -26,9 +30,11 @@ const Profile = () => {
     isThemeChanging,
     themeCooldown,
   } = useTheme();
-  const { showSuccess, showInfo } = useToast();
+  const { showSuccess, showError, showInfo } = useToast();
 
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // ============================================================
   // ROLE
@@ -126,10 +132,46 @@ const Profile = () => {
   };
 
   // ============================================================
+  // PROFILE PHOTO UPLOAD
+  // ============================================================
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingPhoto(true);
+      const formData = new FormData();
+      formData.append("photo", file);
+
+      const res = await usersAPI.uploadProfilePhoto(formData);
+      const updatedUser = res.data?.data?.user;
+      const photoUrl = res.data?.data?.profilePhoto || res.data?.data?.url;
+
+      if (updatedUser) {
+        updateUser(updatedUser);
+      } else if (photoUrl) {
+        updateUser({ ...admin, profilePhoto: photoUrl });
+      }
+
+      showSuccess("Profile Photo Updated", "Your official account photo has been saved.");
+    } catch (err) {
+      console.error("Profile photo upload failed:", err);
+      showError(
+        "Upload Failed",
+        err.response?.data?.message || "Failed to update profile photo."
+      );
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // ============================================================
   // LOGOUT
   // ============================================================
 
   const handleLogout = () => {
+    setShowLogoutConfirm(false);
     logout();
     window.location.href = "/login";
   };
@@ -225,24 +267,67 @@ const Profile = () => {
             flexWrap: "wrap",
           }}
         >
-          {/* AVATAR */}
+          {/* AVATAR WITH PHOTO UPLOAD */}
 
-          <div
-            style={{
-              width: "76px",
-              height: "76px",
-              minWidth: "76px",
-              borderRadius: "50%",
-              backgroundColor: colors.primary,
-              color: "#FFFFFF",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "25px",
-              fontWeight: "700",
-            }}
-          >
-            {getInitials()}
+          <div style={{ position: "relative" }}>
+            <div
+              style={{
+                width: "80px",
+                height: "80px",
+                minWidth: "80px",
+                borderRadius: "50%",
+                backgroundColor: colors.primary,
+                color: "#FFFFFF",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "26px",
+                fontWeight: "700",
+                overflow: "hidden",
+                border: `3px solid ${colors.surface}`,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+              }}
+            >
+              {admin?.profilePhoto ? (
+                <img
+                  src={admin.profilePhoto}
+                  alt="Profile"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              ) : (
+                getInitials()
+              )}
+            </div>
+
+            <label
+              style={{
+                position: "absolute",
+                bottom: "-2px",
+                right: "-2px",
+                backgroundColor: colors.primary,
+                color: "#FFFFFF",
+                borderRadius: "50%",
+                width: "28px",
+                height: "28px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: uploadingPhoto ? "not-allowed" : "pointer",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                border: "2px solid #FFFFFF",
+                transition: "transform 0.15s ease",
+              }}
+              title="Upload new profile picture"
+            >
+              <Camera size={14} />
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: "none" }}
+                disabled={uploadingPhoto}
+                onChange={handlePhotoUpload}
+              />
+            </label>
           </div>
 
           {/* USER INFO */}
@@ -695,7 +780,7 @@ const Profile = () => {
           </div>
 
           <button
-            onClick={handleLogout}
+            onClick={() => setShowLogoutConfirm(true)}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -723,6 +808,17 @@ const Profile = () => {
           </button>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={handleLogout}
+        title="Sign Out of SmartSakay"
+        message="Are you sure you want to end your current console session? You will be returned to the login screen."
+        confirmText="Sign Out"
+        cancelText="Cancel"
+        type="danger"
+      />
 
       {/* ========================================================
           RESPONSIVE

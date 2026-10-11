@@ -13,6 +13,8 @@ import {
   UserCircle,
   ChevronDown,
   MoreHorizontal,
+  Megaphone,
+  Archive,
 } from "lucide-react";
 
 import { NavLink, useNavigate } from "react-router-dom";
@@ -21,6 +23,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { useTheme } from "../../../contexts/theme/ThemeContext";
 import { useSidebar } from "../../../contexts/SidebarContext";
+import ConfirmModal from "../../common/ConfirmModal";
 
 const Sidebar = () => {
   const { admin, logout, isAdmin, isLgu, isPoso } = useAuth();
@@ -43,6 +46,12 @@ const Sidebar = () => {
   // SIDEBAR VISIBILITY
   // ============================================================
 
+  const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
+
+  // ============================================================
+  // SIDEBAR VISIBILITY
+  // ============================================================
+
   const sidebarExpanded = isExpanded || isHovered || isMobileOpen;
 
   // ============================================================
@@ -50,6 +59,7 @@ const Sidebar = () => {
   // ============================================================
 
   const handleLogout = () => {
+    setShowLogoutConfirm(false);
     logout();
 
     showInfo(
@@ -87,20 +97,10 @@ const Sidebar = () => {
               label: "Road Broadcaster",
               icon: Bell,
             },
-          ],
-        },
-        {
-          title: "Field Reference",
-          items: [
             {
-              to: "/routes",
-              label: "Route Directory",
-              icon: MapPin,
-            },
-            {
-              to: "/fares",
-              label: "Fare Matrix",
-              icon: Calculator,
+              to: "/announcements",
+              label: "City Announcements",
+              icon: Megaphone,
             },
           ],
         },
@@ -158,6 +158,16 @@ const Sidebar = () => {
               to: "/notifications",
               label: "City Broadcaster",
               icon: Bell,
+            },
+            {
+              to: "/announcements",
+              label: "City Announcements",
+              icon: Megaphone,
+            },
+            {
+              to: "/archives",
+              label: "Archives",
+              icon: Archive,
             },
             {
               to: "/users",
@@ -522,9 +532,20 @@ const Sidebar = () => {
 
               fontSize: "14px",
               fontWeight: "700",
+              overflow: "hidden",
             }}
           >
-            {admin?.firstName ? admin.firstName[0].toUpperCase() : "U"}
+            {admin?.profilePhoto ? (
+              <img
+                src={admin.profilePhoto}
+                alt="Profile"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            ) : admin?.firstName ? (
+              admin.firstName[0].toUpperCase()
+            ) : (
+              "U"
+            )}
           </div>
 
           {/* USER */}
@@ -574,7 +595,7 @@ const Sidebar = () => {
             <button
               onClick={(event) => {
                 event.stopPropagation();
-                handleLogout();
+                setShowLogoutConfirm(true);
               }}
               title="Sign Out"
               style={{
@@ -597,6 +618,17 @@ const Sidebar = () => {
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={handleLogout}
+        title="Sign Out Confirmation"
+        message="Are you sure you want to sign out of the SmartSakay Console? Any unsaved work may be lost."
+        confirmText="Sign Out"
+        cancelText="Stay Signed In"
+        type="danger"
+      />
     </aside>
   );
 };

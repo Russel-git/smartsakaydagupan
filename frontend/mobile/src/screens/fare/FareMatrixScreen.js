@@ -38,12 +38,23 @@ const FareMatrixScreen = () => {
   const [selectedVehicle, setSelectedVehicle] = useState('traditional'); // 'traditional' | 'modern'
   const [viewMode, setViewMode] = useState('routes'); // 'routes' | 'km_ladder'
   const [showDiscounted, setShowDiscounted] = useState(false);
+  const [activeFares, setActiveFares] = useState([]);
 
   useEffect(() => {
     const loadMatrix = async () => {
       try {
-        const { data } = await faresAPI.getFareMatrix();
-        setMatrix(Array.isArray(data.data) ? data.data : []);
+        const [matrixRes, faresRes] = await Promise.allSettled([
+          faresAPI.getFareMatrix(),
+          faresAPI.getActiveFares(),
+        ]);
+        if (matrixRes.status === 'fulfilled') {
+          setMatrix(Array.isArray(matrixRes.value.data?.data) ? matrixRes.value.data.data : []);
+        } else {
+          setMatrix([]);
+        }
+        if (faresRes.status === 'fulfilled') {
+          setActiveFares(Array.isArray(faresRes.value.data?.data) ? faresRes.value.data.data : []);
+        }
       } catch (e) {
         setMatrix([]);
       }
@@ -74,11 +85,25 @@ const FareMatrixScreen = () => {
     return acc;
   }, {});
 
+  const tradFare = activeFares.find((f) => f.vehicleType === 'traditional') || {
+    baseFare: 13,
+    perKmRate: 1.80,
+    baseDistanceKm: 4,
+    effectiveDate: null,
+  };
+  const modFare = activeFares.find((f) => f.vehicleType === 'modern') || {
+    baseFare: 15,
+    perKmRate: 2.20,
+    baseDistanceKm: 4,
+    effectiveDate: null,
+  };
+
   const isModern = selectedVehicle === 'modern';
-  const currentBaseFare = isModern ? 17 : 14;
-  const currentBaseDist = 4;
-  const currentPerKm = isModern ? 2.4 : 2.0;
-  const currentMinDiscounted = isModern ? 14 : 12;
+  const currentFareObj = isModern ? modFare : tradFare;
+  const currentBaseFare = currentFareObj.baseFare;
+  const currentBaseDist = currentFareObj.baseDistanceKm || 4;
+  const currentPerKm = currentFareObj.perKmRate;
+  const currentMinDiscounted = Math.ceil(currentBaseFare * 0.8);
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -86,6 +111,7 @@ const FareMatrixScreen = () => {
         <Text style={[styles.title, { color: colors.textPrimary }]}>Fare Matrix</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           Official LTFRB-approved fare matrix & per-km added difference schedule
+          {currentFareObj.effectiveDate && ` • Effective: ${new Date(currentFareObj.effectiveDate).toLocaleDateString()}`}
         </Text>
 
         {/* Emphasized Regulated Base Fares Banner (Public Jeepneys Only) */}
@@ -105,10 +131,10 @@ const FareMatrixScreen = () => {
             >
               <Text style={[styles.baseFareVehicle, { color: '#D97706' }]}>🚐 Traditional PUJ</Text>
               <Text style={[styles.baseFareNum, { color: '#D97706' }]}>
-                {formatPeso(showDiscounted ? 12 : 14)}
+                {formatPeso(showDiscounted ? Math.ceil(tradFare.baseFare * 0.8) : tradFare.baseFare)}
               </Text>
               <Text style={[styles.baseFareRate, { color: colors.textSecondary }]}>
-                First 4 km • <Text style={{ fontWeight: '800', color: '#D97706' }}>+₱2.00/km added</Text>
+                First 4 km • <Text style={{ fontWeight: '800', color: '#D97706' }}>+₱{tradFare.perKmRate.toFixed(2)}/km added</Text>
               </Text>
             </TouchableOpacity>
 
@@ -123,10 +149,10 @@ const FareMatrixScreen = () => {
             >
               <Text style={[styles.baseFareVehicle, { color: '#2563EB' }]}>🚌 Modern PUJ</Text>
               <Text style={[styles.baseFareNum, { color: '#2563EB' }]}>
-                {formatPeso(showDiscounted ? 14 : 17)}
+                {formatPeso(showDiscounted ? Math.ceil(modFare.baseFare * 0.8) : modFare.baseFare)}
               </Text>
               <Text style={[styles.baseFareRate, { color: colors.textSecondary }]}>
-                First 4 km • <Text style={{ fontWeight: '800', color: '#2563EB' }}>+₱2.40/km added</Text>
+                First 4 km • <Text style={{ fontWeight: '800', color: '#2563EB' }}>+₱{modFare.perKmRate.toFixed(2)}/km added</Text>
               </Text>
             </TouchableOpacity>
           </View>
@@ -155,7 +181,7 @@ const FareMatrixScreen = () => {
                 { color: selectedVehicle === 'traditional' ? '#FFFFFF' : colors.textPrimary },
               ]}
             >
-              Traditional (+₱2.00/km)
+              Traditional (+₱{tradFare.perKmRate.toFixed(2)}/km)
             </Text>
           </TouchableOpacity>
 
@@ -180,7 +206,7 @@ const FareMatrixScreen = () => {
                 { color: selectedVehicle === 'modern' ? '#FFFFFF' : colors.textPrimary },
               ]}
             >
-              Modern PUJ (+₱2.40/km)
+              Modern PUJ (+₱{modFare.perKmRate.toFixed(2)}/km)
             </Text>
           </TouchableOpacity>
         </View>

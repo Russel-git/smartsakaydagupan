@@ -13,8 +13,12 @@ const getNotifications = async (req, res, next) => {
       createdAt: { $lt: threeDaysAgo },
     }).exec().catch(() => {});
 
+    const userOrPublic = req.user
+      ? [{ userId: req.user._id }, { userId: null }]
+      : [{ userId: null }];
+
     const filter = {
-      $or: [{ userId: req.user._id }, { userId: null }],
+      $or: userOrPublic,
       status: 'published',
       $nor: [
         {
@@ -52,6 +56,9 @@ const getNotifications = async (req, res, next) => {
 
 const getUnreadCount = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return apiResponse.success(res, { count: 0 });
+    }
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
     const count = await Notification.countDocuments({
       $or: [{ userId: req.user._id }, { userId: null }],
@@ -90,7 +97,7 @@ const markAllAsRead = async (req, res, next) => {
 
 const broadcast = async (req, res, next) => {
   try {
-    const { title, message, type, category, severity = 'info', locationArea = '' } = req.body;
+    const { title, message, type, category, severity = 'info', locationArea = '', photoUrl, evidencePhoto, metadata = {} } = req.body;
     let finalCategory = category;
     let finalType = type || 'broadcast';
 
@@ -99,6 +106,12 @@ const broadcast = async (req, res, next) => {
       else if (finalType === 'complaint_update') finalCategory = 'complaint_updates';
       else finalCategory = 'broadcast_by_admin';
     }
+
+    const attachedPhoto = photoUrl || evidencePhoto || metadata?.photoUrl || metadata?.evidenceUrl || null;
+    const finalMetadata = {
+      ...metadata,
+      ...(attachedPhoto ? { photoUrl: attachedPhoto, evidencePhoto: attachedPhoto } : {}),
+    };
 
     const isWeather = finalCategory === 'weather_updates' || finalType === 'weather_alert';
     const expiresAt = isWeather
@@ -119,6 +132,7 @@ const broadcast = async (req, res, next) => {
       approvedAt: new Date(),
       severity,
       locationArea: locationArea || '',
+      metadata: finalMetadata,
       expiresAt,
     });
 
@@ -136,6 +150,7 @@ const broadcast = async (req, res, next) => {
       approvedAt: new Date(),
       severity,
       locationArea: locationArea || '',
+      metadata: finalMetadata,
       expiresAt,
     }));
     if (notifications.length > 0) await Notification.insertMany(notifications);
@@ -145,7 +160,8 @@ const broadcast = async (req, res, next) => {
 
 const requestRoadAlert = async (req, res, next) => {
   try {
-    const { title, message, severity = 'warning', locationArea = '' } = req.body;
+    const { title, message, severity = 'warning', locationArea = '', photoUrl, evidencePhoto } = req.body;
+    const attachedPhoto = photoUrl || evidencePhoto || null;
     const alert = await Notification.create({
       userId: null,
       title: title.trim(),
@@ -161,6 +177,7 @@ const requestRoadAlert = async (req, res, next) => {
         submittedBy: `${req.user.firstName} ${req.user.lastName}`,
         badgeNumber: req.user.badgeNumber || 'POSO-ENFORCER',
         zone: req.user.assignedZone || '',
+        ...(attachedPhoto ? { photoUrl: attachedPhoto, evidencePhoto: attachedPhoto } : {}),
       },
     });
 
@@ -185,12 +202,16 @@ const getPendingRoadAlerts = async (req, res, next) => {
 
 const getAlertFeed = async (req, res, next) => {
   try {
-    const { status, limit = 50 } = req.query;
+    const { status, limit = 100 } = req.query;
     const filter = {
-      type: 'broadcast',
+      $or: [{ type: 'broadcast' }, { category: 'broadcast_by_admin' }, { type: 'system' }],
       userId: null,
     };
-    if (status) filter.status = status;
+    if (status) {
+      filter.status = status;
+    } else {
+      filter.status = { $ne: 'archived' };
+    }
 
     const alerts = await Notification.find(filter)
       .populate('authorUser', 'firstName lastName badgeNumber department')
@@ -199,6 +220,50 @@ const getAlertFeed = async (req, res, next) => {
       .limit(parseInt(limit));
 
     return apiResponse.success(res, alerts, 'Alerts feed retrieved.');
+  } catch (error) { next(error); }
+};
+
+const archiveAnnouncement = async (req, res, next) => {
+  try {
+    const alert = await Notification.findById(req.params.id);
+    if (!alert) return apiResponse.error(res, 'Announcement not found.', 404);
+
+    alert.status = 'archived';
+    await alert.save();
+
+    return apiResponse.success(res, alert, 'Announcement archived successfully.');
+  } catch (error) { next(error); }
+};
+
+const restoreAnnouncement = async (req, res, next) => {
+  try {
+    const alert = await Notification.findById(req.params.id);
+    if (!alert) return apiResponse.error(res, 'Announcement not found.', 404);
+
+    alert.status = 'published';
+    await alert.save();
+
+    return apiResponse.success(res, alert, 'Announcement restored and published.');
+  } catch (error) { next(error); }
+};
+
+const permanentDeleteAnnouncement = async (req, res, next) => {
+  try {
+    const alert = await Notification.findById(req.params.id);
+    if (!alert) return apiResponse.error(res, 'Announcement not found.', 404);
+
+    // Delete primary record
+    await Notification.findByIdAndDelete(req.params.id);
+
+    // Also remove any commuter copies that originated from this broadcast
+    await Notification.deleteMany({
+      $or: [
+        { 'metadata.originalAlertId': alert._id },
+        { title: alert.title, createdAt: { $gte: new Date(alert.createdAt.getTime() - 60000), $lte: new Date(alert.createdAt.getTime() + 60000) } },
+      ],
+    }).exec().catch(() => {});
+
+    return apiResponse.success(res, null, 'Announcement permanently removed.');
   } catch (error) { next(error); }
 };
 
@@ -231,6 +296,8 @@ const approveRoadAlert = async (req, res, next) => {
         metadata: {
           originalAlertId: alert._id,
           verifiedByLgu: true,
+          photoUrl: alert.metadata?.photoUrl || alert.metadata?.evidencePhoto || null,
+          evidencePhoto: alert.metadata?.photoUrl || alert.metadata?.evidencePhoto || null,
         },
       }));
       await Notification.insertMany(commuterNotifs);
@@ -242,12 +309,12 @@ const approveRoadAlert = async (req, res, next) => {
 
 const rejectRoadAlert = async (req, res, next) => {
   try {
-    const { reason } = req.body;
+    const reason = req.body.reason || req.body.rejectionReason || 'Declined by City LGU verification desk.';
     const alert = await Notification.findById(req.params.id);
     if (!alert) return apiResponse.error(res, 'Road alert not found.', 404);
 
     alert.status = 'rejected';
-    alert.rejectionReason = reason || 'Declined by City LGU verification desk.';
+    alert.rejectionReason = reason;
     alert.approvedBy = req.user._id;
     alert.approvedAt = new Date();
     await alert.save();
@@ -300,4 +367,7 @@ module.exports = {
   getAlertFeed,
   approveRoadAlert,
   rejectRoadAlert,
+  archiveAnnouncement,
+  restoreAnnouncement,
+  permanentDeleteAnnouncement,
 };

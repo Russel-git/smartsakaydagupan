@@ -1,6 +1,6 @@
 const Groq = require("groq-sdk");
 
-const GROQ_MODEL = "openai/gpt-oss-120b";
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
 const chatWithGroq = async (messages, systemPrompt) => {
   const apiKey = process.env.GROQ_API_KEY;

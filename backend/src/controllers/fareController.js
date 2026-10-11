@@ -87,10 +87,13 @@ const updateFare = async (req, res, next) => {
     }
 
     const commuters = await User.find({ role: 'commuter', isActive: true }).select('_id');
+    const effDateFormatted = new Date(newFare.effectiveDate).toLocaleDateString();
     const notifications = commuters.map((user) => ({
-      userId: user._id, title: 'Fare Rate Updated',
-      message: `${newFare.vehicleType.charAt(0).toUpperCase() + newFare.vehicleType.slice(1)} jeepney fare has been updated. Base fare: ₱${newFare.baseFare}, per km: ₱${newFare.perKmRate}`,
-      type: 'fare_update', metadata: { fareId: newFare._id },
+      userId: user._id,
+      title: 'Fare Rate Updated',
+      message: `${newFare.vehicleType.charAt(0).toUpperCase() + newFare.vehicleType.slice(1)} jeepney fare updated: ₱${newFare.baseFare.toFixed(2)} base, +₱${newFare.perKmRate.toFixed(2)}/km. Effective: ${effDateFormatted}.`,
+      type: 'fare_update',
+      metadata: { fareId: newFare._id, effectiveDate: newFare.effectiveDate },
     }));
     if (notifications.length > 0) await Notification.insertMany(notifications);
 
@@ -104,11 +107,85 @@ const updateFare = async (req, res, next) => {
         newBaseFare: newFare.baseFare,
         previousPerKm: oldFare.perKmRate,
         newPerKm: newFare.perKmRate,
+        effectiveDate: newFare.effectiveDate,
       },
     });
 
     return apiResponse.success(res, newFare, 'Fare updated and matrix recalculated');
 
+  } catch (error) { next(error); }
+};
+
+const revertFare = async (req, res, next) => {
+  try {
+    const { vehicleType } = req.params;
+    let targetVehicle = vehicleType || 'traditional';
+    if (targetVehicle === 'traditional_jeepney') targetVehicle = 'traditional';
+    if (targetVehicle === 'modern_jeepney') targetVehicle = 'modern';
+
+    const currentActive = await Fare.findOne({ vehicleType: targetVehicle, isActive: true });
+    if (!currentActive) return apiResponse.error(res, `No active tariff found for ${targetVehicle}`, 404);
+
+    // Find the most recently superseded fare record
+    const previousFare = await Fare.findOne({
+      vehicleType: targetVehicle,
+      isActive: false,
+      _id: { $ne: currentActive._id },
+    }).sort({ createdAt: -1 });
+
+    if (!previousFare) {
+      return apiResponse.error(res, `No previous tariff revision available in history to revert to.`, 400);
+    }
+
+    currentActive.isActive = false;
+    await currentActive.save();
+
+    previousFare.isActive = true;
+    await previousFare.save();
+
+    // Recalculate route matrix for restored tariff
+    const routes = await Route.find({ isActive: true });
+    await FareMatrix.updateMany({ vehicleType: previousFare.vehicleType, isActive: true }, { isActive: false });
+
+    for (const route of routes) {
+      const result = fareCalculator.calculate(route.distanceKm, previousFare.baseFare, previousFare.baseDistanceKm, previousFare.perKmRate);
+      await FareMatrix.create({
+        routeId: route._id,
+        fareId: previousFare._id,
+        vehicleType: previousFare.vehicleType,
+        regularFare: result.regularFare,
+        discountedFare: result.discountedFare,
+        distanceKm: route.distanceKm,
+        isActive: true,
+      });
+    }
+
+    // Notify all active commuters
+    const commuters = await User.find({ role: 'commuter', isActive: true }).select('_id');
+    const effDateFormatted = new Date(previousFare.effectiveDate).toLocaleDateString();
+    const notifications = commuters.map((user) => ({
+      userId: user._id,
+      title: 'Fare Rate Reverted',
+      message: `${previousFare.vehicleType.charAt(0).toUpperCase() + previousFare.vehicleType.slice(1)} jeepney fare restored to: ₱${previousFare.baseFare.toFixed(2)} base, +₱${previousFare.perKmRate.toFixed(2)}/km. Effective: ${effDateFormatted}.`,
+      type: 'fare_update',
+      metadata: { fareId: previousFare._id, effectiveDate: previousFare.effectiveDate, reverted: true },
+    }));
+    if (notifications.length > 0) await Notification.insertMany(notifications);
+
+    await logAuditEvent(req, {
+      action: 'FARE_REVERT',
+      resourceType: 'fare',
+      resourceId: previousFare._id,
+      details: {
+        vehicleType: previousFare.vehicleType,
+        restoredBaseFare: previousFare.baseFare,
+        restoredPerKm: previousFare.perKmRate,
+        previousBaseFare: currentActive.baseFare,
+        previousPerKm: currentActive.perKmRate,
+      },
+    });
+
+    return apiResponse.success(res, previousFare, `Tariff rate for ${previousFare.vehicleType} successfully reverted to previous revision.`);
   } catch (error) { next(error); }
 };
 
@@ -122,4 +199,4 @@ const getFareHistory = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getActiveFares, calculateFare, getFareMatrix, updateFare, getFareHistory };
+module.exports = { getActiveFares, calculateFare, getFareMatrix, updateFare, revertFare, getFareHistory };

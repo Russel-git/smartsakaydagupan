@@ -16,11 +16,11 @@ router.get('/', optionalAuth, terminalController.getAllTerminals);
 router.get('/bus', optionalAuth, getBusTerminals);
 router.get('/:id', optionalAuth, terminalController.getTerminalById);
 
-// Admin-only management routes
+// Admin & LGU management routes
 router.post(
   '/',
   authMiddleware,
-  rbac('admin'),
+  rbac('admin', 'lgu'),
   validate(createTerminalSchema),
   terminalController.createTerminal
 );
@@ -28,7 +28,7 @@ router.post(
 router.put(
   '/:id',
   authMiddleware,
-  rbac('admin'),
+  rbac('admin', 'lgu'),
   validate(updateTerminalSchema),
   terminalController.updateTerminal
 );
@@ -36,14 +36,14 @@ router.put(
 router.delete(
   '/clear-all',
   authMiddleware,
-  rbac('admin'),
+  rbac('admin', 'lgu'),
   terminalController.clearAllTerminals
 );
 
 router.delete(
   '/:id',
   authMiddleware,
-  rbac('admin'),
+  rbac('admin', 'lgu'),
   terminalController.deleteTerminal
 );
 

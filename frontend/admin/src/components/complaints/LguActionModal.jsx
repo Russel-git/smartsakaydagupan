@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, CheckCircle2, X, AlertCircle } from "lucide-react";
+import { ShieldCheck, CheckCircle2, X, AlertCircle, Camera, Upload } from "lucide-react";
+import { complaintsAPI } from "../../api/services";
 
 const LguActionModal = ({
   isOpen,
@@ -10,13 +11,17 @@ const LguActionModal = ({
   loading,
 }) => {
   const [notes, setNotes] = useState("");
+  const [evidencePhotoUrl, setEvidencePhotoUrl] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     if (complaint) {
       if (mode === "action") {
         setNotes(complaint.lguActionNotes || "");
+        setEvidencePhotoUrl(complaint.lguEvidencePhoto || "");
       } else {
         setNotes(complaint.lguTerminationNotes || "");
+        setEvidencePhotoUrl("");
       }
     }
   }, [complaint, mode, isOpen]);
@@ -25,9 +30,28 @@ const LguActionModal = ({
 
   const isAction = mode === "action";
 
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingPhoto(true);
+      const formData = new FormData();
+      formData.append("photo", file);
+      const res = await complaintsAPI.uploadEvidence(formData);
+      const url = res.data?.data?.url || res.data?.url;
+      setEvidencePhotoUrl(url);
+    } catch (err) {
+      console.error("Failed to upload evidence photo:", err);
+      alert(err.response?.data?.message || "Failed to upload evidence photo.");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    onConfirm(complaint, mode, notes);
+    onConfirm(complaint, mode, notes, evidencePhotoUrl);
   };
 
   return (
@@ -117,6 +141,88 @@ const LguActionModal = ({
                 This official finding will be permanently recorded and
                 transmitted in real-time to the commuter's device.
               </span>
+            </div>
+
+            {/* Evidence Photo Upload */}
+            <div
+              style={{
+                backgroundColor: "var(--surface-elevated, #f8fafc)",
+                border: "1px solid var(--border-color, #e2e8f0)",
+                borderRadius: "var(--radius-md, 8px)",
+                padding: "12px",
+              }}
+            >
+              <label
+                className="form-label"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  marginBottom: "8px",
+                }}
+              >
+                <Camera size={15} color="#059669" />
+                <span>Action Evidence Photo (Citation Ticket, Inspection Photo, etc.)</span>
+              </label>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 14px",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "6px",
+                    cursor: uploadingPhoto ? "not-allowed" : "pointer",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                  }}
+                >
+                  <Upload size={14} />
+                  <span>{uploadingPhoto ? "Uploading..." : "Attach Evidence Photo"}</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    style={{ display: "none" }}
+                    disabled={uploadingPhoto}
+                    onChange={handlePhotoUpload}
+                  />
+                </label>
+
+                {evidencePhotoUrl && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <img
+                      src={evidencePhotoUrl}
+                      alt="Action Evidence"
+                      style={{
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "6px",
+                        objectFit: "cover",
+                        border: "1px solid #cbd5e1",
+                      }}
+                    />
+                    <span style={{ fontSize: "11px", color: "#059669", fontWeight: "600" }}>Attached ✓</span>
+                    <button
+                      type="button"
+                      onClick={() => setEvidencePhotoUrl("")}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color: "#dc2626",
+                        cursor: "pointer",
+                        fontSize: "11px",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

@@ -11,6 +11,9 @@ import {
   UserX,
   Power,
   CheckCircle2,
+  Eye,
+  EyeOff,
+  KeyRound,
 } from "lucide-react";
 
 import { usersAPI } from "../api/services";
@@ -48,6 +51,7 @@ const UsersPage = () => {
   });
 
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // ============================================================
   // CONFIRMATION MODAL
@@ -122,6 +126,104 @@ const UsersPage = () => {
         }
       },
     });
+  };
+
+  // ============================================================
+  // DELETE SUSPENDED ACCOUNT
+  // ============================================================
+
+  const handleDeleteUser = (user) => {
+    if (user.isActive) {
+      showError(
+        "Action Not Permitted",
+        "The account must be suspended before it can be deleted. Please suspend the account first."
+      );
+      return;
+    }
+
+    setConfirmConfig({
+      isOpen: true,
+      title: "Permanently Delete Account",
+      message: `Are you sure you want to permanently delete the account for ${user.firstName} ${user.lastName} (${user.email})? This action cannot be undone and will purge all credentials from the system.`,
+      confirmText: "Delete Account Permanently",
+      cancelText: "Cancel",
+      type: "danger",
+      loading: false,
+
+      onConfirm: async () => {
+        setConfirmConfig((prev) => ({ ...prev, loading: true }));
+        try {
+          await usersAPI.delete(user._id);
+          showSuccess(
+            "Account Deleted",
+            `Account for ${user.firstName} ${user.lastName} has been permanently deleted.`
+          );
+          setConfirmConfig((prev) => ({ ...prev, isOpen: false, loading: false }));
+          fetchUsers();
+        } catch (err) {
+          showError("Delete Failed", err.response?.data?.message || "Failed to delete account.");
+          setConfirmConfig((prev) => ({ ...prev, loading: false }));
+        }
+      },
+    });
+  };
+
+  // ============================================================
+  // CHANGE / RECOVER PASSWORD MODAL STATE & HANDLERS
+  // ============================================================
+
+  const [passwordModal, setPasswordModal] = useState({
+    isOpen: false,
+    user: null,
+    newPassword: "",
+    showPassword: false,
+    submitting: false,
+  });
+
+  const handleOpenPasswordModal = (user) => {
+    setPasswordModal({
+      isOpen: true,
+      user,
+      newPassword: "",
+      showPassword: false,
+      submitting: false,
+    });
+  };
+
+  const handleGenerateRandomPassword = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
+    let randomPass = "";
+    for (let i = 0; i < 10; i++) {
+      randomPass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setPasswordModal((prev) => ({ ...prev, newPassword: randomPass, showPassword: true }));
+  };
+
+  const handleSubmitPasswordChange = async (e) => {
+    e.preventDefault();
+    if (!passwordModal.newPassword || passwordModal.newPassword.length < 6) {
+      showError("Invalid Password", "New password must be at least 6 characters long.");
+      return;
+    }
+
+    setPasswordModal((prev) => ({ ...prev, submitting: true }));
+    try {
+      await usersAPI.resetPassword(passwordModal.user._id, passwordModal.newPassword);
+      showSuccess(
+        "Password Updated",
+        `Password for ${passwordModal.user.firstName} ${passwordModal.user.lastName} (${passwordModal.user.email}) has been updated successfully.`
+      );
+      setPasswordModal({
+        isOpen: false,
+        user: null,
+        newPassword: "",
+        showPassword: false,
+        submitting: false,
+      });
+    } catch (err) {
+      showError("Update Failed", err.response?.data?.message || "Failed to update user password.");
+      setPasswordModal((prev) => ({ ...prev, submitting: false }));
+    }
   };
 
   // ============================================================
@@ -437,28 +539,82 @@ const UsersPage = () => {
 
                       {/* Actions */}
                       <td style={{ padding: "14px 20px", textAlign: "right" }}>
-                        <button
-                          onClick={() => handleToggleStatus(u)}
-                          disabled={isCurrent}
-                          title={u.isActive ? "Suspend Account" : "Activate Account"}
-                          style={{
-                            padding: "6px 12px",
-                            borderRadius: "8px",
-                            border: `1px solid ${u.isActive ? "#FCA5A5" : "#86EFAC"}`,
-                            backgroundColor: u.isActive ? "#FEF2F2" : "#ECFDF5",
-                            color: u.isActive ? "#DC2626" : "#059669",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            cursor: isCurrent ? "not-allowed" : "pointer",
-                            opacity: isCurrent ? 0.5 : 1,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                          }}
-                        >
-                          <Power size={14} />
-                          <span>{u.isActive ? "Suspend" : "Activate"}</span>
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px" }}>
+                          {/* Change / Recover Password Button */}
+                          <button
+                            onClick={() => handleOpenPasswordModal(u)}
+                            disabled={isCurrent}
+                            title="Change or Recover Password"
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: "8px",
+                              border: `1px solid ${colors.border}`,
+                              backgroundColor: colors.surfaceElevated || "#F8FAFC",
+                              color: colors.textPrimary,
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              cursor: isCurrent ? "not-allowed" : "pointer",
+                              opacity: isCurrent ? 0.5 : 1,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <KeyRound size={13} style={{ color: "#6366F1" }} />
+                            <span>Password</span>
+                          </button>
+
+                          {/* Suspend / Activate Button */}
+                          <button
+                            onClick={() => handleToggleStatus(u)}
+                            disabled={isCurrent}
+                            title={u.isActive ? "Suspend Account" : "Activate Account"}
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: "8px",
+                              border: `1px solid ${u.isActive ? "#FCA5A5" : "#86EFAC"}`,
+                              backgroundColor: u.isActive ? "#FEF2F2" : "#ECFDF5",
+                              color: u.isActive ? "#DC2626" : "#059669",
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              cursor: isCurrent ? "not-allowed" : "pointer",
+                              opacity: isCurrent ? 0.5 : 1,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <Power size={13} />
+                            <span>{u.isActive ? "Suspend" : "Activate"}</span>
+                          </button>
+
+                          {/* Delete Account (Enabled & Visible after Suspending LGU account) */}
+                          {!u.isActive && (
+                            <button
+                              onClick={() => handleDeleteUser(u)}
+                              disabled={isCurrent}
+                              title="Delete Suspended Account Permanently"
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: "8px",
+                                border: "1px solid #DC2626",
+                                backgroundColor: "#DC2626",
+                                color: "#FFFFFF",
+                                fontSize: "12px",
+                                fontWeight: "700",
+                                cursor: isCurrent ? "not-allowed" : "pointer",
+                                opacity: isCurrent ? 0.5 : 1,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                boxShadow: "0 1px 3px rgba(220, 38, 38, 0.25)",
+                              }}
+                            >
+                              <Trash2 size={13} />
+                              <span>Delete</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -473,30 +629,79 @@ const UsersPage = () => {
           ADD ACCOUNT MODAL (SCOPED)
       ====================================================== */}
       {showAddModal && (
-        <div className="modal-backdrop">
-          <div className="modal-card" style={{ maxWidth: "520px" }}>
-            <div className="modal-header">
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 999999,
+            backgroundColor: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAddModal(false);
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: "16px",
+              border: `1px solid ${colors.border}`,
+              maxWidth: "520px",
+              width: "100%",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+              overflow: "hidden",
+              animation: "fadeIn 0.2s ease-out",
+            }}
+          >
+            <div
+              style={{
+                padding: "20px 24px",
+                borderBottom: `1px solid ${colors.border}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 {isAdmin ? (
-                  <Building2 size={20} style={{ color: "#4F46E5" }} />
+                  <Building2 size={22} style={{ color: "#4F46E5" }} />
                 ) : (
-                  <ShieldCheck size={20} style={{ color: "#D97706" }} />
+                  <ShieldCheck size={22} style={{ color: "#D97706" }} />
                 )}
-                <h3 className="modal-title" style={{ margin: 0 }}>
-                  {isAdmin ? "Provision New LGU Authority Account" : "Register POSO Field Enforcer"}
-                </h3>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "17px", fontWeight: "700", color: colors.textPrimary }}>
+                    {isAdmin ? "Provision New LGU Authority Account" : "Register POSO Field Enforcer"}
+                  </h3>
+                  <span style={{ fontSize: "12px", color: colors.textMuted }}>
+                    {isAdmin
+                      ? "Create official City Transport Authority login"
+                      : "Create official Road Enforcer patrol credentials"}
+                  </span>
+                </div>
               </div>
               <button
                 type="button"
                 className="btn-icon"
                 onClick={() => setShowAddModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: colors.textMuted,
+                  padding: "4px",
+                  borderRadius: "6px",
+                }}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateStaff}>
-              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <form onSubmit={handleCreateStaff} autoComplete="off">
+              <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div>
                     <label className="form-label">First Name *</label>
@@ -531,19 +736,43 @@ const UsersPage = () => {
                     value={createForm.email}
                     onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
                     required
+                    autoComplete="new-email"
                   />
                 </div>
 
                 <div>
                   <label className="form-label">Initial Password *</label>
-                  <input
-                    type="password"
-                    className="form-input"
-                    placeholder="Min. 8 characters"
-                    value={createForm.password}
-                    onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-                    required
-                  />
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      className="form-input"
+                      placeholder="Min. 8 characters"
+                      value={createForm.password}
+                      onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                      required
+                      autoComplete="new-password"
+                      style={{ paddingRight: "40px", width: "100%" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      style={{
+                        position: "absolute",
+                        right: "10px",
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        color: colors.textMuted,
+                        display: "flex",
+                        alignItems: "center",
+                        padding: "4px",
+                      }}
+                      title={showPassword ? "Hide password" : "Show password"}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
 
                 {isAdmin ? (
@@ -584,7 +813,16 @@ const UsersPage = () => {
                 )}
               </div>
 
-              <div className="modal-footer">
+              <div
+                style={{
+                  padding: "16px 24px",
+                  borderTop: `1px solid ${colors.border}`,
+                  backgroundColor: colors.surfaceElevated || colors.background,
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "12px",
+                }}
+              >
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -599,10 +837,250 @@ const UsersPage = () => {
                   style={{
                     backgroundColor: colors.primary,
                     color: "#FFFFFF",
+                    fontWeight: "600",
                     opacity: submitting ? 0.7 : 1,
                   }}
                 >
                   {submitting ? "Provisioning..." : (isAdmin ? "Provision LGU Account" : "Register POSO Officer")}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================
+          CHANGE / RECOVER PASSWORD MODAL
+      ====================================================== */}
+      {passwordModal.isOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 999999,
+            backgroundColor: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !passwordModal.submitting) {
+              setPasswordModal((prev) => ({ ...prev, isOpen: false }));
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: "16px",
+              border: `1px solid ${colors.border}`,
+              maxWidth: "460px",
+              width: "100%",
+              overflow: "hidden",
+              boxShadow: "0 20px 40px -15px rgba(0,0,0,0.3)",
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: "20px 24px",
+                borderBottom: `1px solid ${colors.border}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: colors.surfaceElevated || "#F8FAFC",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div
+                  style={{
+                    width: "38px",
+                    height: "38px",
+                    borderRadius: "10px",
+                    backgroundColor: "rgba(99, 102, 241, 0.12)",
+                    color: "#6366F1",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <KeyRound size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: "16px", fontWeight: "800", color: colors.textPrimary, margin: 0 }}>
+                    Change Account Password
+                  </h3>
+                  <p style={{ fontSize: "12px", color: colors.textSecondary, margin: "2px 0 0 0" }}>
+                    Recover or reset credentials for {isAdmin ? "LGU Officer" : "Officer"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPasswordModal((prev) => ({ ...prev, isOpen: false }))}
+                disabled={passwordModal.submitting}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: colors.textMuted,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "4px",
+                  borderRadius: "6px",
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleSubmitPasswordChange} style={{ padding: "24px" }}>
+              {/* Target User Info Card */}
+              {passwordModal.user && (
+                <div
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: "10px",
+                    backgroundColor: "rgba(99, 102, 241, 0.06)",
+                    border: "1px solid rgba(99, 102, 241, 0.18)",
+                    marginBottom: "20px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: "700", fontSize: "13px", color: colors.textPrimary }}>
+                      {passwordModal.user.firstName} {passwordModal.user.lastName}
+                    </div>
+                    <div style={{ fontSize: "12px", color: colors.textSecondary }}>
+                      {passwordModal.user.email}
+                    </div>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      padding: "3px 8px",
+                      borderRadius: "6px",
+                      backgroundColor: "#EEF2FF",
+                      color: "#4F46E5",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {passwordModal.user.role}
+                  </span>
+                </div>
+              )}
+
+              {/* Password Input */}
+              <div style={{ marginBottom: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <label style={{ fontSize: "12px", fontWeight: "700", color: colors.textPrimary }}>
+                    New Password *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleGenerateRandomPassword}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: colors.primary,
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      padding: "0",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    Generate Random
+                  </button>
+                </div>
+
+                <div style={{ position: "relative" }}>
+                  <input
+                    type={passwordModal.showPassword ? "text" : "password"}
+                    required
+                    placeholder="Enter at least 6 characters"
+                    value={passwordModal.newPassword}
+                    onChange={(e) => setPasswordModal((prev) => ({ ...prev, newPassword: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "10px 42px 10px 14px",
+                      borderRadius: "8px",
+                      border: `1px solid ${colors.border}`,
+                      backgroundColor: colors.surface,
+                      color: colors.textPrimary,
+                      fontSize: "14px",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPasswordModal((prev) => ({ ...prev, showPassword: !prev.showPassword }))}
+                    style={{
+                      position: "absolute",
+                      right: "12px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "none",
+                      border: "none",
+                      color: colors.textMuted,
+                      cursor: "pointer",
+                      padding: "0",
+                    }}
+                  >
+                    {passwordModal.showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <p style={{ fontSize: "11px", color: colors.textMuted, marginTop: "6px", lineHeight: "14px" }}>
+                  Provide this new password to the LGU officer so they can immediately sign into the transit console.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: "flex", gap: "10px", marginTop: "24px" }}>
+                <button
+                  type="button"
+                  disabled={passwordModal.submitting}
+                  onClick={() => setPasswordModal((prev) => ({ ...prev, isOpen: false }))}
+                  style={{
+                    flex: 1,
+                    padding: "10px 16px",
+                    borderRadius: "8px",
+                    border: `1px solid ${colors.border}`,
+                    backgroundColor: "transparent",
+                    color: colors.textPrimary,
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={passwordModal.submitting || !passwordModal.newPassword}
+                  style={{
+                    flex: 1.5,
+                    padding: "10px 16px",
+                    borderRadius: "8px",
+                    border: "none",
+                    backgroundColor: colors.primary,
+                    color: "#FFFFFF",
+                    fontSize: "13px",
+                    fontWeight: "700",
+                    cursor: passwordModal.submitting || !passwordModal.newPassword ? "not-allowed" : "pointer",
+                    opacity: passwordModal.submitting || !passwordModal.newPassword ? 0.6 : 1,
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                  }}
+                >
+                  {passwordModal.submitting ? "Updating..." : "Update Password"}
                 </button>
               </div>
             </form>

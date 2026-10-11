@@ -34,7 +34,7 @@ const uploadEvidencePhoto = async (req, res, next) => {
       return apiResponse.error(res, 'No photo file provided.', 400);
     }
     const fileUrl = `/uploads/complaints/${req.file.filename}`;
-    return apiResponse.success(res, { url: fileUrl }, 'Evidence photo uploaded successfully.');
+    return apiResponse.success(res, { url: fileUrl, photoUrl: fileUrl }, 'Evidence photo uploaded successfully.');
   } catch (error) { next(error); }
 };
 
@@ -319,8 +319,9 @@ const deleteComplaintWithReason = async (req, res, next) => {
     const complaint = await Complaint.findById(id);
     if (!complaint) return apiResponse.error(res, 'Complaint not found.', 404);
 
+    complaint.previousStatus = complaint.status || 'pending';
     complaint.status = 'deleted';
-    complaint.deletionReason = deletionReason;
+    complaint.deletionReason = deletionReason || 'Removed by Transit Authority';
     complaint.deletionNotes = deletionNotes || '';
     complaint.deletedBy = req.user._id;
     complaint.deletedAt = new Date();
@@ -330,23 +331,78 @@ const deleteComplaintWithReason = async (req, res, next) => {
       action: 'COMPLAINT_SOFT_DELETED',
       resourceType: 'complaint',
       resourceId: complaint._id,
-      details: { subject: complaint.subject, deletionReason, deletionNotes },
+      details: { subject: complaint.subject, deletionReason, deletionNotes, previousStatus: complaint.previousStatus },
     });
 
-    return apiResponse.success(res, null, 'Complaint report has been removed with reason documented.');
+    return apiResponse.success(res, complaint, 'Complaint report has been removed and moved to archive.');
+  } catch (error) { next(error); }
+};
+
+const restoreComplaint = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const complaint = await Complaint.findById(id);
+    if (!complaint) return apiResponse.error(res, 'Complaint not found.', 404);
+
+    const restoredStatus = complaint.previousStatus && complaint.previousStatus !== 'deleted'
+      ? complaint.previousStatus
+      : (complaint.lguCaseNumber ? 'endorsed_to_lgu' : 'pending');
+
+    complaint.status = restoredStatus;
+    complaint.deletedBy = null;
+    complaint.deletedAt = null;
+    complaint.deletionReason = '';
+    complaint.deletionNotes = '';
+    await complaint.save();
+
+    await logAuditEvent(req, {
+      action: 'COMPLAINT_RESTORED',
+      resourceType: 'complaint',
+      resourceId: complaint._id,
+      details: { subject: complaint.subject, restoredStatus },
+    });
+
+    return apiResponse.success(res, complaint, `Complaint restored to status: ${restoredStatus}.`);
+  } catch (error) { next(error); }
+};
+
+const permanentDeleteComplaint = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const complaint = await Complaint.findById(id);
+    if (!complaint) return apiResponse.error(res, 'Complaint not found.', 404);
+
+    await Complaint.findByIdAndDelete(id);
+
+    await logAuditEvent(req, {
+      action: 'COMPLAINT_PERMANENTLY_DELETED',
+      resourceType: 'complaint',
+      resourceId: id,
+      details: { subject: complaint.subject, plateNumber: complaint.vehiclePlateNumber },
+    });
+
+    return apiResponse.success(res, null, 'Complaint report permanently deleted from database.');
   } catch (error) { next(error); }
 };
 
 const lguTakeAction = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { lguActionNotes, sanctionIssued } = req.body;
+    const { lguActionNotes, sanctionIssued, lguEvidencePhoto, evidencePhoto } = req.body;
     const complaint = await Complaint.findById(id);
     if (!complaint) return apiResponse.error(res, 'Complaint not found.', 404);
 
     complaint.status = 'action_taken';
     complaint.lguActionNotes = lguActionNotes;
     if (sanctionIssued) complaint.sanctionIssued = sanctionIssued;
+    const photoToSave = lguEvidencePhoto || evidencePhoto;
+    if (photoToSave) {
+      complaint.lguEvidencePhoto = photoToSave;
+      if (!complaint.attachments) complaint.attachments = [];
+      if (!complaint.attachments.includes(photoToSave)) {
+        complaint.attachments.push(photoToSave);
+      }
+    }
     complaint.lguActionTakenAt = new Date();
     complaint.lguHandledBy = req.user._id;
     await complaint.save();
@@ -356,7 +412,7 @@ const lguTakeAction = async (req, res, next) => {
       title: '🚨 Official Action Taken by LGU',
       message: `Dagupan City POSO/LGU has taken administrative action on your complaint "${complaint.subject}": ${lguActionNotes}`,
       type: 'complaint_update',
-      metadata: { complaintId: complaint._id, status: 'action_taken' },
+      metadata: { complaintId: complaint._id, status: 'action_taken', evidencePhoto: photoToSave || null },
     });
 
     await logAuditEvent(req, {
@@ -660,4 +716,6 @@ module.exports = {
   endorseToLgu,
   deleteMyComplaint,
   undoMyComplaint,
+  restoreComplaint,
+  permanentDeleteComplaint,
 };

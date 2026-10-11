@@ -3,9 +3,31 @@ const Joi = require('joi');
 const createComplaintSchema = Joi.object({
   category: Joi.string()
     .valid('overcharging', 'reckless_driving', 'harassment', 'route_deviation', 'vehicle_condition', 'other')
-    .required(),
-  subject: Joi.string().trim().min(5).max(200).required(),
-  description: Joi.string().trim().min(10).max(2000).required(),
+    .required()
+    .messages({
+      'any.required': 'Please select a violation category.',
+      'any.only': 'Please select a valid violation category.',
+    }),
+  subject: Joi.string().trim().min(5).max(200).required().messages({
+    'string.empty': 'Subject is required.',
+    'string.min': 'Subject must be at least 5 characters long.',
+    'string.max': 'Subject cannot exceed 200 characters.',
+    'any.required': 'Subject is required.',
+  }),
+  description: Joi.string().trim().min(10).max(2000).required()
+    .custom((value, helpers) => {
+      const words = value.trim().split(/\s+/).filter(Boolean);
+      if (words.length < 5) {
+        return helpers.message('Description must contain at least 5 to 8 words describing what happened.');
+      }
+      return value;
+    })
+    .messages({
+      'string.empty': 'Description is required.',
+      'string.min': 'Description must be at least 10 characters long.',
+      'string.max': 'Description cannot exceed 2000 characters.',
+      'any.required': 'Description is required.',
+    }),
   routeId: Joi.string().allow(null, ''),
   vehiclePlateNumber: Joi.string().allow('').max(20),
   location: Joi.object({
@@ -54,6 +76,8 @@ const deleteComplaintSchema = Joi.object({
 const lguActionSchema = Joi.object({
   lguActionNotes: Joi.string().trim().min(3).max(2000).required(),
   sanctionIssued: Joi.string().allow('', null).max(200),
+  lguEvidencePhoto: Joi.string().allow('', null).max(1000),
+  evidencePhoto: Joi.string().allow('', null).max(1000),
 });
 
 const lguTerminateSchema = Joi.object({

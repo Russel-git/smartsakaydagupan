@@ -4,8 +4,9 @@ const updateFareSchema = Joi.object({
   baseFare: Joi.number().positive().required(),
   baseDistanceKm: Joi.number().positive().required(),
   perKmRate: Joi.number().positive().required(),
-  effectiveDate: Joi.date().iso(),
-  memorandumRef: Joi.string().allow(''),
+  effectiveDate: Joi.alternatives().try(Joi.date(), Joi.string().isoDate(), Joi.string()).allow('', null),
+  memorandumRef: Joi.string().allow('', null),
+  reason: Joi.string().allow('', null),
   discounts: Joi.object({
     student: Joi.number().min(0).max(1),
     seniorCitizen: Joi.number().min(0).max(1),

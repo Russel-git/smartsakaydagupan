@@ -236,12 +236,13 @@ const ComplaintsPage = () => {
     });
   };
 
-  const handleConfirmLguAction = async (complaint, mode, notes) => {
+  const handleConfirmLguAction = async (complaint, mode, notes, evidencePhoto) => {
     setLguModalConfig((prev) => ({ ...prev, loading: true }));
     try {
       if (mode === "action") {
         const { data } = await complaintsAPI.lguAction(complaint._id, {
           lguActionNotes: notes,
+          lguEvidencePhoto: evidencePhoto || null,
         });
 
         showSuccess(
@@ -989,20 +990,26 @@ const ComplaintsPage = () => {
                               </>
                             )}
 
-                          {/* ADMIN OVERSIGHT DELETE */}
-                          {isAdmin && c.status !== "deleted" && (
+                          {/* REMOVE / ARCHIVE ACTION DESK BUTTON */}
+                          {(isLgu || isAdmin) && c.status !== "deleted" && (
                             <button
                               onClick={() => handleOpenDelete(c)}
                               className="btn btn-sm"
                               style={{
                                 backgroundColor: "rgba(239, 68, 68, 0.1)",
                                 color: "#DC2626",
-                                border: "1px solid rgba(239, 68, 68, 0.2)",
-                                padding: "4px 7px",
+                                border: "1px solid rgba(239, 68, 68, 0.25)",
+                                padding: "4px 8px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontSize: "11px",
+                                fontWeight: "600",
                               }}
-                              title="Delete record"
+                              title="Remove complaint and move to archive"
                             >
                               <Trash2 size={12} />
+                              <span>Remove</span>
                             </button>
                           )}
                         </div>
@@ -1280,6 +1287,50 @@ const ComplaintsPage = () => {
                       Sanction: {selectedComplaint.sanctionIssued}
                     </div>
                   )}
+
+                  {selectedComplaint.lguEvidencePhoto && (
+                    <div style={{ marginTop: "10px" }}>
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: "700",
+                          color: "#059669",
+                          marginBottom: "6px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <ImageIcon size={13} />
+                        Official LGU Action Evidence Photo
+                      </div>
+                      <div
+                        onClick={() =>
+                          setLightboxImage(
+                            getImageUrl(selectedComplaint.lguEvidencePhoto)
+                          )
+                        }
+                        style={{
+                          width: "120px",
+                          height: "90px",
+                          borderRadius: "8px",
+                          overflow: "hidden",
+                          border: "1px solid rgba(16, 185, 129, 0.4)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <img
+                          src={getImageUrl(selectedComplaint.lguEvidencePhoto)}
+                          alt="LGU Evidence"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1343,19 +1394,42 @@ const ComplaintsPage = () => {
                 {(isLgu || isAdmin) &&
                   selectedComplaint.status !== "terminated" &&
                   selectedComplaint.status !== "deleted" && (
-                    <button
-                      onClick={() => {
-                        handleOpenLguModal(selectedComplaint, "action");
-                        setSelectedComplaint(null);
-                      }}
-                      className="btn"
-                      style={{
-                        backgroundColor: "#059669",
-                        color: "#FFFFFF",
-                      }}
-                    >
-                      Take Action
-                    </button>
+                    <>
+                      <button
+                        onClick={() => {
+                          handleOpenLguModal(selectedComplaint, "action");
+                          setSelectedComplaint(null);
+                        }}
+                        className="btn"
+                        style={{
+                          backgroundColor: "#059669",
+                          color: "#FFFFFF",
+                        }}
+                      >
+                        Take Action
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const target = selectedComplaint;
+                          setSelectedComplaint(null);
+                          handleOpenDelete(target);
+                        }}
+                        className="btn"
+                        style={{
+                          backgroundColor: "rgba(239, 68, 68, 0.12)",
+                          color: "#DC2626",
+                          border: "1px solid rgba(239, 68, 68, 0.3)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        <Trash2 size={14} />
+                        <span>Remove Complaint</span>
+                      </button>
+                    </>
                   )}
               </div>
 

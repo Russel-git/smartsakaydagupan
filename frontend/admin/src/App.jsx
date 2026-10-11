@@ -13,6 +13,8 @@ import NotificationsPage from "./pages/NotificationsPage";
 import UsersPage from "./pages/UsersPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import TerminalsPage from "./pages/TerminalsPage";
+import AnnouncementsPage from "./pages/AnnouncementsPage";
+import ArchivesPage from "./pages/ArchivesPage";
 import Profile from "./pages/Profile";
 
 const ProtectedRoute = ({ children }) => {
@@ -45,11 +47,13 @@ const App = () => {
         }
       >
         <Route index element={<DashboardPage />} />
-        <Route path="fares" element={<FaresPage />} />
-        <Route path="routes" element={<RoutesPage />} />
+        <Route path="fares" element={admin?.role === "poso" ? <Navigate to="/" replace /> : <FaresPage />} />
+        <Route path="routes" element={admin?.role === "poso" ? <Navigate to="/" replace /> : <RoutesPage />} />
         <Route path="terminals" element={<TerminalsPage />} />
         <Route path="complaints" element={<ComplaintsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="announcements" element={admin?.role === "admin" ? <Navigate to="/" replace /> : <AnnouncementsPage />} />
+        <Route path="archives" element={admin?.role !== "lgu" ? <Navigate to="/" replace /> : <ArchivesPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="audit-logs" element={<AuditLogsPage />} />
         <Route path="profile" element={<Profile />} />

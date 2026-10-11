@@ -15,6 +15,14 @@ export const usersAPI = {
   create: (data) => apiClient.post("/users", data),
 
   delete: (id) => apiClient.delete(`/users/${id}`),
+
+  resetPassword: (id, newPassword) =>
+    apiClient.put(`/users/${id}/password`, { newPassword }),
+
+  uploadProfilePhoto: (formData) =>
+    apiClient.post("/users/me/photo", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
 };
 
 // ============================================================
@@ -45,6 +53,7 @@ export const faresAPI = {
   calculateFare: (params) => apiClient.get("/fares/calculate", { params }),
   getFareMatrix: () => apiClient.get("/fares/matrix"),
   updateFare: (id, data) => apiClient.put(`/fares/${id}`, data),
+  revertFare: (vehicleType) => apiClient.post(`/fares/revert/${vehicleType}`),
   getFareHistory: () => apiClient.get("/fares/history"),
 };
 
@@ -90,12 +99,22 @@ export const complaintsAPI = {
       data,
     }),
 
+  // Archive restore & permanent delete
+  restoreComplaint: (id) => apiClient.patch(`/complaints/${id}/restore`),
+  deletePermanently: (id) => apiClient.delete(`/complaints/${id}/permanent`),
+
   // LGU enforcement action
   lguAction: (id, data) => apiClient.put(`/complaints/${id}/lgu-action`, data),
 
   // LGU termination
   lguTerminate: (id, data) =>
     apiClient.put(`/complaints/${id}/lgu-terminate`, data),
+
+  // Evidence photo upload
+  uploadEvidence: (formData) =>
+    apiClient.post("/complaints/upload-photo", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
 };
 
 // ============================================================
@@ -108,9 +127,20 @@ export const notificationsAPI = {
   getPending: () => apiClient.get("/notifications/pending"),
   requestAlert: (data) => apiClient.post("/notifications/request", data),
   approveAlert: (id) => apiClient.patch(`/notifications/${id}/approve`),
-  rejectAlert: (id, data) => apiClient.patch(`/notifications/${id}/reject`, data),
+  rejectAlert: (id, data) =>
+    apiClient.patch(
+      `/notifications/${id}/reject`,
+      typeof data === "string" ? { reason: data } : data,
+    ),
   broadcast: (data) => apiClient.post("/notifications/broadcast", data),
   sendToUser: (data) => apiClient.post("/notifications/send", data),
+  archiveAnnouncement: (id) => apiClient.patch(`/notifications/${id}/archive`),
+  restoreAnnouncement: (id) => apiClient.patch(`/notifications/${id}/restore`),
+  deletePermanently: (id) => apiClient.delete(`/notifications/${id}/permanent`),
+  uploadEvidence: (formData) =>
+    apiClient.post("/complaints/upload-photo", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
 };
 
 // ============================================================

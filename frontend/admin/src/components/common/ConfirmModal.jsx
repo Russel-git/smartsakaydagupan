@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Trash2, X, Info } from 'lucide-react';
 
 const ConfirmModal = ({
@@ -46,7 +47,7 @@ const ConfirmModal = ({
 
   const current = typeConfig[type] || typeConfig.danger;
 
-  return (
+  const modalNode = (
     <div
       className="modal-overlay"
       style={{
@@ -175,6 +176,10 @@ const ConfirmModal = ({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined'
+    ? createPortal(modalNode, document.body)
+    : modalNode;
 };
 
 export default ConfirmModal;

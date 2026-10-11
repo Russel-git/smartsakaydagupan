@@ -26,6 +26,11 @@ import {
   COMPLAINT_CATEGORIES,
 } from "../../utils/constants";
 
+const countWords = (text) => {
+  if (!text || typeof text !== "string") return 0;
+  return text.trim().split(/\s+/).filter(Boolean).length;
+};
+
 const SubmitComplaintScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
   const { isGuest } = useAuth();
@@ -87,7 +92,13 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
 
   const updateField = (key, val) => {
     setForm((p) => ({ ...p, [key]: val }));
-    setErrors({});
+    if (errors[key]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
   };
 
   const handlePickFromGallery = async () => {
@@ -140,11 +151,34 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
 
   const validate = () => {
     const e = {};
-    if (!form.category) e.category = "Select a category";
-    if (!form.subject.trim()) e.subject = "Subject is required";
-    if (!form.description.trim()) e.description = "Description is required";
+    if (!form.category) {
+      e.category = "Please select a grievance category.";
+    }
+
+    const cleanSubject = (form.subject || "").trim();
+    if (!cleanSubject) {
+      e.subject = "Subject is required.";
+    } else if (cleanSubject.length < 5) {
+      e.subject = "Subject must be at least 5 characters long (e.g., Overcharging on Route 3).";
+    }
+
+    const cleanDesc = (form.description || "").trim();
+    const wordCount = countWords(cleanDesc);
+    if (!cleanDesc) {
+      e.description = "Description is required. Please write at least 5 to 8 words.";
+    } else if (wordCount < 5) {
+      e.description = `Description must have at least 5 to 8 words to describe what happened (currently only ${wordCount} word${wordCount === 1 ? "" : "s"}).`;
+    } else if (cleanDesc.length < 10) {
+      e.description = "Description must be at least 10 characters long.";
+    }
+
     setErrors(e);
-    return Object.keys(e).length === 0;
+
+    if (Object.keys(e).length > 0) {
+      const firstError = e.category || e.subject || e.description;
+      return { isValid: false, message: firstError };
+    }
+    return { isValid: true };
   };
 
   const handleSubmit = async () => {
@@ -161,10 +195,11 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
       return;
     }
 
-    if (!validate()) {
+    const validation = validate();
+    if (!validation.isValid) {
       showWarning(
-        "Incomplete Fields",
-        "Please complete all required fields before submitting.",
+        "Incomplete Report Details",
+        validation.message || "Please complete all required fields with sufficient detail before submitting.",
       );
       return;
     }
@@ -185,15 +220,6 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         if (Platform.OS === "web") {
           const response = await fetch(uri);
           const blob = await response.blob();
-
-          console.log("PLATFORM:", Platform.OS);
-          console.log("IMAGE URI:", uri);
-          console.log("FILE NAME:", fileName);
-          console.log("FILE TYPE:", fileType);
-          console.log("BLOB TYPE:", blob.type);
-          console.log("BLOB SIZE:", blob.size);
-          console.log("FORM DATA:", formData);
-
           formData.append("photo", blob, fileName);
         } else {
           formData.append("photo", {
@@ -204,8 +230,6 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         }
 
         const uploadRes = await complaintsAPI.uploadPhoto(formData);
-
-        console.log("PHOTO UPLOAD RESPONSE:", uploadRes.data);
         if (uploadRes.data?.data?.url) {
           attachments.push(uploadRes.data.data.url);
         }
@@ -223,16 +247,33 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
       );
       navigation.goBack();
     } catch (e) {
-      showError(
-        "Submission Failed",
-        e.response?.data?.message || "Failed to submit complaint.",
-      );
+      console.error("Complaint submission error:", e?.response?.data || e);
+      let errorMsg = "Failed to submit complaint. Please try again.";
+      if (e.response?.data) {
+        const resData = e.response.data;
+        if (Array.isArray(resData.errors) && resData.errors.length > 0) {
+          errorMsg = resData.errors
+            .map((err) =>
+              typeof err === "string"
+                ? err.replace(/^"|"$/g, "").replace(/"/g, "")
+                : JSON.stringify(err)
+            )
+            .join("\n");
+        } else if (resData.message) {
+          errorMsg = resData.message;
+        }
+      } else if (e.message) {
+        errorMsg = e.message;
+      }
+      showError("Submission Failed", errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
   const isLimitReached = todayCount >= 5;
+  const descWordCount = countWords(form.description);
+  const subjectLength = (form.subject || "").trim().length;
 
   return (
     <>
@@ -388,23 +429,134 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
 
           <Input
             label="Subject *"
-            placeholder="Brief summary of your complaint"
+            placeholder="Brief summary (e.g., Overcharging on Perez Blvd)"
             value={form.subject}
             onChangeText={(t) => updateField("subject", t)}
             error={errors.subject}
             leftIcon="text-short"
+            style={{
+              marginBottom:
+                form.subject && subjectLength > 0 && subjectLength < 5
+                  ? 4
+                  : SPACING.lg,
+            }}
           />
+          {Boolean(form.subject && subjectLength > 0 && subjectLength < 5) && (
+            <Text style={[styles.fieldHint, { color: "#D97706" }]}>
+              ⚠️ Subject must have at least 5 characters ({subjectLength}/5)
+            </Text>
+          )}
 
-          <Input
-            label="Description *"
-            placeholder="Describe what happened in detail..."
-            value={form.description}
-            onChangeText={(t) => updateField("description", t)}
-            error={errors.description}
-            leftIcon="text"
-            multiline
-            numberOfLines={4}
-          />
+          <View style={{ marginBottom: SPACING.lg }}>
+            <Input
+              label="Description *"
+              placeholder="Describe what happened in detail (e.g., where it occurred, what the driver did or said, fare paid)..."
+              value={form.description}
+              onChangeText={(t) => updateField("description", t)}
+              error={errors.description}
+              leftIcon="text"
+              multiline
+              numberOfLines={4}
+              style={{ marginBottom: 6 }}
+            />
+
+            {/* Word Requirement & Guidance Banner */}
+            <View
+              style={[
+                styles.descRequirementCard,
+                {
+                  backgroundColor:
+                    descWordCount >= 5
+                      ? "rgba(34, 197, 94, 0.08)"
+                      : descWordCount > 0
+                      ? "rgba(245, 158, 11, 0.08)"
+                      : colors.surfaceElevated,
+                  borderColor:
+                    descWordCount >= 5
+                      ? "rgba(34, 197, 94, 0.25)"
+                      : descWordCount > 0
+                      ? "rgba(245, 158, 11, 0.25)"
+                      : colors.border,
+                },
+              ]}
+            >
+              <View style={styles.descRequirementHeader}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    flex: 1,
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name={
+                      descWordCount >= 5
+                        ? "checkbox-marked-circle"
+                        : descWordCount > 0
+                        ? "alert-circle"
+                        : "information"
+                    }
+                    size={16}
+                    color={
+                      descWordCount >= 5
+                        ? "#16A34A"
+                        : descWordCount > 0
+                        ? "#D97706"
+                        : colors.primary
+                    }
+                  />
+                  <Text
+                    style={{
+                      fontSize: FONTS.sizes.xs,
+                      fontWeight: "700",
+                      color:
+                        descWordCount >= 5
+                          ? "#16A34A"
+                          : descWordCount > 0
+                          ? "#D97706"
+                          : colors.textPrimary,
+                    }}
+                  >
+                    {descWordCount >= 5
+                      ? "Description Requirement Met"
+                      : descWordCount > 0
+                      ? `Need ${Math.max(0, 5 - descWordCount)} more word${5 - descWordCount === 1 ? "" : "s"}`
+                      : "Description Requirement (5–8 Words Min)"}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.descBadge,
+                    {
+                      backgroundColor:
+                        descWordCount >= 5
+                          ? "#16A34A"
+                          : descWordCount > 0
+                          ? "#D97706"
+                          : colors.border,
+                    },
+                  ]}
+                >
+                  <Text style={styles.descBadgeText}>
+                    {descWordCount} / 5–8 words min
+                  </Text>
+                </View>
+              </View>
+
+              <Text
+                style={[
+                  styles.descRequirementNote,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {descWordCount >= 5
+                  ? `✓ Thank you! Your description contains ${descWordCount} words, giving Dagupan traffic investigators adequate details.`
+                  : "Please write at least 5 to 8 words describing what happened so Dagupan traffic officers and the LGU can verify and take action on your report."}
+              </Text>
+            </View>
+          </View>
 
           {/* Photo Evidence Picker */}
           <Text
@@ -611,6 +763,38 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   error: { fontSize: FONTS.sizes.xs, marginBottom: SPACING.sm },
+  fieldHint: {
+    fontSize: FONTS.sizes.xs,
+    marginBottom: SPACING.md,
+    fontWeight: "600",
+    marginLeft: 4,
+  },
+  descRequirementCard: {
+    padding: 12,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    marginTop: 2,
+  },
+  descRequirementHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  descBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  descBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  descRequirementNote: {
+    fontSize: 11,
+    lineHeight: 16,
+  },
   categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",

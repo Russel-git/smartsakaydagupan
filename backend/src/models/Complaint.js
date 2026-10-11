@@ -52,6 +52,7 @@ const complaintSchema = new mongoose.Schema(
     lguCaseNumber: { type: String, default: '', trim: true },
     lguEndorsedAt: { type: Date, default: null },
     lguActionNotes: { type: String, default: '' },
+    lguEvidencePhoto: { type: String, default: '', trim: true },
     lguActionTakenAt: { type: Date, default: null },
     lguHandledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     lguTerminatedAt: { type: Date, default: null },

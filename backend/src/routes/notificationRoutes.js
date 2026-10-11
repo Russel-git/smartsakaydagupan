@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const notificationController = require('../controllers/notificationController');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, optionalAuth } = require('../middleware/auth');
 const rbac = require('../middleware/rbac');
 const validate = require('../middleware/validate');
 const {
@@ -11,8 +11,11 @@ const {
   rejectRoadAlertSchema,
 } = require('../validators/notificationValidator');
 
+// Public or Authenticated Notifications feed (guests see public announcements)
+router.get('/', optionalAuth, notificationController.getNotifications);
+router.get('/public', optionalAuth, notificationController.getNotifications);
+
 router.use(authMiddleware);
-router.get('/', notificationController.getNotifications);
 router.get('/unread-count', notificationController.getUnreadCount);
 router.put('/:id/read', notificationController.markAsRead);
 router.put('/read-all', notificationController.markAllAsRead);
@@ -31,5 +34,10 @@ router.patch('/:id/reject', rbac('lgu', 'admin'), validate(rejectRoadAlertSchema
 // Direct broadcasts by LGU / Admin
 router.post('/broadcast', rbac('admin', 'lgu'), validate(broadcastSchema), notificationController.broadcast);
 router.post('/send', rbac('admin', 'lgu'), validate(sendToUserSchema), notificationController.sendToUser);
+
+// Archive management
+router.patch('/:id/archive', rbac('admin', 'lgu'), notificationController.archiveAnnouncement);
+router.patch('/:id/restore', rbac('admin', 'lgu'), notificationController.restoreAnnouncement);
+router.delete('/:id/permanent', rbac('admin', 'lgu'), notificationController.permanentDeleteAnnouncement);
 
 module.exports = router;

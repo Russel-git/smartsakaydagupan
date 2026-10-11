@@ -8,7 +8,7 @@ const { chatLimiter } = require("../middleware/rateLimiter");
 router.get("/status", assistantController.getStatus);
 
 router.use(authMiddleware);
-router.use(rbac("commuter", "admin"));
+router.use(rbac("commuter", "admin", "lgu", "poso"));
 router.post("/chat", chatLimiter, assistantController.chat);
 router.get("/history", assistantController.getHistoryList);
 router.get("/history/:id", assistantController.getHistory);

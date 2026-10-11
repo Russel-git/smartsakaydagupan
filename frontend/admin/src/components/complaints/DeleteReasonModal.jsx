@@ -40,8 +40,8 @@ const DeleteReasonModal = ({
             }}
           >
             <Trash2 size={20} />
-            <h2 style={{ fontSize: "18px", margin: 0, color: "black" }}>
-              Delete Complaint Report
+            <h2 style={{ fontSize: "18px", margin: 0 }}>
+              Remove Complaint (Move to Archive)
             </h2>
           </div>
           <button
@@ -136,7 +136,7 @@ const DeleteReasonModal = ({
                 fontWeight: "600",
               }}
             >
-              {loading ? "Deleting Report..." : "Confirm Deletion"}
+              {loading ? "Removing..." : "Remove & Archive"}
             </button>
           </div>
         </form>

@@ -303,7 +303,9 @@ const HomeScreen = ({ navigation }) => {
               actionText="View Matrix"
               onAction={() => navigation.navigate('RoutesAndFares', { initialTab: 'fares' })}
             />
-            {fares.map((fare) => (
+            {fares
+              .filter((fare) => fare.vehicleType !== 'tricycle')
+              .map((fare) => (
               <Card key={fare._id} style={{ borderLeftWidth: 3.5, borderLeftColor: fare.vehicleType === 'traditional' ? '#f97316' : '#3b82f6', marginBottom: SPACING.md }}>
                 <View style={styles.fareRow}>
                   <View style={{ flex: 1 }}>
@@ -313,6 +315,11 @@ const HomeScreen = ({ navigation }) => {
                     <Text style={[styles.fareDetail, { color: colors.textSecondary }]}>
                       Base: {formatPeso(fare.baseFare)} (first {fare.baseDistanceKm} km)
                     </Text>
+                    {fare.effectiveDate && (
+                      <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+                        Effective: {new Date(fare.effectiveDate).toLocaleDateString()}
+                      </Text>
+                    )}
                   </View>
                   <View style={styles.fareRight}>
                     <Text style={[styles.fareRate, { color: colors.primary }]}>

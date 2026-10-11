@@ -14,12 +14,16 @@ import {
   Car,
   Bell,
   CheckCheck,
+  Camera,
+  Upload,
+  Image as ImageIcon,
 } from "lucide-react";
 
 import { notificationsAPI } from "../api/services";
 import { useToast } from "../contexts/ToastContext";
 import { useTheme } from "../contexts/theme/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
+import { getEvidenceImageUrl } from "../utils/imageUrl";
 
 const NotificationsPage = () => {
   const { colors } = useTheme();
@@ -32,8 +36,9 @@ const NotificationsPage = () => {
   const [category, setCategory] = useState("broadcast_by_admin");
   const [severity, setSeverity] = useState("warning");
   const [locationArea, setLocationArea] = useState("");
-  const [targetUserId, setTargetUserId] = useState("");
-  const [sendMode, setSendMode] = useState("all");
+  const [evidencePhotoUrl, setEvidencePhotoUrl] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [previewModalImage, setPreviewModalImage] = useState(null);
 
   const [sending, setSending] = useState(false);
   const [alertMessage, setAlertMessage] = useState(null);
@@ -133,6 +138,29 @@ const NotificationsPage = () => {
   };
 
   // ============================================================
+  // EVIDENCE PHOTO UPLOAD FOR LGU BROADCAST
+  // ============================================================
+  const handleEvidencePhotoSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingPhoto(true);
+      const formData = new FormData();
+      formData.append("photo", file);
+      const res = await notificationsAPI.uploadEvidence(formData);
+      const photoUrl = res.data?.data?.url || res.data?.data?.photoUrl || res.data?.url || res.data?.photoUrl;
+      setEvidencePhotoUrl(photoUrl);
+      showSuccess("Evidence Attached", "Photo uploaded successfully for broadcast credibility.");
+    } catch (err) {
+      console.error("Failed to upload evidence photo:", err);
+      showError("Upload Failed", err.response?.data?.message || "Could not upload evidence photo.");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // ============================================================
   // LGU / ADMIN DIRECT BROADCAST
   // ============================================================
   const handleDirectBroadcast = async (e) => {
@@ -148,49 +176,32 @@ const NotificationsPage = () => {
         : "broadcast";
 
     try {
-      if (sendMode === "all") {
-        await notificationsAPI.broadcast({
-          title,
-          message: messageText,
-          type,
-          category,
-          severity,
-          locationArea,
-        });
+      await notificationsAPI.broadcast({
+        title,
+        message: messageText,
+        type,
+        category,
+        severity,
+        locationArea,
+        photoUrl: evidencePhotoUrl || null,
+        evidencePhoto: evidencePhotoUrl || null,
+        metadata: evidencePhotoUrl ? { photoUrl: evidencePhotoUrl, evidencePhoto: evidencePhotoUrl } : {},
+      });
 
-        showSuccess(
-          "Broadcast Dispatched",
-          "Notification published and delivered to all active commuters."
-        );
+      showSuccess(
+        "Broadcast Dispatched",
+        "Official announcement published and delivered to all active commuters."
+      );
 
-        setAlertMessage({
-          type: "success",
-          text: "Broadcast successfully dispatched to all commuters!",
-        });
-      } else {
-        await notificationsAPI.sendToUser({
-          userId: targetUserId,
-          title,
-          message: messageText,
-          type,
-          category,
-        });
-
-        showSuccess(
-          "Notification Delivered",
-          "Direct message sent to target commuter."
-        );
-
-        setAlertMessage({
-          type: "success",
-          text: "Direct notification sent successfully!",
-        });
-      }
+      setAlertMessage({
+        type: "success",
+        text: "Broadcast successfully dispatched to all commuters!",
+      });
 
       setTitle("");
       setMessageText("");
-      setTargetUserId("");
       setLocationArea("");
+      setEvidencePhotoUrl("");
       fetchRecent();
     } catch (err) {
       const errText =
@@ -239,7 +250,7 @@ const NotificationsPage = () => {
     try {
       await notificationsAPI.rejectAlert(
         rejectModalConfig.alert._id,
-        rejectModalConfig.reason
+        { reason: rejectModalConfig.reason }
       );
 
       showSuccess(
@@ -293,7 +304,7 @@ const NotificationsPage = () => {
 
   const lguTemplates = [
     {
-      label: "Broadcast by Admin: General Advisory",
+      label: "Broadcast by LGU: General Advisory",
       title: "SmartSakay Official Transit Advisory",
       message:
         "Notice to all commuters: Expect normal PUJ and loop operations today across downtown Dagupan and intercity corridors.",
@@ -317,7 +328,7 @@ const NotificationsPage = () => {
       severity: "info",
     },
     {
-      label: "Broadcast by Admin: LTFRB Fare Adjustment",
+      label: "Broadcast by LGU: LTFRB Fare Adjustment",
       title: "Official LTFRB Fare Adjustment Notice",
       message:
         "Please be advised that updated jeepney fare tariffs are now in effect for all Dagupan City and Pangasinan routes.",
@@ -728,70 +739,6 @@ const NotificationsPage = () => {
           </div>
 
           <form onSubmit={isPoso ? handlePosoSubmitAlert : handleDirectBroadcast}>
-            {/* LGU / ADMIN ONLY: SEND MODE */}
-            {!isPoso && (
-              <div
-                style={{
-                  display: "flex",
-                  gap: "20px",
-                  marginBottom: "16px",
-                  flexWrap: "wrap",
-                }}
-              >
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    color: colors.textSecondary,
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="sendMode"
-                    checked={sendMode === "all"}
-                    onChange={() => setSendMode("all")}
-                  />
-                  <span>Broadcast to All Commuters</span>
-                </label>
-
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    color: colors.textSecondary,
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="sendMode"
-                    checked={sendMode === "user"}
-                    onChange={() => setSendMode("user")}
-                  />
-                  <span>Target Specific Commuter ID</span>
-                </label>
-              </div>
-            )}
-
-            {!isPoso && sendMode === "user" && (
-              <div className="form-group" style={{ marginBottom: "14px" }}>
-                <label className="form-label">Recipient User ID</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Paste MongoDB User ID e.g. 660f..."
-                  className="form-input"
-                  value={targetUserId}
-                  onChange={(e) => setTargetUserId(e.target.value)}
-                />
-              </div>
-            )}
-
             {/* SEVERITY & LOCATION FIELDS */}
             <div
               style={{
@@ -845,7 +792,7 @@ const NotificationsPage = () => {
                     onChange={(e) => setCategory(e.target.value)}
                     style={{ fontWeight: "600" }}
                   >
-                    <option value="broadcast_by_admin">📢 Broadcast by Admin</option>
+                    <option value="broadcast_by_admin">📢 Broadcast by LGU</option>
                     <option value="weather_updates">🌦️ Weather Updates</option>
                     <option value="complaint_updates">📋 Complaint Updates</option>
                   </select>
@@ -878,10 +825,10 @@ const NotificationsPage = () => {
             )}
 
             {/* MESSAGE BODY */}
-            <div className="form-group" style={{ marginBottom: "18px" }}>
+            <div className="form-group" style={{ marginBottom: "14px" }}>
               <label className="form-label">Advisory Details & Instructions *</label>
               <textarea
-                rows={5}
+                rows={4}
                 required
                 placeholder={
                   isPoso
@@ -892,6 +839,110 @@ const NotificationsPage = () => {
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
               />
+            </div>
+
+            {/* EVIDENCE PHOTO UPLOAD (LGU / POSO CREDIBILITY) */}
+            <div
+              className="form-group"
+              style={{
+                marginBottom: "20px",
+                padding: "14px",
+                backgroundColor: colors.surfaceElevated,
+                borderRadius: "10px",
+                border: `1px solid ${colors.border}`,
+              }}
+            >
+              <label
+                className="form-label"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "12px",
+                  fontWeight: "700",
+                  color: colors.textPrimary,
+                  marginBottom: "8px",
+                }}
+              >
+                <Camera size={15} color={colors.primary} />
+                <span>Evidence Photo / Advisory Document (Optional — Increases Public Credibility)</span>
+              </label>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px 16px",
+                    backgroundColor: colors.surface,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: "8px",
+                    cursor: uploadingPhoto ? "not-allowed" : "pointer",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: colors.textPrimary,
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                  }}
+                >
+                  <Upload size={14} />
+                  <span>{uploadingPhoto ? "Uploading Photo..." : "Attach Evidence Photo"}</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    style={{ display: "none" }}
+                    disabled={uploadingPhoto}
+                    onChange={handleEvidencePhotoSelect}
+                  />
+                </label>
+
+                {evidencePhotoUrl && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: "4px 8px",
+                      backgroundColor: "rgba(16, 185, 129, 0.1)",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(16, 185, 129, 0.3)",
+                    }}
+                  >
+                    <img
+                      src={getEvidenceImageUrl(evidencePhotoUrl)}
+                      alt="Broadcast Evidence"
+                      style={{
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "6px",
+                        objectFit: "cover",
+                        border: `1px solid ${colors.border}`,
+                      }}
+                    />
+                    <span style={{ fontSize: "12px", color: "#059669", fontWeight: "600" }}>
+                      Photo Attached ✓
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setEvidencePhotoUrl("")}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color: "#DC2626",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        padding: "2px 6px",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+              <span style={{ fontSize: "11px", color: colors.textMuted, marginTop: "6px", display: "block" }}>
+                Accepted: JPG, PNG, WebP up to 5MB. Verified image will be embedded directly in the commuter advisory card.
+              </span>
             </div>
 
             {/* SUBMIT BUTTON */}
@@ -1200,89 +1251,7 @@ const NotificationsPage = () => {
         </div>
       )}
 
-      {/* ======================================================
-          LGU & ADMIN: RECENT DISPATCHES TABLE
-      ====================================================== */}
-      {!isPoso && recentNotifications.length > 0 && (
-        <div className="card" style={{ marginTop: "24px" }}>
-          <h3
-            style={{
-              fontSize: "16px",
-              color: colors.textPrimary,
-              marginBottom: "14px",
-              fontWeight: "700",
-            }}
-          >
-            Recent City Announcements
-          </h3>
 
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: "13px",
-              }}
-            >
-              <thead>
-                <tr
-                  style={{
-                    borderBottom: `1px solid ${colors.border}`,
-                    color: colors.textMuted,
-                    textAlign: "left",
-                  }}
-                >
-                  <th style={{ padding: "10px 8px" }}>Title</th>
-                  <th style={{ padding: "10px 8px" }}>Message Preview</th>
-                  <th style={{ padding: "10px 8px" }}>Date</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {recentNotifications.map((notification, index) => (
-                  <tr
-                    key={notification._id || index}
-                    style={{ borderBottom: `1px solid ${colors.border}` }}
-                  >
-                    <td
-                      style={{
-                        padding: "10px 8px",
-                        fontWeight: "600",
-                        color: colors.textPrimary,
-                      }}
-                    >
-                      {notification.title}
-                    </td>
-
-                    <td
-                      style={{
-                        padding: "10px 8px",
-                        color: colors.textMuted,
-                        maxWidth: "350px",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {notification.message}
-                    </td>
-
-                    <td
-                      style={{
-                        padding: "10px 8px",
-                        color: colors.textMuted,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {new Date(notification.createdAt).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {/* ======================================================
           REJECT ALERT MODAL
@@ -1350,6 +1319,65 @@ const NotificationsPage = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* LIGHTBOX PREVIEW MODAL */}
+      {previewModalImage && (
+        <div
+          onClick={() => setPreviewModalImage(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.85)",
+            backdropFilter: "blur(6px)",
+            zIndex: 100000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "relative",
+              maxWidth: "90vw",
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewModalImage(null)}
+              style={{
+                position: "absolute",
+                top: "-40px",
+                right: "0",
+                background: "none",
+                border: "none",
+                color: "#FFFFFF",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: "700",
+              }}
+            >
+              ✕ Close
+            </button>
+            <img
+              src={previewModalImage}
+              alt="High resolution evidence"
+              style={{
+                maxWidth: "100%",
+                maxHeight: "85vh",
+                borderRadius: "12px",
+                boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
+                objectFit: "contain",
+              }}
+            />
           </div>
         </div>
       )}

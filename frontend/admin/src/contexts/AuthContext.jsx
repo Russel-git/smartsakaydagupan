@@ -39,6 +39,15 @@ export const AuthProvider = ({ children }) => {
     setAdmin(null);
   };
 
+  const updateUser = (updatedUser) => {
+    setAdmin(updatedUser);
+    try {
+      localStorage.setItem('smartsakay_admin_user', JSON.stringify(updatedUser));
+    } catch (e) {
+      console.warn('Could not persist updated user:', e);
+    }
+  };
+
   const isAdmin = admin?.role === 'admin';
   const isLgu = admin?.role === 'lgu';
   const isPoso = admin?.role === 'poso';
@@ -49,9 +58,11 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider
       value={{
         admin,
+        user: admin,
         loading,
         login,
         logout,
+        updateUser,
         isAdmin,
         isLgu,
         isPoso,

@@ -11,8 +11,8 @@ router.get('/bus-terminals', routeController.getBusTerminals);
 router.get('/nearby', routeController.getNearbyRoutes);
 router.get('/:id', routeController.getRouteById);
 
-router.post('/', authMiddleware, rbac('admin'), validate(createRouteSchema), routeController.createRoute);
-router.put('/:id', authMiddleware, rbac('admin'), validate(updateRouteSchema), routeController.updateRoute);
-router.delete('/:id', authMiddleware, rbac('admin'), routeController.deleteRoute);
+router.post('/', authMiddleware, rbac('admin', 'lgu'), validate(createRouteSchema), routeController.createRoute);
+router.put('/:id', authMiddleware, rbac('admin', 'lgu'), validate(updateRouteSchema), routeController.updateRoute);
+router.delete('/:id', authMiddleware, rbac('admin', 'lgu'), routeController.deleteRoute);
 
 module.exports = router;

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { MapPin, Plus, Eye, Check, AlertCircle, X } from "lucide-react";
+import { MapPin, Plus, Eye, Check, AlertCircle, X, Trash2 } from "lucide-react";
 import api from "../api/client";
+import { routesAPI } from "../api/services";
 import LeafletMap from "../components/common/LeafletMap";
+import PointToPointRouteMap from "../components/routes/PointToPointRouteMap";
+import ConfirmModal from "../components/common/ConfirmModal";
 import { useToast } from "../contexts/ToastContext";
 import { useTheme } from "../contexts/theme/ThemeContext";
 
@@ -13,9 +16,11 @@ const RoutesPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [routeToDelete, setRouteToDelete] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [message, setMessage] = useState(null);
+  const [drawnPoints, setDrawnPoints] = useState([]);
 
   // New route form state
   const [newRoute, setNewRoute] = useState({
@@ -77,41 +82,115 @@ const RoutesPage = () => {
     }
   };
 
+  const handleDeleteRoute = async (id) => {
+    try {
+      await routesAPI.deleteRoute(id);
+      showSuccess(
+        "Route Removed",
+        "Route has been successfully removed from directory."
+      );
+      setRouteToDelete(null);
+      if (selectedRoute?._id === id) {
+        setSelectedRoute(null);
+      }
+      fetchRoutes();
+    } catch (err) {
+      showError(
+        "Remove Failed",
+        err.response?.data?.message || "Failed to remove route."
+      );
+    }
+  };
+
+  const handleOpenAddModal = () => {
+    setDrawnPoints([]);
+    setNewRoute({
+      name: "",
+      code: "",
+      category: "city",
+      distanceKm: "",
+      startName: "",
+      startLat: 16.0433,
+      startLng: 120.3342,
+      endName: "",
+      endLat: 16.03,
+      endLng: 120.33,
+      terminalName: "",
+      terminalAddress: "",
+    });
+    setIsAddModalOpen(true);
+  };
+
   const handleCreateRoute = async (e) => {
     e.preventDefault();
 
     try {
+      const startPt = {
+        name:
+          newRoute.startName ||
+          (drawnPoints.length > 0 ? "Route Start" : "Dagupan Terminal"),
+        lat:
+          drawnPoints.length > 0
+            ? drawnPoints[0].lat
+            : Number(newRoute.startLat),
+        lng:
+          drawnPoints.length > 0
+            ? drawnPoints[0].lng
+            : Number(newRoute.startLng),
+      };
+
+      const endPt = {
+        name:
+          newRoute.endName ||
+          (drawnPoints.length > 1 ? "Route End" : "Destination"),
+        lat:
+          drawnPoints.length > 1
+            ? drawnPoints[drawnPoints.length - 1].lat
+            : Number(newRoute.endLat),
+        lng:
+          drawnPoints.length > 1
+            ? drawnPoints[drawnPoints.length - 1].lng
+            : Number(newRoute.endLng),
+      };
+
+      const waypoints = drawnPoints.map((pt, idx) => ({
+        name:
+          idx === 0
+            ? newRoute.startName || "Start Terminal"
+            : idx === drawnPoints.length - 1
+            ? newRoute.endName || "Destination End"
+            : `Waypoint ${idx + 1}`,
+        lat: pt.lat,
+        lng: pt.lng,
+        order: idx,
+      }));
+
       await api.post("/routes", {
         name: newRoute.name,
         code: newRoute.code.toUpperCase(),
         category: newRoute.category,
-        distanceKm: Number(newRoute.distanceKm),
+        distanceKm: Number(newRoute.distanceKm) || 1,
 
-        startPoint: {
-          name: newRoute.startName,
-          lat: Number(newRoute.startLat),
-          lng: Number(newRoute.startLng),
-        },
-
-        endPoint: {
-          name: newRoute.endName,
-          lat: Number(newRoute.endLat),
-          lng: Number(newRoute.endLng),
-        },
+        startPoint: startPt,
+        endPoint: endPt,
 
         terminalLocation: {
-          name: newRoute.terminalName || newRoute.startName,
+          name:
+            newRoute.terminalName ||
+            newRoute.startName ||
+            "Dagupan Terminal",
           address: newRoute.terminalAddress || "Dagupan City",
-          lat: Number(newRoute.startLat),
-          lng: Number(newRoute.startLng),
+          lat: startPt.lat,
+          lng: startPt.lng,
         },
 
-        waypoints: [],
+        path: drawnPoints.map((pt) => ({ lat: pt.lat, lng: pt.lng })),
+        waypoints,
       });
 
       showSuccess(
         "Route Registered",
-        `New corridor "${newRoute.name}" (${newRoute.code.toUpperCase()}) published.`,
+        `New corridor "${newRoute.name}" (${newRoute.code.toUpperCase()}) published with ${drawnPoints.length} track points.`,
       );
 
       setMessage({
@@ -120,6 +199,7 @@ const RoutesPage = () => {
       });
 
       setIsAddModalOpen(false);
+      setDrawnPoints([]);
       fetchRoutes();
     } catch (err) {
       const errText = err.response?.data?.message || "Failed to create route.";
@@ -180,7 +260,7 @@ const RoutesPage = () => {
         </div>
 
         <button
-          onClick={() => setIsAddModalOpen(true)}
+          onClick={handleOpenAddModal}
           className="btn btn"
           style={{
             backgroundColor: colors.primary,
@@ -383,13 +463,38 @@ const RoutesPage = () => {
 
                   {/* Actions */}
                   <td>
-                    <button
-                      onClick={() => setSelectedRoute(r)}
-                      className="btn btn-secondary btn-sm"
-                    >
-                      <Eye size={14} />
-                      <span>Details</span>
-                    </button>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      <button
+                        onClick={() => setSelectedRoute(r)}
+                        className="btn btn-secondary btn-sm"
+                        title="View Route Details"
+                      >
+                        <Eye size={14} />
+                        <span>Details</span>
+                      </button>
+
+                      <button
+                        onClick={() => setRouteToDelete(r)}
+                        className="btn btn-sm"
+                        style={{
+                          backgroundColor: "#FEE2E2",
+                          color: "#DC2626",
+                          border: "1px solid #FECACA",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          padding: "6px 10px",
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                        }}
+                        title="Remove outdated route"
+                      >
+                        <Trash2 size={13} />
+                        <span>Remove</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -614,7 +719,25 @@ const RoutesPage = () => {
               )}
             </div>
 
-            <div className="modal-footer">
+            <div className="modal-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <button
+                onClick={() => setRouteToDelete(selectedRoute)}
+                className="btn btn-sm"
+                style={{
+                  backgroundColor: "#FEE2E2",
+                  color: "#DC2626",
+                  border: "1px solid #FECACA",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 14px",
+                  fontWeight: "600",
+                }}
+              >
+                <Trash2 size={14} />
+                <span>Remove Route</span>
+              </button>
+
               <button
                 onClick={() => setSelectedRoute(null)}
                 className="btn btn-secondary"
@@ -631,16 +754,37 @@ const RoutesPage = () => {
       ====================================================== */}
       {isAddModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: "560px" }}>
+          <div
+            className="modal-content"
+            style={{
+              maxWidth: "920px",
+              width: "95vw",
+              maxHeight: "92vh",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             <div className="modal-header">
-              <h3
-                style={{
-                  color: colors.textPrimary,
-                  fontSize: "18px",
-                }}
-              >
-                Register New PUV Route
-              </h3>
+              <div>
+                <h3
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: "18px",
+                    margin: 0,
+                  }}
+                >
+                  Register New PUV Route
+                </h3>
+                <p
+                  style={{
+                    fontSize: "12px",
+                    color: colors.textMuted,
+                    margin: "2px 0 0 0",
+                  }}
+                >
+                  Define corridor details and trace road waypoints point-to-point.
+                </p>
+              </div>
 
               <button
                 onClick={() => setIsAddModalOpen(false)}
@@ -653,8 +797,76 @@ const RoutesPage = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateRoute}>
-              <div className="modal-body">
+            <form
+              onSubmit={handleCreateRoute}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                flex: 1,
+              }}
+            >
+              <div
+                className="modal-body"
+                style={{
+                  overflowY: "auto",
+                  padding: "20px 24px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "16px",
+                }}
+              >
+                {/* Point to Point Route Drawer (OnTheGoMap) */}
+                <div
+                  style={{
+                    background: colors.surfaceElevated || "#f8fafc",
+                    padding: "14px",
+                    borderRadius: "var(--radius-md)",
+                    border: `1px solid ${colors.border}`,
+                  }}
+                >
+                  <div style={{ marginBottom: "10px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        color: colors.textPrimary,
+                      }}
+                    >
+                      <MapPin size={16} color={colors.primary} />
+                      <span>Point-to-Point Route Creator (OnTheGoMap Mode)</span>
+                    </div>
+                    <p
+                      style={{
+                        fontSize: "12px",
+                        color: colors.textMuted,
+                        margin: "4px 0 0 0",
+                      }}
+                    >
+                      Click sequentially on the Dagupan map to plot stops and corridor turnings. The route track and total kilometer distance will auto-populate below.
+                    </p>
+                  </div>
+
+                  <PointToPointRouteMap
+                    points={drawnPoints}
+                    onPointsChange={(pts, dist) => {
+                      setDrawnPoints(pts);
+                      if (pts.length > 0) {
+                        setNewRoute((prev) => ({
+                          ...prev,
+                          distanceKm: dist > 0 ? dist : prev.distanceKm,
+                          startLat: pts[0].lat,
+                          startLng: pts[0].lng,
+                          endLat: pts[pts.length - 1].lat,
+                          endLng: pts[pts.length - 1].lng,
+                        }));
+                      }
+                    }}
+                  />
+                </div>
                 {/* Route Name */}
                 <div className="form-group">
                   <label className="form-label">Route Name</label>
@@ -789,7 +1001,10 @@ const RoutesPage = () => {
               <div className="modal-footer">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => {
+                    setIsAddModalOpen(false);
+                    setDrawnPoints([]);
+                  }}
                   className="btn btn-secondary"
                 >
                   Cancel
@@ -811,6 +1026,18 @@ const RoutesPage = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Route Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!routeToDelete}
+        onClose={() => setRouteToDelete(null)}
+        onConfirm={() => handleDeleteRoute(routeToDelete._id)}
+        title="Remove Route from Directory"
+        message={`Are you sure you want to remove "${routeToDelete?.name}" (${routeToDelete?.code})? This will deactivate the route and remove it from active commuter navigation.`}
+        confirmText="Remove Route"
+        cancelText="Cancel"
+        type="danger"
+      />
     </div>
   );
 };

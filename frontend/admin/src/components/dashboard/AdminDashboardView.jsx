@@ -148,7 +148,6 @@ const AdminDashboardView = () => {
             boxShadow: `0 4px 12px ${colors.primaryDark}40`,
           }}
         >
-          <PlusCircle size={16} />
           Provision LGU Account
         </Link>
       </div>

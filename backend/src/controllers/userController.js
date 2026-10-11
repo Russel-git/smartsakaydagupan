@@ -205,6 +205,14 @@ const deleteUser = async (req, res, next) => {
     if (user.role === 'admin') {
       return apiResponse.error(res, 'Cannot delete an Admin account.', 403);
     }
+    if (req.user.role === 'lgu' && user.role !== 'poso') {
+      return apiResponse.error(res, 'LGU can only delete POSO officer accounts.', 403);
+    }
+
+    // Require account to be suspended before it can be deleted
+    if (user.isActive) {
+      return apiResponse.error(res, 'Account must be suspended before deletion. Please suspend the account first.', 400);
+    }
 
     await User.findByIdAndDelete(id);
     await Otp.deleteMany({ email: user.email.toLowerCase() });
@@ -217,6 +225,42 @@ const deleteUser = async (req, res, next) => {
     });
 
     return apiResponse.success(res, null, 'User account permanently removed.');
+  } catch (error) { next(error); }
+};
+
+const adminResetPassword = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return apiResponse.error(res, 'New password must be at least 6 characters long.', 400);
+    }
+
+    const user = await User.findById(id);
+    if (!user) return apiResponse.error(res, 'User not found.', 404);
+
+    if (req.user.role === 'lgu' && user.role !== 'poso') {
+      return apiResponse.error(res, 'LGU can only change passwords for POSO field officers.', 403);
+    }
+
+    if (user.role === 'admin' && req.user._id.toString() !== user._id.toString()) {
+      return apiResponse.error(res, 'Cannot change password of another Administrator.', 403);
+    }
+
+    user.passwordHash = newPassword;
+    user.failedLoginAttempts = 0;
+    user.lockUntil = null;
+    await user.save();
+
+    await logAuditEvent(req, {
+      action: 'USER_PASSWORD_RESET_ADMIN',
+      resourceType: 'user',
+      resourceId: user._id,
+      details: { email: user.email, name: `${user.firstName} ${user.lastName}`, resetBy: req.user.email },
+    });
+
+    return apiResponse.success(res, null, `Password for ${user.firstName} ${user.lastName} updated successfully.`);
   } catch (error) { next(error); }
 };
 
@@ -260,15 +304,37 @@ const deleteMyAccount = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const uploadProfilePhoto = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return apiResponse.error(res, 'No image file uploaded.', 400);
+    }
+    const fileUrl = `/uploads/complaints/${req.file.filename}`;
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { profilePhoto: fileUrl },
+      { new: true }
+    ).select('-passwordHash -refreshToken');
+
+    return apiResponse.success(
+      res,
+      { user, profilePhoto: fileUrl, url: fileUrl },
+      'Profile photo updated successfully.'
+    );
+  } catch (error) { next(error); }
+};
+
 module.exports = {
   getProfile,
   updateProfile,
+  uploadProfilePhoto,
   changePassword,
   getAllUsers,
   createUser,
   updateUserRole,
   updateUserStatus,
   deleteUser,
+  adminResetPassword,
   deleteMyAccount,
 };
 
