@@ -108,7 +108,7 @@ const ComplaintsPage = () => {
       }
       if (location.state.selectedComplaintId) {
         const target = complaints.find(
-          (c) => c._id === location.state.selectedComplaintId
+          (c) => c._id === location.state.selectedComplaintId,
         );
         if (target) {
           if (location.state.autoEndorse) {
@@ -132,14 +132,14 @@ const ComplaintsPage = () => {
     setEndorseLoading(true);
     try {
       const { data } = await complaintsAPI.endorse(complaint._id, {
-        posoEndorsementNotes: notes,
+        endorsementNotes: notes.trim(),
       });
 
       showSuccess(
         "Endorsed to LGU",
         `Complaint "${complaint.subject}" verified and forwarded to Dagupan LGU. Case #: ${
           data.data?.lguCaseNumber || "Assigned"
-        }.`
+        }.`,
       );
 
       setEndorseModalOpen(false);
@@ -153,7 +153,7 @@ const ComplaintsPage = () => {
     } catch (err) {
       showError(
         "Endorsement Failed",
-        err.response?.data?.message || "Could not endorse complaint to LGU."
+        err.response?.data?.message || "Could not endorse complaint to LGU.",
       );
     } finally {
       setEndorseLoading(false);
@@ -170,7 +170,7 @@ const ComplaintsPage = () => {
         "Violation Report Filed",
         `Direct road report "${data.data?.subject}" filed and escalated to Dagupan LGU (Case: ${
           data.data?.lguCaseNumber || "Assigned"
-        }).`
+        }).`,
       );
 
       setFieldReportModalOpen(false);
@@ -178,7 +178,7 @@ const ComplaintsPage = () => {
     } catch (err) {
       showError(
         "Submission Failed",
-        err.response?.data?.message || "Could not submit violation report."
+        err.response?.data?.message || "Could not submit violation report.",
       );
     } finally {
       setFieldReportLoading(false);
@@ -194,7 +194,7 @@ const ComplaintsPage = () => {
   const handleConfirmDelete = async (
     complaint,
     deletionReason,
-    deletionNotes
+    deletionNotes,
   ) => {
     setDeleteLoading(true);
     try {
@@ -205,7 +205,7 @@ const ComplaintsPage = () => {
 
       showSuccess(
         "Complaint Removed",
-        `Report "${complaint.subject}" soft-deleted. Reason: "${deletionReason}".`
+        `Report "${complaint.subject}" soft-deleted. Reason: "${deletionReason}".`,
       );
 
       setDeleteModalOpen(false);
@@ -219,7 +219,7 @@ const ComplaintsPage = () => {
     } catch (err) {
       showError(
         "Deletion Failed",
-        err.response?.data?.message || "Could not delete report."
+        err.response?.data?.message || "Could not delete report.",
       );
     } finally {
       setDeleteLoading(false);
@@ -236,7 +236,12 @@ const ComplaintsPage = () => {
     });
   };
 
-  const handleConfirmLguAction = async (complaint, mode, notes, evidencePhoto) => {
+  const handleConfirmLguAction = async (
+    complaint,
+    mode,
+    notes,
+    evidencePhoto,
+  ) => {
     setLguModalConfig((prev) => ({ ...prev, loading: true }));
     try {
       if (mode === "action") {
@@ -247,7 +252,7 @@ const ComplaintsPage = () => {
 
         showSuccess(
           "LGU Action Recorded",
-          `Enforcement action saved for case ${data.data.lguCaseNumber}.`
+          `Enforcement action saved for case ${data.data.lguCaseNumber}.`,
         );
       } else {
         const { data } = await complaintsAPI.lguTerminate(complaint._id, {
@@ -256,7 +261,7 @@ const ComplaintsPage = () => {
 
         showSuccess(
           "Case Terminated",
-          `Grievance case ${data.data.lguCaseNumber} officially closed.`
+          `Grievance case ${data.data.lguCaseNumber} officially closed.`,
         );
       }
 
@@ -275,7 +280,7 @@ const ComplaintsPage = () => {
     } catch (err) {
       showError(
         "LGU Action Failed",
-        err.response?.data?.message || "Failed to submit LGU update."
+        err.response?.data?.message || "Failed to submit LGU update.",
       );
       setLguModalConfig((prev) => ({ ...prev, loading: false }));
     }
@@ -431,8 +436,7 @@ const ComplaintsPage = () => {
       }
     }
 
-    const matchesStatus =
-      statusFilter === "all" || c.status === statusFilter;
+    const matchesStatus = statusFilter === "all" || c.status === statusFilter;
 
     const matchesCategory =
       categoryFilter === "all" || c.category === categoryFilter;
@@ -455,13 +459,13 @@ const ComplaintsPage = () => {
 
   // Count metrics for POSO tabs
   const pendingCount = complaints.filter(
-    (c) => c.status === "pending" || c.status === "under_review"
+    (c) => c.status === "pending" || c.status === "under_review",
   ).length;
   const endorsedCount = complaints.filter(
     (c) =>
       c.status === "endorsed_to_lgu" ||
       c.status === "action_taken" ||
-      c.status === "terminated"
+      c.status === "terminated",
   ).length;
 
   return (
@@ -493,8 +497,8 @@ const ComplaintsPage = () => {
               {isPoso
                 ? "POSO Complaints Hub"
                 : isLgu
-                ? "LGU Action Desk - City of Dagupan"
-                : "Commuter Complaints & Grievance Hub"}
+                  ? "LGU Action Desk - City of Dagupan"
+                  : "Commuter Complaints & Grievance Hub"}
             </span>
 
             <span
@@ -503,13 +507,9 @@ const ComplaintsPage = () => {
                 backgroundColor: isPoso
                   ? "rgba(217, 119, 6, 0.15)"
                   : isLgu
-                  ? "rgba(16, 185, 129, 0.15)"
-                  : colors.surfaceElevated,
-                color: isPoso
-                  ? "#D97706"
-                  : isLgu
-                  ? "#059669"
-                  : colors.info,
+                    ? "rgba(16, 185, 129, 0.15)"
+                    : colors.surfaceElevated,
+                color: isPoso ? "#D97706" : isLgu ? "#059669" : colors.info,
                 border: `1px solid ${colors.border}`,
                 fontSize: "11px",
               }}
@@ -517,8 +517,8 @@ const ComplaintsPage = () => {
               {isPoso
                 ? "Field Enforcer Verification"
                 : isLgu
-                ? "Enforcement Authority"
-                : "System Oversight"}
+                  ? "Enforcement Authority"
+                  : "System Oversight"}
             </span>
           </h1>
 
@@ -532,8 +532,8 @@ const ComplaintsPage = () => {
             {isPoso
               ? "Verify commuter complaints on the road, inspect vehicle violations, endorse cases to Dagupan LGU, or directly file field citation reports."
               : isLgu
-              ? "Receive verified complaints endorsed by POSO field enforcers, review road inspection remarks, record official sanctions, and terminate cases."
-              : "Comprehensive audit records of commuter grievances, POSO on-road verifications, and LGU municipal enforcement actions."}
+                ? "Receive verified complaints endorsed by POSO field enforcers, review road inspection remarks, record official sanctions, and terminate cases."
+                : "Comprehensive audit records of commuter grievances, POSO on-road verifications, and LGU municipal enforcement actions."}
           </p>
         </div>
 
@@ -592,7 +592,9 @@ const ComplaintsPage = () => {
             <span
               style={{
                 backgroundColor:
-                  posoTab === "pending" ? "rgba(0,0,0,0.2)" : colors.surfaceElevated,
+                  posoTab === "pending"
+                    ? "rgba(0,0,0,0.2)"
+                    : colors.surfaceElevated,
                 padding: "2px 7px",
                 borderRadius: "999px",
                 fontSize: "11px",
@@ -624,7 +626,9 @@ const ComplaintsPage = () => {
             <span
               style={{
                 backgroundColor:
-                  posoTab === "endorsed" ? "rgba(0,0,0,0.2)" : colors.surfaceElevated,
+                  posoTab === "endorsed"
+                    ? "rgba(0,0,0,0.2)"
+                    : colors.surfaceElevated,
                 padding: "2px 7px",
                 borderRadius: "999px",
                 fontSize: "11px",
@@ -718,8 +722,8 @@ const ComplaintsPage = () => {
             {isPoso && posoTab === "pending"
               ? "No pending complaints requiring road verification."
               : isPoso && posoTab === "endorsed"
-              ? "No complaints endorsed to LGU yet."
-              : "No complaint records found matching criteria."}
+                ? "No complaints endorsed to LGU yet."
+                : "No complaint records found matching criteria."}
           </div>
         ) : (
           <div className="table-container">
@@ -810,8 +814,8 @@ const ComplaintsPage = () => {
                           {isPosoFieldReport
                             ? `POSO (Badge #${c.posoBadgeNumber || "Enforcer"})`
                             : c.userId?.firstName
-                            ? `${c.userId.firstName} ${c.userId.lastName || ""}`
-                            : "Commuter"}
+                              ? `${c.userId.firstName} ${c.userId.lastName || ""}`
+                              : "Commuter"}
                         </span>
                       </td>
 
@@ -895,11 +899,17 @@ const ComplaintsPage = () => {
                           >
                             <ImageIcon size={13} color={colors.info} />
                             <span style={{ fontSize: "11px" }}>
-                              {c.attachments.length} Photo{c.attachments.length !== 1 ? "s" : ""}
+                              {c.attachments.length} Photo
+                              {c.attachments.length !== 1 ? "s" : ""}
                             </span>
                           </button>
                         ) : (
-                          <span style={{ fontSize: "11px", color: colors.textMuted }}>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: colors.textMuted,
+                            }}
+                          >
                             None
                           </span>
                         )}
@@ -931,7 +941,8 @@ const ComplaintsPage = () => {
 
                           {/* POSO VERIFY & ENDORSE */}
                           {isPoso &&
-                            (c.status === "pending" || c.status === "under_review") && (
+                            (c.status === "pending" ||
+                              c.status === "under_review") && (
                               <button
                                 onClick={() => handleOpenEndorse(c)}
                                 className="btn btn-sm"
@@ -958,7 +969,9 @@ const ComplaintsPage = () => {
                             c.status !== "terminated" && (
                               <>
                                 <button
-                                  onClick={() => handleOpenLguModal(c, "action")}
+                                  onClick={() =>
+                                    handleOpenLguModal(c, "action")
+                                  }
                                   className="btn btn-sm"
                                   style={{
                                     backgroundColor: "rgba(16, 185, 129, 0.15)",
@@ -974,7 +987,9 @@ const ComplaintsPage = () => {
                                 </button>
 
                                 <button
-                                  onClick={() => handleOpenLguModal(c, "terminate")}
+                                  onClick={() =>
+                                    handleOpenLguModal(c, "terminate")
+                                  }
                                   className="btn btn-sm"
                                   style={{
                                     backgroundColor: colors.surfaceElevated,
@@ -1035,7 +1050,9 @@ const ComplaintsPage = () => {
             }}
           >
             <div className="modal-header">
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "8px" }}
+              >
                 <FileText size={20} color={colors.primary} />
                 <h2
                   style={{
@@ -1114,7 +1131,8 @@ const ComplaintsPage = () => {
                       fontWeight: "700",
                     }}
                   >
-                    Official Dagupan LGU Case Tracking #: {selectedComplaint.lguCaseNumber}
+                    Official Dagupan LGU Case Tracking #:{" "}
+                    {selectedComplaint.lguCaseNumber}
                   </span>
                 </div>
               )}
@@ -1162,7 +1180,7 @@ const ComplaintsPage = () => {
                     >
                       Endorsed on:{" "}
                       {new Date(
-                        selectedComplaint.posoEndorsedAt
+                        selectedComplaint.posoEndorsedAt,
                       ).toLocaleString()}
                     </div>
                   )}
@@ -1223,7 +1241,9 @@ const ComplaintsPage = () => {
                 selectedComplaint.attachments.length > 0 && (
                   <div>
                     <label className="form-label">Evidence Photos</label>
-                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                    <div
+                      style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}
+                    >
                       {selectedComplaint.attachments.map((photoUrl, idx) => (
                         <div
                           key={idx}
@@ -1307,7 +1327,7 @@ const ComplaintsPage = () => {
                       <div
                         onClick={() =>
                           setLightboxImage(
-                            getImageUrl(selectedComplaint.lguEvidencePhoto)
+                            getImageUrl(selectedComplaint.lguEvidencePhoto),
                           )
                         }
                         style={{
