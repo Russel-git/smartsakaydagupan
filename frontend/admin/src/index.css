@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-@import "tailwindcss";
-
 /* Global styles belong in the base layer so Tailwind utilities
    can override them on individual components. */
 @layer base {
