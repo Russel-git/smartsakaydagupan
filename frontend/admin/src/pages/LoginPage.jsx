@@ -47,7 +47,7 @@ const LoginPage = () => {
         }! SmartSakay command console active.`,
       );
 
-      navigate("/");
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       const msg =
         err.response?.data?.message || err.message || "Failed to authenticate";

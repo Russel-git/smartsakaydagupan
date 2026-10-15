@@ -16,12 +16,13 @@ import TerminalsPage from "./pages/TerminalsPage";
 import AnnouncementsPage from "./pages/AnnouncementsPage";
 import ArchivesPage from "./pages/ArchivesPage";
 import Profile from "./pages/Profile";
+import LandingPage from "./pages/LandingPage/LandingPage";
 
 const ProtectedRoute = ({ children }) => {
   const { admin } = useAuth();
 
   if (!admin) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return children;
@@ -32,11 +33,9 @@ const App = () => {
 
   return (
     <Routes>
+      <Route index path="/" element={<LandingPage />} />
       {/* Login */}
-      <Route
-        path="/login"
-        element={admin ? <Navigate to="/" replace /> : <LoginPage />}
-      />
+      <Route path="/login" element={<LoginPage />} />
 
       {/* Protected Application */}
       <Route
@@ -46,23 +45,59 @@ const App = () => {
           </ProtectedRoute>
         }
       >
-        <Route index element={<DashboardPage />} />
-        <Route path="fares" element={admin?.role === "poso" ? <Navigate to="/" replace /> : <FaresPage />} />
-        <Route path="routes" element={admin?.role === "poso" ? <Navigate to="/" replace /> : <RoutesPage />} />
-        <Route path="terminals" element={<TerminalsPage />} />
-        <Route path="complaints" element={<ComplaintsPage />} />
-        <Route path="notifications" element={<NotificationsPage />} />
-        <Route path="announcements" element={admin?.role === "admin" ? <Navigate to="/" replace /> : <AnnouncementsPage />} />
-        <Route path="archives" element={admin?.role !== "lgu" ? <Navigate to="/" replace /> : <ArchivesPage />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="audit-logs" element={<AuditLogsPage />} />
-        <Route path="profile" element={<Profile />} />
+        <Route path={"/dashboard"} element={<DashboardPage />} />
+        <Route
+          path="fares"
+          element={
+            admin?.role === "poso" ? (
+              <Navigate to="dashboard" replace />
+            ) : (
+              <FaresPage />
+            )
+          }
+        />
+        <Route
+          path="/routes"
+          element={
+            admin?.role === "poso" ? (
+              <Navigate to="dasboard" replace />
+            ) : (
+              <RoutesPage />
+            )
+          }
+        />
+        <Route path="/terminals" element={<TerminalsPage />} />
+        <Route path="/complaints" element={<ComplaintsPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route
+          path="/announcements"
+          element={
+            admin?.role === "admin" ? (
+              <Navigate to="dashboard" replace />
+            ) : (
+              <AnnouncementsPage />
+            )
+          }
+        />
+        <Route
+          path="/archives"
+          element={
+            admin?.role !== "lgu" ? (
+              <Navigate to="dashboard" replace />
+            ) : (
+              <ArchivesPage />
+            )
+          }
+        />
+        <Route path="/users" element={<UsersPage />} />
+        <Route path="/audit-logs" element={<AuditLogsPage />} />
+        <Route path="/profile" element={<Profile />} />
       </Route>
 
       {/* Fallback */}
       <Route
         path="*"
-        element={<Navigate to={admin ? "/" : "/login"} replace />}
+        element={<Navigate to={admin ? "/dashboard" : "/"} replace />}
       />
     </Routes>
   );

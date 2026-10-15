@@ -1,14 +1,14 @@
-import axios from 'axios';
+import axios from "axios";
 
 const getAdminBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
-  if (typeof window !== 'undefined' && window.location) {
+  if (typeof window !== "undefined" && window.location) {
     const hostname = window.location.hostname;
-    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return 'https://smartsakay-backend.onrender.com/api';
+    if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+      return "https://smartsakay-backend.onrender.com/api";
     }
   }
-  return '/api';
+  return "/api";
 };
 
 const api = axios.create({
@@ -17,7 +17,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('smartsakay_admin_token');
+  const token = localStorage.getItem("smartsakay_admin_token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -27,13 +27,16 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && !window.location.pathname.includes('/login')) {
-      localStorage.removeItem('smartsakay_admin_token');
-      localStorage.removeItem('smartsakay_admin_user');
-      window.location.href = '/login';
+    if (
+      error.response?.status === 401 &&
+      !window.location.pathname.includes("/")
+    ) {
+      localStorage.removeItem("smartsakay_admin_token");
+      localStorage.removeItem("smartsakay_admin_user");
+      window.location.href = "/";
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;
