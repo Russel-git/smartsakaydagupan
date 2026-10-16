@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useTheme } from "../../../contexts/theme/ThemeContext";
 
 const FOOTER_COLUMNS = [
@@ -6,9 +5,9 @@ const FOOTER_COLUMNS = [
     heading: "Explore",
     links: [
       { label: "About", href: "/about" },
-      { label: "Blog", href: "/#place-finder" },
-      { label: "FAQ", href: "/#features" },
-      { label: "Contact", href: "/#features" },
+      { label: "Blog", href: "/blog" },
+      { label: "FAQ", href: "/faqs" },
+      { label: "Contact", href: "/contact" },
     ],
   },
   {

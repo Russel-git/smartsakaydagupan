@@ -17,6 +17,10 @@ import AnnouncementsPage from "./pages/AnnouncementsPage";
 import ArchivesPage from "./pages/ArchivesPage";
 import Profile from "./pages/Profile";
 import LandingPage from "./pages/LandingPage/LandingPage";
+import AboutPage from "./pages/LandingPage/About";
+import BlogPage from "./pages/LandingPage/BlogPage";
+import FAQPage from "./pages/LandingPage/FAQPage";
+import ContactPage from "./pages/LandingPage/ContactPage";
 
 const ProtectedRoute = ({ children }) => {
   const { admin } = useAuth();
@@ -34,6 +38,11 @@ const App = () => {
   return (
     <Routes>
       <Route index path="/" element={<LandingPage />} />
+      <Route path="/about" element={<AboutPage />} />
+      <Route path="/blog" element={<BlogPage />} />
+      <Route path="/faqs" element={<FAQPage />} />
+      <Route path="/contact" element={<ContactPage />} />
+
       {/* Login */}
       <Route path="/login" element={<LoginPage />} />
 

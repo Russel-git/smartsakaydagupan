@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useTheme } from "../../../contexts/theme/ThemeContext";
 
 const NAV_LINKS = [
+  { label: "Home", href: "/" },
   { label: "About", href: "/about" },
-  { label: "Blog", href: "/#place-finder" },
-  { label: "FAQ", href: "/faq" },
+  { label: "Blog", href: "/blog" },
+  { label: "FAQ", href: "/faqs" },
   { label: "Contact", href: "/contact" },
 ];
 
-function Logo({ light = false, colors }) {
+function Logo({ colors }) {
   return (
     <a
       href="/"
@@ -18,16 +20,10 @@ function Logo({ light = false, colors }) {
     >
       <span
         className="max-md:text-2xl md:text-4xl font-black tracking-tight"
-        style={{ color: light ? colors.white : colors.textPrimary }}
+        style={{ color: colors.textPrimary }}
       >
         Smart
-        <span
-          style={{
-            color: light ? colors.primaryLight : colors.primary,
-          }}
-        >
-          Sakay
-        </span>
+        <span style={{ color: colors.primary }}>Sakay</span>
       </span>
     </a>
   );
@@ -35,8 +31,20 @@ function Logo({ light = false, colors }) {
 
 export default function Header() {
   const { colors } = useTheme();
+  const location = useLocation();
+
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+
+  const isActive = (href) => {
+    if (href === "/") {
+      return location.pathname === "/";
+    }
+
+    return (
+      location.pathname === href || location.pathname.startsWith(`${href}/`)
+    );
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -46,6 +54,25 @@ export default function Header() {
 
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Close the mobile menu when the route changes.
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
+
+  const getLinkStyle = (active) => ({
+    color: active ? colors.primary : colors.textSecondary,
+    background: active ? `${colors.primary}15` : "transparent",
+    boxShadow: active
+      ? `0 0 14px ${colors.primary}25, inset 0 0 0 1px ${colors.primary}25`
+      : "none",
+  });
+
+  const handleMouseEnter = (event) => {
+    event.currentTarget.style.color = colors.primary;
+    event.currentTarget.style.background = `${colors.primary}15`;
+    event.currentTarget.style.boxShadow = `0 0 14px ${colors.primary}30, inset 0 0 0 1px ${colors.primary}30`;
+  };
 
   return (
     <header
@@ -62,26 +89,31 @@ export default function Header() {
       >
         <Logo colors={colors} />
 
+        {/* Desktop navigation */}
         <ul className="hidden items-center gap-1 md:flex">
-          {NAV_LINKS.map((link) => (
-            <li key={link.label}>
-              <a
-                href={link.href}
-                className="rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors"
-                style={{ color: colors.textSecondary }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = colors.primary;
-                  e.currentTarget.style.background = colors.primaryLight;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = colors.textSecondary;
-                  e.currentTarget.style.background = "transparent";
-                }}
-              >
-                {link.label}
-              </a>
-            </li>
-          ))}
+          {NAV_LINKS.map((link) => {
+            const active = isActive(link.href);
+
+            return (
+              <li key={link.label}>
+                <a
+                  href={link.href}
+                  aria-current={active ? "page" : undefined}
+                  className="rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200"
+                  style={getLinkStyle(active)}
+                  onMouseEnter={handleMouseEnter}
+                  onMouseLeave={(event) => {
+                    Object.assign(
+                      event.currentTarget.style,
+                      getLinkStyle(active),
+                    );
+                  }}
+                >
+                  {link.label}
+                </a>
+              </li>
+            );
+          })}
         </ul>
 
         <div className="flex items-center gap-3">
@@ -93,6 +125,7 @@ export default function Header() {
             Get Started
           </a>
 
+          {/* Mobile menu button */}
           <button
             type="button"
             className="grid h-11 w-11 place-items-center rounded-xl border md:hidden"
@@ -110,6 +143,7 @@ export default function Header() {
         </div>
       </nav>
 
+      {/* Mobile navigation */}
       {open && (
         <div
           className="border-t px-5 pb-4 pt-2 md:hidden"
@@ -118,17 +152,22 @@ export default function Header() {
             background: colors.surface,
           }}
         >
-          {NAV_LINKS.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              onClick={() => setOpen(false)}
-              className="block rounded-xl px-4 py-3 font-semibold"
-              style={{ color: colors.textSecondary }}
-            >
-              {link.label}
-            </a>
-          ))}
+          {NAV_LINKS.map((link) => {
+            const active = isActive(link.href);
+
+            return (
+              <a
+                key={link.label}
+                href={link.href}
+                aria-current={active ? "page" : undefined}
+                onClick={() => setOpen(false)}
+                className="mb-1 block rounded-xl px-4 py-3 font-semibold transition-all duration-200"
+                style={getLinkStyle(active)}
+              >
+                {link.label}
+              </a>
+            );
+          })}
 
           <a
             href={import.meta.env.VITE_APP_URL}

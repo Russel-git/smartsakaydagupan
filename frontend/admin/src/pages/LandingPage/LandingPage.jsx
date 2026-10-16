@@ -13,7 +13,7 @@ const SLIDES = [
     tintKey: "primaryLight",
     buttonText: "Learn More",
     image: "../../../assets/map.jpg",
-    to: "#",
+    to: "/about",
   },
   {
     eyebrow: "02 / BE PART",
@@ -23,7 +23,7 @@ const SLIDES = [
     tintKey: "secondaryLight",
     buttonText: "Contact Us",
     image: "../../../assets/town.jpg",
-    to: "#",
+    to: "/contact",
   },
   {
     eyebrow: "03 / DASHBOARD",
