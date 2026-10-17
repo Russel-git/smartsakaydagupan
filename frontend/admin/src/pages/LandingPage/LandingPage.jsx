@@ -37,7 +37,7 @@ const SLIDES = [
     text: "Add routes, terminals, broadcast announcements, and review file reports.",
     colorKey: "accentDark",
     tintKey: "accentLight",
-    buttonText: "Admin Login",
+    buttonText: "Login",
     image: informImg,
     to: "/login",
   },
@@ -412,8 +412,8 @@ function ImageSlot({ src, alt, Art, dark, colors }) {
 
 function Logo({ dark, light = false, colors }) {
   return (
-    <Link
-      to="/"
+    <a
+      href="/"
       className="inline-flex items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2"
       style={{ "--tw-ring-color": colors.primary }}
     >
@@ -428,7 +428,7 @@ function Logo({ dark, light = false, colors }) {
           Sakay
         </span>
       </span>
-    </Link>
+    </a>
   );
 }
 
@@ -497,31 +497,6 @@ function Hero({ dark, colors }) {
                 </span>
               ),
             )}
-          </div>
-
-          <div className="mt-8 flex flex-wrap items-center gap-4">
-            <Link
-              to="/login"
-              className="rounded-xl px-6 py-3.5 font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:brightness-110 text-center inline-block"
-              style={{
-                background: colors.primary,
-                boxShadow: `0 8px 24px ${colors.primary}40`,
-              }}
-            >
-              Admin Sign In
-            </Link>
-
-            <Link
-              to="/about"
-              className="rounded-xl border px-6 py-3.5 font-bold transition hover:-translate-y-0.5 text-center inline-block"
-              style={{
-                borderColor: colors.border,
-                color: colors.textPrimary,
-                background: colors.surface,
-              }}
-            >
-              Learn More
-            </Link>
           </div>
         </div>
 
@@ -643,16 +618,16 @@ function Slides({ dark, colors }) {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <Link
-              to={slide.to}
-              className="rounded-xl w-50 py-3.5 font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:brightness-110 cursor-pointer block text-center"
+            <a
+              href={slide.to}
+              className="rounded-xl w-50 py-3.5 font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:brightness-110 cursor-pointer"
               style={{
                 background: slideColor,
                 boxShadow: `0 10px 30px ${slideColor}55`,
               }}
             >
               {slide.buttonText}
-            </Link>
+            </a>
           </div>
         </div>
 
