@@ -54,12 +54,12 @@ const App = () => {
           </ProtectedRoute>
         }
       >
-        <Route path={"/dashboard"} element={<DashboardPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route
-          path="fares"
+          path="/fares"
           element={
             admin?.role === "poso" ? (
-              <Navigate to="dashboard" replace />
+              <Navigate to="/dashboard" replace />
             ) : (
               <FaresPage />
             )
@@ -69,7 +69,7 @@ const App = () => {
           path="/routes"
           element={
             admin?.role === "poso" ? (
-              <Navigate to="dasboard" replace />
+              <Navigate to="/dashboard" replace />
             ) : (
               <RoutesPage />
             )
@@ -82,7 +82,7 @@ const App = () => {
           path="/announcements"
           element={
             admin?.role === "admin" ? (
-              <Navigate to="dashboard" replace />
+              <Navigate to="/dashboard" replace />
             ) : (
               <AnnouncementsPage />
             )
@@ -92,7 +92,7 @@ const App = () => {
           path="/archives"
           element={
             admin?.role !== "lgu" ? (
-              <Navigate to="dashboard" replace />
+              <Navigate to="/dashboard" replace />
             ) : (
               <ArchivesPage />
             )
