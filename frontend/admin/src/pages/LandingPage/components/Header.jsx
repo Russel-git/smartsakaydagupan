@@ -118,7 +118,12 @@ export default function Header() {
 
         <div className="flex items-center gap-3">
           <a
-            href={import.meta.env.VITE_APP_URL}
+            href={
+              import.meta.env.VITE_APP_URL ||
+              "https://smartsakaydagupan-mobilev1.vercel.app/"
+            }
+            target="_blank"
+            rel="noopener noreferrer"
             className="hidden rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95 md:inline-flex"
             style={{ background: colors.primary }}
           >
@@ -170,7 +175,12 @@ export default function Header() {
           })}
 
           <a
-            href={import.meta.env.VITE_APP_URL}
+            href={
+              import.meta.env.VITE_APP_URL ||
+              "https://smartsakaydagupan-mobilev1.vercel.app/"
+            }
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={() => setOpen(false)}
             className="mt-2 block rounded-xl px-4 py-3 text-center font-bold text-white"
             style={{ background: colors.primary }}

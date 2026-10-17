@@ -159,7 +159,12 @@ function AboutHero({ colors }) {
 
           <div className="mt-8 flex flex-wrap gap-3">
             <a
-              href={import.meta.env.VITE_APP_URL}
+              href={
+                import.meta.env.VITE_APP_URL ||
+                "https://smartsakaydagupan-mobilev1.vercel.app/"
+              }
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center justify-center rounded-xl px-20 py-3 font-bold text-white transition hover:-translate-y-0.5"
               style={{
                 background: colors.primary,

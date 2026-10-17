@@ -90,12 +90,25 @@ export default function ContactPage() {
 
     if (sending) return;
 
+    const serviceId =
+      import.meta.env.VITE_EMAILJS_SERVICE_ID || "service_pk9zb2v";
+    const templateId =
+      import.meta.env.VITE_EMAILJS_TEMPLATE_ID || "template_2vgm1od";
+    const publicKey =
+      import.meta.env.VITE_EMAILJS_PUBLIC_KEY || "8ibxY9h2tFIsiWwOg";
+
+    if (!serviceId || !templateId || !publicKey) {
+      console.warn("EmailJS configuration is missing. Check your environment variables.");
+      setError("Email service is temporarily unavailable. Please try again later.");
+      return;
+    }
+
     setSending(true);
 
     try {
       await emailjs.send(
-        import.meta.env.VITE_EMAILJS_SERVICE_ID,
-        import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
+        serviceId,
+        templateId,
         {
           name: form.name.trim(),
           email: form.email.trim(),
@@ -103,7 +116,7 @@ export default function ContactPage() {
           message: form.message.trim(),
         },
         {
-          publicKey: import.meta.env.VITE_EMAILJS_PUBLIC_KEY,
+          publicKey,
         },
       );
 
