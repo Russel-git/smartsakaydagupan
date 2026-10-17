@@ -125,13 +125,13 @@ const checkAndNotifyWeather = async (force = false) => {
       sentAt: new Date(),
     };
 
-    console.log(`[WeatherAutoNotifier] Broadcasted automated weather notification: "${alertTitle}" to commuters.`);
+    console.log(`[WeatherAutoNotifier] Broadcasted automated weather notification: "${alertTitle}" to ${commuters.length} commuters.`);
 
     return {
       notified: true,
       title: alertTitle,
       message: alertMessage,
-      broadcast: true,
+      recipients: commuters.length,
     };
   } catch (error) {
     console.error('[WeatherAutoNotifier] Error checking weather alerts:', error.message);
