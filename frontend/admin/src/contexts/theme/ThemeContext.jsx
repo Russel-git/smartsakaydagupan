@@ -75,6 +75,13 @@ export const ThemeProvider = ({ children }) => {
 
   useEffect(() => {
     const loadAccountTheme = async () => {
+      const token = localStorage.getItem("smartsakay_admin_token");
+      if (!token) {
+        setTheme("theme1");
+        setIsLoaded(true);
+        return;
+      }
+
       try {
         const response = await themeAPI.getTheme();
 

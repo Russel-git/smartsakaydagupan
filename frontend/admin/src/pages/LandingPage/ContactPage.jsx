@@ -16,6 +16,7 @@ import emailjs from "@emailjs/browser";
 import { useTheme } from "../../contexts/theme/ThemeContext";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+import townImg from "../../../assets/town.jpg";
 
 const ORANGE = "#F59E0B";
 const ORANGE_DARK = "#D97706";
@@ -276,12 +277,9 @@ export default function ContactPage() {
 
                 <div className="relative my-8 overflow-hidden rounded-2xl">
                   <img
-                    src="/images/smartsakay-contact.jpg"
+                    src={townImg}
                     alt="SmartSakay public transportation community"
                     className="h-52 w-full object-cover sm:h-64"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
                   />
 
                   <div

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useTheme } from "../../contexts/theme/ThemeContext";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
@@ -699,13 +700,13 @@ export default function BlogPage() {
               transportation needs. This is the story behind what we are
               building and why it matters to us.
             </p>
-            <a
-              href="/about"
-              className="mt-7 inline-flex rounded-xl px-6 py-3 font-bold transition hover:-translate-y-0.5"
+            <Link
+              to="/about"
+              className="mt-7 inline-flex rounded-xl px-6 py-3 font-bold transition hover:-translate-y-0.5 text-center"
               style={{ background: "#FFFFFF", color: colors.primary }}
             >
               Learn More About SmartSakay
-            </a>
+            </Link>
           </div>
         </section>
       </main>

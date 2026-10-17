@@ -498,6 +498,31 @@ function Hero({ dark, colors }) {
               ),
             )}
           </div>
+
+          <div className="mt-8 flex flex-wrap items-center gap-4">
+            <Link
+              to="/login"
+              className="rounded-xl px-6 py-3.5 font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:brightness-110 text-center inline-block"
+              style={{
+                background: colors.primary,
+                boxShadow: `0 8px 24px ${colors.primary}40`,
+              }}
+            >
+              Admin Sign In
+            </Link>
+
+            <Link
+              to="/about"
+              className="rounded-xl border px-6 py-3.5 font-bold transition hover:-translate-y-0.5 text-center inline-block"
+              style={{
+                borderColor: colors.border,
+                color: colors.textPrimary,
+                background: colors.surface,
+              }}
+            >
+              Learn More
+            </Link>
+          </div>
         </div>
 
         <div id="place-finder" className="scroll-mt-24">

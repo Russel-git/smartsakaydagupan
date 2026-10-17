@@ -33,9 +33,12 @@ api.interceptors.response.use(
        error.response?.data?.message?.toLowerCase().includes('suspended') ||
        error.response?.data?.error === 'ACCOUNT_SUSPENDED');
 
+    const publicPaths = ['/', '/about', '/blog', '/faqs', '/contact', '/login'];
+    const isPublicPage = publicPaths.includes(window.location.pathname);
+
     if (
       (error.response?.status === 401 || isSuspendedOrDeactivated) &&
-      !window.location.pathname.includes('/login')
+      !isPublicPage
     ) {
       localStorage.removeItem('smartsakay_admin_token');
       localStorage.removeItem('smartsakay_admin_user');

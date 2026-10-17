@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useTheme } from "../../contexts/theme/ThemeContext";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
@@ -631,20 +632,20 @@ function CallToAction({ colors }) {
         </p>
 
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <a
-            href="/"
-            className="rounded-xl px-6 py-3 font-bold transition hover:-translate-y-0.5"
+          <Link
+            to="/"
+            className="rounded-xl px-6 py-3 font-bold transition hover:-translate-y-0.5 inline-block text-center"
             style={{ background: "#FFFFFF", color: colors.primary }}
           >
             Back to Home
-          </a>
+          </Link>
 
-          <a
-            href="/contact"
-            className="rounded-xl border border-white/50 px-6 py-3 font-bold text-white transition hover:bg-white/10"
+          <Link
+            to="/contact"
+            className="rounded-xl border border-white/50 px-6 py-3 font-bold text-white transition hover:bg-white/10 inline-block text-center"
           >
             Contact Us
-          </a>
+          </Link>
         </div>
       </div>
     </section>
