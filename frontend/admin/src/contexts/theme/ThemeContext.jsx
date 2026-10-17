@@ -108,6 +108,22 @@ export const ThemeProvider = ({ children }) => {
     themeMode === "dark" || (themeMode === "system" && systemScheme === "dark");
 
   // ---------------------------------------------------------
+  // Synchronize document attributes for CSS variables
+  // ---------------------------------------------------------
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      const root = document.documentElement;
+      root.setAttribute("data-theme", isDark ? "dark" : "light");
+      if (isDark) {
+        root.classList.add("dark");
+      } else {
+        root.classList.remove("dark");
+      }
+    }
+  }, [isDark]);
+
+  // ---------------------------------------------------------
   // Get selected theme colors
   // ---------------------------------------------------------
 

@@ -17,6 +17,17 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Handle FormData properly across platforms: on Web, let browser set multipart boundary
+    if (
+      config.data &&
+      typeof FormData !== "undefined" &&
+      config.data instanceof FormData
+    ) {
+      if (typeof window !== "undefined" && config.headers) {
+        delete config.headers["Content-Type"];
+        delete config.headers["content-type"];
+      }
+    }
     return config;
   },
   (error) => Promise.reject(error)

@@ -87,6 +87,7 @@ export const complaintsAPI = {
 
   // POSO Road Triage & Field Reports
   endorse: (id, data) => apiClient.patch(`/complaints/${id}/endorse`, data),
+  rejectComplaint: (id, data) => apiClient.patch(`/complaints/${id}/reject`, data),
   fileFieldReport: (data) => apiClient.post("/complaints/field-report", data),
 
   // Operator → LGU

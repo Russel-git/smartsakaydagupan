@@ -165,6 +165,7 @@ const NotificationsPage = () => {
   // ============================================================
   const handleDirectBroadcast = async (e) => {
     e.preventDefault();
+    if (sending) return;
     setSending(true);
     setAlertMessage(null);
 

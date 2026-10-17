@@ -17,7 +17,7 @@ const authMiddleware = async (req, res, next) => {
       return apiResponse.error(res, 'User not found.', 401);
     }
     if (!user.isActive) {
-      return apiResponse.error(res, 'Account has been deactivated.', 403);
+      return apiResponse.error(res, 'Account has been suspended/deactivated by LGU Transport Authority.', 403, 'ACCOUNT_SUSPENDED');
     }
 
     req.user = user;

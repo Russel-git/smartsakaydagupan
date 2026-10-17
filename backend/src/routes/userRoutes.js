@@ -4,13 +4,13 @@ const userController = require('../controllers/userController');
 const { authMiddleware } = require('../middleware/auth');
 const rbac = require('../middleware/rbac');
 const validate = require('../middleware/validate');
-const { uploadEvidence } = require('../middleware/upload');
+const { uploadAvatar } = require('../middleware/upload');
 const { updateProfileSchema, changePasswordSchema } = require('../validators/authValidator');
 
 router.use(authMiddleware);
 router.get('/me', userController.getProfile);
 router.put('/me', validate(updateProfileSchema), userController.updateProfile);
-router.post('/me/photo', uploadEvidence.single('photo'), userController.uploadProfilePhoto);
+router.post('/me/photo', uploadAvatar.single('photo'), userController.uploadProfilePhoto);
 router.put('/me/password', validate(changePasswordSchema), userController.changePassword);
 router.delete('/me', userController.deleteMyAccount);
 router.get('/', rbac('admin', 'lgu'), userController.getAllUsers);

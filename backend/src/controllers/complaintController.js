@@ -372,16 +372,27 @@ const permanentDeleteComplaint = async (req, res, next) => {
     const complaint = await Complaint.findById(id);
     if (!complaint) return apiResponse.error(res, 'Complaint not found.', 404);
 
+    const isOwner = complaint.userId && complaint.userId.toString() === req.user._id.toString();
+    const isPrivileged = req.user.role === 'admin' || req.user.role === 'lgu';
+
+    if (!isOwner && !isPrivileged) {
+      return apiResponse.error(res, 'Not authorized to permanently delete this complaint.', 403);
+    }
+
+    if (complaint.status !== 'deleted' && !complaint.isArchived && !isPrivileged) {
+      return apiResponse.error(res, 'Only deleted (trash) or archived complaints can be permanently removed.', 400);
+    }
+
     await Complaint.findByIdAndDelete(id);
 
     await logAuditEvent(req, {
       action: 'COMPLAINT_PERMANENTLY_DELETED',
       resourceType: 'complaint',
       resourceId: id,
-      details: { subject: complaint.subject, plateNumber: complaint.vehiclePlateNumber },
+      details: { subject: complaint.subject, plateNumber: complaint.vehiclePlateNumber, deletedByRole: req.user.role },
     });
 
-    return apiResponse.success(res, null, 'Complaint report permanently deleted from database.');
+    return apiResponse.success(res, { id }, 'Complaint report permanently deleted from database.');
   } catch (error) { next(error); }
 };
 
@@ -697,6 +708,44 @@ const undoMyComplaint = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const rejectComplaint = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reason, remarks } = req.body;
+
+    const complaint = await Complaint.findById(id);
+    if (!complaint) return apiResponse.error(res, 'Complaint not found.', 404);
+
+    const fullReason = reason ? (remarks ? `${reason}: ${remarks}` : reason) : (remarks || 'Complaint rejected upon field inspection.');
+
+    complaint.status = 'rejected';
+    complaint.rejectionReason = fullReason;
+    complaint.adminNotes = fullReason;
+    complaint.rejectedBy = req.user._id;
+    complaint.rejectedAt = new Date();
+    await complaint.save();
+
+    await logAuditEvent(req, {
+      action: 'COMPLAINT_REJECTED',
+      resourceType: 'complaint',
+      resourceId: complaint._id,
+      details: { reason: fullReason, officer: req.user.badgeNumber || req.user.email },
+    });
+
+    if (complaint.userId) {
+      await Notification.create({
+        userId: complaint.userId,
+        title: '❌ Complaint Rejected by POSO',
+        message: `Your report "${complaint.subject}" was reviewed and rejected. Reason: ${fullReason}`,
+        type: 'complaint_update',
+        metadata: { complaintId: complaint._id, status: 'rejected' },
+      });
+    }
+
+    return apiResponse.success(res, complaint, 'Complaint rejected successfully.');
+  } catch (error) { next(error); }
+};
+
 module.exports = {
   createComplaint,
   uploadEvidencePhoto,
@@ -718,4 +767,5 @@ module.exports = {
   undoMyComplaint,
   restoreComplaint,
   permanentDeleteComplaint,
+  rejectComplaint,
 };

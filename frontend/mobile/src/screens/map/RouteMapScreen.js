@@ -15,10 +15,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useFeedback } from '../../contexts/FeedbackContext';
 import { Card, LoadingSpinner } from '../../components/common/SharedComponents';
-import { routesAPI } from '../../api/services';
-import { FONTS, SPACING, RADIUS } from '../../utils/constants';
+import { routesAPI, locationSharingAPI } from '../../api/services';
+import { FONTS, SPACING, RADIUS, API_BASE_URL } from '../../utils/constants';
+import LocationSharingModal from './LocationSharingModal';
 
 const GPS_ICON = require('../../../assets/gps_access_icon.png');
 
@@ -55,6 +57,7 @@ const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.45) => {
 
 const RouteMapScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
+  const { user, isAuthenticated } = useAuth();
   const { showWarning } = useFeedback();
   const webViewRef = useRef(null);
 
@@ -82,6 +85,10 @@ const RouteMapScreen = ({ navigation }) => {
   });
   const [locationStatus, setLocationStatus] = useState('Acquiring GPS...');
   const [recenterCount, setRecenterCount] = useState(0);
+
+  // Peer Location Sharing states
+  const [showLocationSharingModal, setShowLocationSharingModal] = useState(false);
+  const [peers, setPeers] = useState([]);
 
   // Real-time continuous location tracking
   useEffect(() => {
@@ -223,6 +230,51 @@ const RouteMapScreen = ({ navigation }) => {
     loadData();
   }, [activeTab]);
 
+  // Real-time synchronization for peer locations
+  const fetchPeerLocations = async () => {
+    if (!isAuthenticated || !user) return;
+    try {
+      const res = await locationSharingAPI.getPeerLocations();
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        setPeers(res.data.data);
+      }
+    } catch (e) {
+      // transient network ignore
+    }
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      setPeers([]);
+      return;
+    }
+
+    if (commuterLocation.lat && commuterLocation.lng) {
+      locationSharingAPI
+        .updateMyLocation({
+          lat: commuterLocation.lat,
+          lng: commuterLocation.lng,
+        })
+        .catch(() => {});
+    }
+    fetchPeerLocations();
+
+    const interval = setInterval(() => {
+      if (commuterLocation.lat && commuterLocation.lng) {
+        locationSharingAPI
+          .updateMyLocation({
+            lat: commuterLocation.lat,
+            lng: commuterLocation.lng,
+          })
+          .catch(() => {});
+      }
+      fetchPeerLocations();
+    }, 8000);
+
+    return () => clearInterval(interval);
+  }, [commuterLocation.lat, commuterLocation.lng, isAuthenticated, user]);
+
+
   // Compute live distances for terminals based on current commuterLocation
   const terminalsWithLiveDistance = busTerminals.map((t) => {
     const dist = calculateDistanceKm(commuterLocation.lat, commuterLocation.lng, t.lat, t.lng);
@@ -345,6 +397,8 @@ const RouteMapScreen = ({ navigation }) => {
 
     const terminalsJson = JSON.stringify(terminalsWithLiveDistance);
     const selectedRouteId = selectedItem?._id || '';
+    const peersJson = JSON.stringify(peers || []);
+    const apiHost = API_BASE_URL.replace(/\/api$/, '');
 
     return `
       <!DOCTYPE html>
@@ -641,6 +695,56 @@ const RouteMapScreen = ({ navigation }) => {
               .addTo(map);
           });
           }
+
+          // 4. Render Authorized Peer Commuters (Live Location Sharing with Profile Photos)
+          var peers = ${peersJson};
+          if (Array.isArray(peers) && peers.length > 0) {
+            peers.forEach(function(peer) {
+              if (typeof peer.lat !== 'number' || typeof peer.lng !== 'number') return;
+              var avatarSrc = peer.profilePhoto
+                ? (peer.profilePhoto.indexOf('http') === 0 ? peer.profilePhoto : '${apiHost}' + peer.profilePhoto)
+                : null;
+              var initialChar = (peer.name && peer.name.trim().length > 0) ? peer.name.trim().charAt(0).toUpperCase() : 'U';
+              var avatarContent = avatarSrc
+                ? '<img src="' + avatarSrc + '" style="width:34px; height:34px; border-radius:50%; object-fit:cover; border:2.5px solid #FFFFFF; background:#334155;" />'
+                : '<div style="width:34px; height:34px; border-radius:50%; background:#8B5CF6; color:#ffffff; font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:center; border:2.5px solid #FFFFFF; box-shadow:0 2px 8px rgba(0,0,0,0.3);">' + initialChar + '</div>';
+
+              var peerMarkerHtml = 
+                '<div style="position:relative; width:40px; height:40px; display:flex; align-items:center; justify-content:center;">' +
+                '<div style="position:absolute; width:100%; height:100%; border-radius:50%; background:rgba(139,92,246,0.35); animation:radar-sweep 2s infinite;"></div>' +
+                avatarContent +
+                '<div style="position:absolute; bottom:-12px; background:#0F172A; color:#FFFFFF; font-size:9px; font-weight:800; padding:1px 5px; border-radius:8px; border:1px solid #8B5CF6; white-space:nowrap; max-width:80px; overflow:hidden; text-overflow:ellipsis;">' +
+                (peer.name ? peer.name.split(' ')[0] : 'Peer') +
+                '</div>' +
+                '</div>';
+
+              var peerIcon = L.divIcon({
+                className: 'peer-commuter-pin',
+                html: peerMarkerHtml,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+              });
+
+              var peerPopupHtml = 
+                '<div style="font-family:-apple-system, BlinkMacSystemFont, sans-serif; min-width:180px;">' +
+                '<div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">' +
+                '<span style="background:#8B5CF6; color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:3px;">AUTHORIZED PEER</span>' +
+                '<span style="color:#10B981; font-weight:700; font-size:11px;">● LIVE</span>' +
+                '</div>' +
+                '<div style="font-size:13px; font-weight:800; color:#0f172a;">' + peer.name + '</div>' +
+                '<div style="font-size:11px; color:#64748b; margin-top:2px;">' + (peer.email || '') + '</div>' +
+                '<div style="font-family:monospace; font-size:10px; color:#8b5cf6; margin-top:4px;">' +
+                peer.lat.toFixed(5) + '°N, ' + peer.lng.toFixed(5) + '°E' +
+                '</div>' +
+                '</div>';
+
+              L.marker([peer.lat, peer.lng], { icon: peerIcon, zIndexOffset: 2500 })
+                .bindPopup(peerPopupHtml)
+                .addTo(map);
+            });
+          }
+
+
         </script>
       </body>
       </html>
@@ -682,6 +786,34 @@ const RouteMapScreen = ({ navigation }) => {
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {/* Peer Sharing Button */}
+          <TouchableOpacity
+            style={[
+              styles.peerShareBtn,
+              {
+                backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : '#EDE9FE',
+                borderColor: '#C4B5FD',
+              },
+            ]}
+            onPress={() => {
+              if (!isAuthenticated || !user) {
+                showWarning(
+                  'Sign In Required',
+                  'Please sign in to your commuter account to request or share live locations with peers.'
+                );
+                return;
+              }
+              setShowLocationSharingModal(true);
+            }}
+            activeOpacity={0.8}
+            accessibilityLabel="Peer Location Sharing"
+          >
+            <MaterialCommunityIcons name="account-group" size={15} color="#8B5CF6" />
+            <Text style={styles.peerShareBtnText}>
+              Peers {peers.length > 0 ? `(${peers.length})` : ''}
+            </Text>
+          </TouchableOpacity>
+
           {/* Top Arrow Button: Toggles down list of routes so user sees full map, or toggles up */}
           <TouchableOpacity
             style={[
@@ -712,16 +844,6 @@ const RouteMapScreen = ({ navigation }) => {
             >
               {isListCollapsed ? 'Show Routes' : 'Full Map'}
             </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tricycleQuickBtn, { backgroundColor: '#F59E0B15', borderColor: '#F59E0B40' }]}
-            onPress={() => navigation.navigate('PinpointFare')}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons name="account-arrow-right" size={15} color="#D97706" />
-            <Text style={styles.tricycleQuickBtnText}>Solo Ride</Text>
-            <MaterialCommunityIcons name="chevron-right" size={14} color="#D97706" />
           </TouchableOpacity>
         </View>
       </View>
@@ -755,7 +877,7 @@ const RouteMapScreen = ({ navigation }) => {
         )}
         {Platform.OS === 'web' ? (
           <iframe
-            key={`leaflet-map-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || 'all'}-${isListCollapsed ? 'full' : 'norm'}`}
+            key={`leaflet-map-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || 'all'}-${isListCollapsed ? 'full' : 'norm'}-${peers.length}`}
             title="Dagupan Transit Leaflet Map"
             srcDoc={generateLeafletHtml()}
             style={{ width: '100%', height: '100%', border: 'none' }}
@@ -763,7 +885,7 @@ const RouteMapScreen = ({ navigation }) => {
         ) : (
           <WebView
             ref={webViewRef}
-            key={`leaflet-webview-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || 'all'}-${isListCollapsed ? 'full' : 'norm'}`}
+            key={`leaflet-webview-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || 'all'}-${isListCollapsed ? 'full' : 'norm'}-${peers.length}`}
             originWhitelist={['*']}
             source={{ html: generateLeafletHtml() }}
             style={{ width: '100%', height: '100%', backgroundColor: '#0f172a' }}
@@ -997,6 +1119,13 @@ const RouteMapScreen = ({ navigation }) => {
           />
         </>
       )}
+
+      {/* Peer Location Sharing Modal */}
+      <LocationSharingModal
+        visible={showLocationSharingModal}
+        onClose={() => setShowLocationSharingModal(false)}
+        onRefreshPeers={fetchPeerLocations}
+      />
     </View>
   );
 };
@@ -1314,6 +1443,21 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.xs,
     marginTop: 1,
   },
+  peerShareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+  },
+  peerShareBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#8B5CF6',
+  },
+
 });
 
 export default RouteMapScreen;

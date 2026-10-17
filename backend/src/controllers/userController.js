@@ -1,7 +1,10 @@
+const path = require('path');
+const fs = require('fs');
 const User = require('../models/User');
 const Otp = require('../models/Otp');
 const apiResponse = require('../utils/apiResponse');
 const { logAuditEvent } = require('../utils/auditLogger');
+const { validateImageBuffer, generateSafeFilename } = require('../utils/fileSecurity');
 
 
 const getProfile = async (req, res, next) => {
@@ -181,6 +184,9 @@ const updateUserStatus = async (req, res, next) => {
     }
 
     user.isActive = Boolean(isActive);
+    if (!user.isActive) {
+      user.refreshToken = null;
+    }
     await user.save();
 
     await logAuditEvent(req, {
@@ -306,10 +312,41 @@ const deleteMyAccount = async (req, res, next) => {
 
 const uploadProfilePhoto = async (req, res, next) => {
   try {
-    if (!req.file) {
+    if (!req.file || !req.file.buffer) {
       return apiResponse.error(res, 'No image file uploaded.', 400);
     }
-    const fileUrl = `/uploads/complaints/${req.file.filename}`;
+
+    // Strictly validate image binary header (magic bytes) and detect polyglot scripts
+    const validation = validateImageBuffer(req.file.buffer);
+    if (!validation.valid) {
+      return apiResponse.error(res, validation.error, 400);
+    }
+
+    const avatarDir = path.join(__dirname, '../../uploads/avatars');
+    if (!fs.existsSync(avatarDir)) {
+      fs.mkdirSync(avatarDir, { recursive: true });
+    }
+
+    const safeFilename = generateSafeFilename(validation.ext);
+    const destinationPath = path.join(avatarDir, safeFilename);
+
+    await fs.promises.writeFile(destinationPath, req.file.buffer);
+
+    const fileUrl = `/uploads/avatars/${safeFilename}`;
+
+    // Get current user to delete old avatar file if present
+    const currentUser = await User.findById(req.user._id);
+    if (currentUser && currentUser.profilePhoto && currentUser.profilePhoto.startsWith('/uploads/avatars/')) {
+      const oldPath = path.join(__dirname, '../..', currentUser.profilePhoto);
+      try {
+        if (fs.existsSync(oldPath)) {
+          fs.unlinkSync(oldPath);
+        }
+      } catch (err) {
+        // Continue even if old avatar file cleanup fails
+      }
+    }
+
     const user = await User.findByIdAndUpdate(
       req.user._id,
       { profilePhoto: fileUrl },
@@ -319,7 +356,7 @@ const uploadProfilePhoto = async (req, res, next) => {
     return apiResponse.success(
       res,
       { user, profilePhoto: fileUrl, url: fileUrl },
-      'Profile photo updated successfully.'
+      'Profile photo updated securely.'
     );
   } catch (error) { next(error); }
 };

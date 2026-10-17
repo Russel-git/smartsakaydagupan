@@ -27,6 +27,12 @@ const LoginPage = () => {
   const { showSuccess, showError } = useToast();
   const navigate = useNavigate();
 
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search.includes("suspended=true")) {
+      setError("Your account has been suspended by LGU Transport Authority. You have been automatically logged out.");
+    }
+  }, []);
+
   // ============================================================
   // LOGIN
   // ============================================================

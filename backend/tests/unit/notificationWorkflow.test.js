@@ -28,6 +28,8 @@ describe('Notification Schema & Broadcast Approval Workflow', () => {
     expect(Notification.schema.path('rejectionReason')).toBeDefined();
     expect(Notification.schema.path('severity')).toBeDefined();
     expect(Notification.schema.path('locationArea')).toBeDefined();
+    expect(Notification.schema.path('deletedForUsers')).toBeDefined();
+    expect(Notification.schema.path('readByUsers')).toBeDefined();
   });
 
   it('validates roadAlertRequestSchema for POSO road drafts', () => {
@@ -51,5 +53,17 @@ describe('Notification Schema & Broadcast Approval Workflow', () => {
       reason: 'Issue already resolved by traffic enforcers.',
     });
     expect(valid.error).toBeUndefined();
+  });
+
+  it('supports deletedForUsers array updates for broadcast hide/delete logic', () => {
+    const notif = new Notification({
+      title: 'City Advisory',
+      message: 'Transit update',
+      type: 'broadcast',
+      deletedForUsers: [],
+      readByUsers: [],
+    });
+    expect(Array.isArray(notif.deletedForUsers)).toBe(true);
+    expect(Array.isArray(notif.readByUsers)).toBe(true);
   });
 });

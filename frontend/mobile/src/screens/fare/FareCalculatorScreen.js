@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,8 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   Platform,
-  Alert,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Card, LoadingSpinner } from '../../components/common/SharedComponents';
 import { faresAPI, routesAPI } from '../../api/services';
@@ -49,16 +47,6 @@ const FareCalculatorScreen = () => {
   const [boardingStopIndex, setBoardingStopIndex] = useState(null);
   const [dropoffStopIndex, setDropoffStopIndex] = useState(null);
 
-  // Live Alight / Ride Tracking Meter State
-  const [isLiveMeterActive, setIsLiveMeterActive] = useState(false);
-  const [liveMeterDistanceKm, setLiveMeterDistanceKm] = useState(0);
-  const [liveMeterDurationSec, setLiveMeterDurationSec] = useState(0);
-  const [hasAlighted, setHasAlighted] = useState(false);
-
-  const lastLocationRef = useRef(null);
-  const locationSubRef = useRef(null);
-  const timerIntervalRef = useRef(null);
-
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -83,19 +71,13 @@ const FareCalculatorScreen = () => {
       setLoading(false);
     };
     loadData();
-
-    return () => {
-      stopLiveMeter();
-    };
   }, []);
 
   const handleSelectRoute = (route) => {
     setSelectedRoute(route);
     setBoardingStopIndex(null);
     setDropoffStopIndex(null);
-    if (!isLiveMeterActive) {
-      setTripDistanceKm(Math.min(route.distanceKm || 4, 4.0));
-    }
+    setTripDistanceKm(Math.min(route.distanceKm || 4, 4.0));
   };
 
   // Stop selection distance calculation
@@ -131,71 +113,7 @@ const FareCalculatorScreen = () => {
     }
   };
 
-  // Live Alight / Meter Tracking
-  const startLiveMeter = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('GPS Permission Required', 'Please enable location permissions to use live ride tracking.');
-        return;
-      }
 
-      setLiveMeterDistanceKm(0);
-      setLiveMeterDurationSec(0);
-      setHasAlighted(false);
-      setIsLiveMeterActive(true);
-
-      const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      lastLocationRef.current = cur?.coords ? { lat: cur.coords.latitude, lng: cur.coords.longitude } : null;
-
-      timerIntervalRef.current = setInterval(() => {
-        setLiveMeterDurationSec((prev) => prev + 1);
-      }, 1000);
-
-      locationSubRef.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 8 },
-        (loc) => {
-          if (!loc?.coords) return;
-          const nextLoc = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-          if (lastLocationRef.current) {
-            const stepDist = calculateDistanceKm(
-              lastLocationRef.current.lat,
-              lastLocationRef.current.lng,
-              nextLoc.lat,
-              nextLoc.lng
-            );
-            if (stepDist && stepDist > 0.005) {
-              setLiveMeterDistanceKm((prev) => {
-                const updated = Number((prev + stepDist).toFixed(2));
-                setTripDistanceKm(updated);
-                return updated;
-              });
-            }
-          }
-          lastLocationRef.current = nextLoc;
-        }
-      );
-    } catch (e) {
-      console.warn('Live meter error:', e);
-    }
-  };
-
-  const stopLiveMeter = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-    if (locationSubRef.current) {
-      locationSubRef.current.remove();
-      locationSubRef.current = null;
-    }
-    setIsLiveMeterActive(false);
-  };
-
-  const handleAlightNow = () => {
-    stopLiveMeter();
-    setHasAlighted(true);
-  };
 
   // LTFRB Official Calculation Engine
   const computeFare = (distance) => {
@@ -245,11 +163,7 @@ const FareCalculatorScreen = () => {
 
   if (loading) return <LoadingSpinner text="Loading routes..." />;
 
-  const formatSec = (totalSeconds) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
+
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
@@ -381,64 +295,9 @@ const FareCalculatorScreen = () => {
           })}
         </View>
 
-        {/* 4. Live Ride Meter Option (Board Jeepney -> Alight Upon Arrival) */}
-        <Card style={[styles.liveMeterBanner, { borderColor: isLiveMeterActive ? '#10B981' : colors.border }]}>
-          <View style={styles.liveMeterHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-              <MaterialCommunityIcons
-                name={isLiveMeterActive ? 'record-circle' : 'crosshairs-gps'}
-                size={20}
-                color={isLiveMeterActive ? '#EF4444' : colors.primary}
-              />
-              <Text style={[styles.liveMeterTitle, { color: colors.textPrimary }]}>
-                {isLiveMeterActive
-                  ? 'Ride In Progress • Live Odometer Active'
-                  : hasAlighted
-                  ? 'Trip Completed • Alighted'
-                  : 'Live "Get Off" Ride Meter'}
-              </Text>
-            </View>
-            {isLiveMeterActive && (
-              <View style={styles.liveTimerBadge}>
-                <Text style={styles.liveTimerText}>{formatSec(liveMeterDurationSec)}</Text>
-              </View>
-            )}
-          </View>
 
-          <Text style={[styles.liveMeterDesc, { color: colors.textSecondary }]}>
-            {isLiveMeterActive
-              ? `Currently tracking your trip along ${selectedRoute?.name || 'this route'}. Tap "Alight / Get Off" when getting off to see your final payable fare.`
-              : 'Hop on a jeepney and tap "Board Jeepney Now". When you reach your stop and get off, tap "Alight / Get Off" to see the exact actual fare to pay the driver.'}
-          </Text>
 
-          <View style={styles.liveMeterActionRow}>
-            {!isLiveMeterActive ? (
-              <TouchableOpacity
-                style={[styles.meterStartBtn, { backgroundColor: '#10B981' }]}
-                onPress={startLiveMeter}
-                activeOpacity={0.85}
-              >
-                <MaterialCommunityIcons name="bus" size={18} color="#FFFFFF" />
-                <Text style={styles.meterStartBtnText}>
-                  {hasAlighted ? 'Board Another Jeepney' : 'Board Jeepney Now (Track Ride)'}
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.meterStopBtn, { backgroundColor: '#EF4444' }]}
-                onPress={handleAlightNow}
-                activeOpacity={0.85}
-              >
-                <MaterialCommunityIcons name="bus-stop" size={18} color="#FFFFFF" />
-                <Text style={styles.meterStopBtnText}>
-                  I'm Getting Off Now (Alight & View Fare)
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </Card>
-
-        {/* 5. Trip Distance Controller */}
+        {/* 4. Trip Distance Controller */}
         <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>
           4. Trip Distance: {tripDistanceKm.toFixed(1)} km
         </Text>
@@ -590,11 +449,7 @@ const FareCalculatorScreen = () => {
                 { color: vehicleType === 'modern' ? '#0284C7' : '#166534' },
               ]}
             >
-              {hasAlighted
-                ? 'ACTUAL FARE UPON ALIGHTING'
-                : isLiveMeterActive
-                ? 'CURRENT METERED TRIP FARE'
-                : 'CALCULATED COMMUTER FARE'}
+              CALCULATED COMMUTER FARE
             </Text>
           </View>
 
@@ -609,9 +464,7 @@ const FareCalculatorScreen = () => {
           </Text>
 
           <Text style={[styles.actualAlightingLabel, { color: colors.textSecondary }]}>
-            {hasAlighted
-              ? 'Exact amount to hand to the jeepney driver now'
-              : 'Amount to pay driver upon getting off the jeepney'}
+            Amount to pay driver upon getting off the jeepney
           </Text>
 
           {currentFare.isDiscounted && (
@@ -773,70 +626,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     minHeight: 38,
   },
-  liveMeterBanner: {
-    padding: SPACING.lg,
-    borderWidth: 1.5,
-    borderRadius: RADIUS.lg,
-    marginBottom: SPACING.xxl,
-  },
-  liveMeterHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.xs,
-  },
-  liveMeterTitle: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '800',
-  },
-  liveTimerBadge: {
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: RADIUS.full,
-  },
-  liveTimerText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-  },
-  liveMeterDesc: {
-    fontSize: 11,
-    lineHeight: 16,
-    marginBottom: SPACING.md,
-  },
-  liveMeterActionRow: {
-    flexDirection: 'row',
-  },
-  meterStartBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: RADIUS.md,
-  },
-  meterStartBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: FONTS.sizes.sm,
-  },
-  meterStopBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: RADIUS.md,
-  },
-  meterStopBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: FONTS.sizes.sm,
-  },
+
   distanceChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

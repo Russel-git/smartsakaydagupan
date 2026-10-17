@@ -1,0 +1,11 @@
+{
+  "watch": ["src"],
+  "ext": "js,json",
+  "ignore": [
+    "src/ai_model/model_trainer/**",
+    "**/*.gguf",
+    "**/*.bin",
+    "uploads/**",
+    "node_modules/**"
+  ]
+}

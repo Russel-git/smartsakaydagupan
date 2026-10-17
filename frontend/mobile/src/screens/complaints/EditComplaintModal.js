@@ -17,6 +17,8 @@ import { useFeedback } from '../../contexts/FeedbackContext';
 import { complaintsAPI, routesAPI } from '../../api/services';
 import { FONTS, SPACING, RADIUS, SHADOWS, COMPLAINT_CATEGORIES } from '../../utils/constants';
 
+const JEEPNEY_PLATE_REGEX = /^[A-Z]{3}[ -]?[0-9]{3,4}$/i;
+
 const EditComplaintModal = ({ visible, complaint, onClose, onSuccess }) => {
   const { colors, isDark } = useTheme();
   const { showSuccess, showError, showWarning } = useFeedback();
@@ -71,6 +73,14 @@ const EditComplaintModal = ({ visible, complaint, onClose, onSuccess }) => {
     if (!form.category) e.category = 'Select a violation category';
     if (!form.subject.trim()) e.subject = 'Subject is required';
     if (!form.description.trim()) e.description = 'Description is required';
+
+    const cleanPlate = (form.vehiclePlateNumber || '').trim().toUpperCase();
+    if (!cleanPlate) {
+      e.vehiclePlateNumber = 'Vehicle plate number is required';
+    } else if (!JEEPNEY_PLATE_REGEX.test(cleanPlate)) {
+      e.vehiclePlateNumber = 'Valid format: ABC 123 or ABC 1234 (Philippine Jeepney)';
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -209,25 +219,32 @@ const EditComplaintModal = ({ visible, complaint, onClose, onSuccess }) => {
 
             {/* Plate Number */}
             <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: 14 }]}>
-              Vehicle Plate / Body Number
+              Vehicle Plate / Body Number <Text style={styles.requiredMark}>*</Text>
             </Text>
             <TextInput
               style={[
                 styles.textInput,
                 {
                   backgroundColor: colors.background,
-                  borderColor: colors.border,
+                  borderColor: errors.vehiclePlateNumber ? '#EF4444' : colors.border,
                   color: colors.textPrimary,
                   fontFamily: 'monospace',
                 },
               ]}
               value={form.vehiclePlateNumber}
               onChangeText={(text) => updateField('vehiclePlateNumber', text.toUpperCase())}
-              placeholder="e.g. ABC 1234 or Dagupan Solo Ride #421"
+              placeholder="e.g. ABC 123 or ABC 1234"
               placeholderTextColor={colors.textMuted}
               autoCapitalize="characters"
+              maxLength={8}
               editable={isEditable}
             />
+            {Boolean(errors.vehiclePlateNumber) && (
+              <Text style={styles.errorText}>{errors.vehiclePlateNumber}</Text>
+            )}
+            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 3 }}>
+              Philippine Jeepney Format: ABC 123 (Traditional) or ABC 1234 (Modern / Traditional)
+            </Text>
 
             {/* Route */}
             {routes.length > 0 && (

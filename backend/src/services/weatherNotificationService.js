@@ -98,7 +98,7 @@ const checkAndNotifyWeather = async (force = false) => {
       createdAt: { $lt: new Date(Date.now() - WEATHER_EXPIRY_MS) },
     }).catch((e) => console.warn('[WeatherAutoNotifier] Auto-cleanup warning:', e.message));
 
-    // 1. Create broadcast notification (userId: null)
+    // 1. Create single broadcast notification (userId: null)
     await Notification.create({
       userId: null,
       title: alertTitle,
@@ -112,50 +112,26 @@ const checkAndNotifyWeather = async (force = false) => {
         windKph,
         condition: current.conditionText || current.condition,
         rainChance,
+        precipitation: current.precipitation ?? 0,
         severity: alertSeverity,
         dagupanCoordinates: { lat: 16.0433, lng: 120.3397 },
         source: 'Open-Meteo Dagupan Telemetry (16.0433° N, 120.3397° E)',
       },
     });
 
-    // 2. Deliver individualized notifications to all registered commuters for unread counter badge
-    const commuters = await User.find({ role: 'commuter', isActive: true }).select('_id');
-    if (commuters.length > 0) {
-      const userNotifications = commuters.map((commuter) => ({
-        userId: commuter._id,
-        title: alertTitle,
-        message: alertMessage,
-        type: 'weather_alert',
-        category: 'weather_updates',
-        expiresAt: weatherExpiresAt,
-        metadata: {
-          tempC,
-          feelsLikeC,
-          windKph,
-          condition: current.conditionText || current.condition,
-          rainChance,
-          precipitation: current.precipitation ?? 0,
-          severity: alertSeverity,
-          dagupanCoordinates: { lat: 16.0433, lng: 120.3397 },
-        },
-      }));
-      await Notification.insertMany(userNotifications);
-    }
-
     lastWeatherAlertSent = {
       title: alertTitle,
       message: alertMessage,
       sentAt: new Date(),
-      recipients: commuters.length,
     };
 
-    console.log(`[WeatherAutoNotifier] Broadcasted automated weather notification: "${alertTitle}" to ${commuters.length} commuters.`);
+    console.log(`[WeatherAutoNotifier] Broadcasted automated weather notification: "${alertTitle}" to commuters.`);
 
     return {
       notified: true,
       title: alertTitle,
       message: alertMessage,
-      recipients: commuters.length,
+      broadcast: true,
     };
   } catch (error) {
     console.error('[WeatherAutoNotifier] Error checking weather alerts:', error.message);

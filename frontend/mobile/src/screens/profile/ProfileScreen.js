@@ -9,9 +9,12 @@ import {
   Platform,
   StatusBar,
   useWindowDimensions,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { useFeedback } from "../../contexts/FeedbackContext";
@@ -21,7 +24,7 @@ import Input from "../../components/common/Input";
 import ConfirmDialogModal from "../../components/common/ConfirmDialogModal";
 import DeleteAccountModal from "../../components/profile/DeleteAccountModal";
 import { usersAPI } from "../../api/services";
-import { FONTS, SPACING, RADIUS } from "../../utils/constants";
+import { FONTS, SPACING, RADIUS, API_BASE_URL } from "../../utils/constants";
 import { getInitials } from "../../utils/helpers";
 
 const ProfileScreen = ({ navigation }) => {
@@ -44,8 +47,72 @@ const ProfileScreen = ({ navigation }) => {
     lastName: user?.lastName || "",
   });
   const [loading, setLoading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const handlePickPhoto = async () => {
+    try {
+      if (Platform.OS !== "web") {
+        const permissionResult =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permissionResult.granted) {
+          Alert.alert(
+            "Permission Required",
+            "Photo library access is needed to select a profile photo."
+          );
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: Platform.OS !== "web",
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+
+      if (result.canceled || !result.assets || !result.assets[0]) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      const uri = asset.uri;
+
+      setUploadingPhoto(true);
+      const formData = new FormData();
+      const filename = asset.fileName || `avatar_${Date.now()}.jpg`;
+      const mimeType = asset.mimeType || "image/jpeg";
+
+      if (Platform.OS === "web") {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        formData.append("photo", blob, filename);
+      } else {
+        formData.append("photo", {
+          uri: Platform.OS === "ios" ? uri.replace("file://", "") : uri,
+          name: filename,
+          type: mimeType,
+        });
+      }
+
+      await usersAPI.uploadPhoto(formData);
+      await refreshProfile();
+      showSuccess(
+        "Photo Updated",
+        "Your profile photo has been securely updated."
+      );
+    } catch (err) {
+      showError(
+        "Upload Failed",
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to update profile photo."
+      );
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   const handleSave = async () => {
     const lettersRegex = /^[A-Za-z][A-Za-z\s.'’\-]*[A-Za-z.]$/;
@@ -120,10 +187,33 @@ const ProfileScreen = ({ navigation }) => {
           { backgroundColor: colors.primary, paddingTop: topInset + 16 },
         ]}
       >
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatarText}>
-            {getInitials(user?.firstName, user?.lastName)}
-          </Text>
+        <View style={styles.avatarContainer}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handlePickPhoto}
+            disabled={uploadingPhoto}
+            style={styles.avatarCircle}
+          >
+            {uploadingPhoto ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : user?.profilePhoto ? (
+              <Image
+                source={{
+                  uri: user.profilePhoto.startsWith("http")
+                    ? user.profilePhoto
+                    : `${API_BASE_URL.replace(/\/api$/, "")}${user.profilePhoto}`,
+                }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {getInitials(user?.firstName, user?.lastName)}
+              </Text>
+            )}
+            <View style={styles.cameraBadge}>
+              <MaterialCommunityIcons name="camera" size={14} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
         </View>
         <Text style={styles.userName}>
           {user?.firstName} {user?.lastName}
@@ -577,14 +667,39 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },
+  avatarContainer: {
+    position: "relative",
+    marginBottom: SPACING.md,
+  },
   avatarCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: "rgba(255,255,255,0.25)",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: SPACING.md,
+    borderWidth: 2.5,
+    borderColor: "#FFFFFF",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 43,
+  },
+  cameraBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: "#2563EB",
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    elevation: 3,
   },
   avatarText: { fontSize: 28, fontWeight: "800", color: "#FFFFFF" },
   userName: { fontSize: FONTS.sizes.xxl, fontWeight: "800", color: "#FFFFFF" },

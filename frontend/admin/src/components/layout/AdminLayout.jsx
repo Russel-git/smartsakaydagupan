@@ -550,7 +550,7 @@ const AdminLayout = () => {
         <main
           className="content-body"
           style={{
-            backgroundColor: colors.white,
+            backgroundColor: colors.background,
             color: colors.textPrimary,
           }}
         >

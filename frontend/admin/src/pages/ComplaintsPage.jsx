@@ -12,6 +12,7 @@ import {
   PlusCircle,
   CheckCircle,
   Filter,
+  XCircle,
 } from "lucide-react";
 
 import { complaintsAPI } from "../api/services";
@@ -23,6 +24,7 @@ import DeleteReasonModal from "../components/complaints/DeleteReasonModal";
 import LguActionModal from "../components/complaints/LguActionModal";
 import PosoEndorseModal from "../components/complaints/PosoEndorseModal";
 import PosoFieldReportModal from "../components/complaints/PosoFieldReportModal";
+import PosoRejectModal from "../components/complaints/PosoRejectModal";
 
 const getImageUrl = (photoUrl) => {
   if (!photoUrl) return "";
@@ -76,6 +78,10 @@ const ComplaintsPage = () => {
   const [endorseModalOpen, setEndorseModalOpen] = useState(false);
   const [targetForEndorse, setTargetForEndorse] = useState(null);
   const [endorseLoading, setEndorseLoading] = useState(false);
+
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [targetForReject, setTargetForReject] = useState(null);
+  const [rejectLoading, setRejectLoading] = useState(false);
 
   const [fieldReportModalOpen, setFieldReportModalOpen] = useState(false);
   const [fieldReportLoading, setFieldReportLoading] = useState(false);
@@ -157,6 +163,43 @@ const ComplaintsPage = () => {
       );
     } finally {
       setEndorseLoading(false);
+    }
+  };
+
+  // POSO → Reject Complaint
+  const handleOpenReject = (complaint) => {
+    setTargetForReject(complaint);
+    setRejectModalOpen(true);
+  };
+
+  const handleConfirmReject = async (complaint, reason, remarks) => {
+    setRejectLoading(true);
+    try {
+      await complaintsAPI.rejectComplaint(complaint._id, {
+        reason,
+        remarks: (remarks || "").trim(),
+      });
+
+      showSuccess(
+        "Complaint Rejected",
+        `Report "${complaint.subject}" has been rejected (${reason}).`,
+      );
+
+      setRejectModalOpen(false);
+      setTargetForReject(null);
+
+      if (selectedComplaint?._id === complaint._id) {
+        setSelectedComplaint(null);
+      }
+
+      fetchComplaints();
+    } catch (err) {
+      showError(
+        "Rejection Failed",
+        err.response?.data?.message || "Could not reject complaint.",
+      );
+    } finally {
+      setRejectLoading(false);
     }
   };
 
@@ -400,6 +443,21 @@ const ComplaintsPage = () => {
           >
             {statusDot("#DC2626")}
             Discarded
+          </span>
+        );
+
+      case "rejected":
+        return (
+          <span
+            style={{
+              ...baseStyle,
+              backgroundColor: "rgba(239, 68, 68, 0.15)",
+              color: "#DC2626",
+              border: "1px solid rgba(239, 68, 68, 0.3)",
+            }}
+          >
+            {statusDot("#DC2626")}
+            Rejected by POSO
           </span>
         );
 
@@ -939,28 +997,50 @@ const ComplaintsPage = () => {
                             <Eye size={13} />
                           </button>
 
-                          {/* POSO VERIFY & ENDORSE */}
+                          {/* POSO VERIFY & ENDORSE OR REJECT */}
                           {isPoso &&
                             (c.status === "pending" ||
                               c.status === "under_review") && (
-                              <button
-                                onClick={() => handleOpenEndorse(c)}
-                                className="btn btn-sm"
-                                style={{
-                                  backgroundColor: "#D97706",
-                                  color: "#FFFFFF",
-                                  fontSize: "11px",
-                                  padding: "5px 9px",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "5px",
-                                  fontWeight: "600",
-                                }}
-                                title="Verify on road and endorse to Dagupan LGU"
-                              >
-                                <Send size={12} />
-                                <span>Verify & Endorse</span>
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleOpenEndorse(c)}
+                                  className="btn btn-sm"
+                                  style={{
+                                    backgroundColor: "#D97706",
+                                    color: "#FFFFFF",
+                                    fontSize: "11px",
+                                    padding: "5px 9px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    fontWeight: "600",
+                                  }}
+                                  title="Verify on road and endorse to Dagupan LGU"
+                                >
+                                  <Send size={12} />
+                                  <span>Verify & Endorse</span>
+                                </button>
+
+                                <button
+                                  onClick={() => handleOpenReject(c)}
+                                  className="btn btn-sm"
+                                  style={{
+                                    backgroundColor: "rgba(239, 68, 68, 0.15)",
+                                    color: "#EF4444",
+                                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                                    fontSize: "11px",
+                                    padding: "5px 9px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    fontWeight: "600",
+                                  }}
+                                  title="Reject commuter complaint"
+                                >
+                                  <XCircle size={12} />
+                                  <span>Reject</span>
+                                </button>
+                              </>
                             )}
 
                           {/* LGU ACTIONS (Action Taken & Terminate) */}
@@ -1387,27 +1467,49 @@ const ComplaintsPage = () => {
               style={{ justifyContent: "space-between" }}
             >
               <div style={{ display: "flex", gap: "8px" }}>
-                {/* POSO IN-MODAL ENDORSE BUTTON */}
+                {/* POSO IN-MODAL ENDORSE & REJECT BUTTONS */}
                 {isPoso &&
                   (selectedComplaint.status === "pending" ||
                     selectedComplaint.status === "under_review") && (
-                    <button
-                      onClick={() => {
-                        handleOpenEndorse(selectedComplaint);
-                        setSelectedComplaint(null);
-                      }}
-                      className="btn"
-                      style={{
-                        backgroundColor: "#D97706",
-                        color: "#FFFFFF",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      <Send size={14} />
-                      <span>Verify & Endorse to LGU</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={() => {
+                          const target = selectedComplaint;
+                          setSelectedComplaint(null);
+                          handleOpenEndorse(target);
+                        }}
+                        className="btn"
+                        style={{
+                          backgroundColor: "#D97706",
+                          color: "#FFFFFF",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <Send size={14} />
+                        <span>Verify & Endorse to LGU</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const target = selectedComplaint;
+                          setSelectedComplaint(null);
+                          handleOpenReject(target);
+                        }}
+                        className="btn"
+                        style={{
+                          backgroundColor: "#EF4444",
+                          color: "#FFFFFF",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <XCircle size={14} />
+                        <span>Reject Complaint</span>
+                      </button>
+                    </>
                   )}
 
                 {/* LGU IN-MODAL ACTIONS */}
@@ -1474,6 +1576,18 @@ const ComplaintsPage = () => {
         }}
         onConfirm={handleConfirmEndorse}
         loading={endorseLoading}
+      />
+
+      {/* POSO REJECT MODAL */}
+      <PosoRejectModal
+        isOpen={rejectModalOpen}
+        complaint={targetForReject}
+        onClose={() => {
+          setRejectModalOpen(false);
+          setTargetForReject(null);
+        }}
+        onConfirm={handleConfirmReject}
+        loading={rejectLoading}
       />
 
       {/* POSO DIRECT FIELD REPORT MODAL */}

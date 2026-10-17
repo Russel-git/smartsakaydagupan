@@ -85,4 +85,35 @@ describe('Complaint Schema & Validation Rules', () => {
     const invalid = lguActionSchema.validate({});
     expect(invalid.error).toBeDefined();
   });
+
+  it('enforces required and legitimate Philippine jeepney plate number format in createComplaintSchema', () => {
+    const baseValid = {
+      category: 'overcharging',
+      subject: 'Overcharging on Perez Blvd',
+      description: 'The jeepney driver collected twenty pesos instead of the approved matrix.',
+    };
+
+    // Valid formats for traditional and modern jeepneys (3 letters + 3 or 4 numbers)
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: 'ABC 1234' }).error).toBeUndefined();
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: 'ABC-1234' }).error).toBeUndefined();
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: 'ABC1234' }).error).toBeUndefined();
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: 'ABC 123' }).error).toBeUndefined();
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: 'ABC-123' }).error).toBeUndefined();
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: 'ABC123' }).error).toBeUndefined();
+
+    // Required check: missing or empty plate
+    expect(createComplaintSchema.validate({ ...baseValid }).error).toBeDefined();
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: '' }).error).toBeDefined();
+
+    // Non-jeepney formats (motorcycles, tricycles, random strings) must fail
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: 'AB 12345' }).error).toBeDefined(); // motorcycle/tricycle
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: 'TC 567' }).error).toBeDefined(); // 2-letter tricycle
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: '1234 AB' }).error).toBeDefined(); // old motorcycle format
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: 'DAG 12' }).error).toBeDefined(); // 2-digit body number
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: 'ABC 12345' }).error).toBeDefined(); // 5 digits
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: 'asdfghjk' }).error).toBeDefined();
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: '123456' }).error).toBeDefined();
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: 'randomletter' }).error).toBeDefined();
+    expect(createComplaintSchema.validate({ ...baseValid, vehiclePlateNumber: '111111' }).error).toBeDefined();
+  });
 });

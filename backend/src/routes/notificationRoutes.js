@@ -19,6 +19,8 @@ router.use(authMiddleware);
 router.get('/unread-count', notificationController.getUnreadCount);
 router.put('/:id/read', notificationController.markAsRead);
 router.put('/read-all', notificationController.markAllAsRead);
+router.delete('/delete-all-read', notificationController.deleteAllRead);
+router.delete('/:id', notificationController.deleteNotification);
 
 // Alert feed for Admin, LGU, POSO dashboards
 router.get('/feed', rbac('admin', 'lgu', 'poso'), notificationController.getAlertFeed);

@@ -27,10 +27,19 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && !window.location.pathname.includes('/login')) {
+    const isSuspendedOrDeactivated =
+      error.response?.status === 403 &&
+      (error.response?.data?.message?.toLowerCase().includes('deactivated') ||
+       error.response?.data?.message?.toLowerCase().includes('suspended') ||
+       error.response?.data?.error === 'ACCOUNT_SUSPENDED');
+
+    if (
+      (error.response?.status === 401 || isSuspendedOrDeactivated) &&
+      !window.location.pathname.includes('/login')
+    ) {
       localStorage.removeItem('smartsakay_admin_token');
       localStorage.removeItem('smartsakay_admin_user');
-      window.location.href = '/login';
+      window.location.href = isSuspendedOrDeactivated ? '/login?suspended=true' : '/login';
     }
     return Promise.reject(error);
   }

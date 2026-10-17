@@ -23,6 +23,7 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const terminalRoutes = require("./routes/terminalRoutes");
 const themeRoutes = require("./routes/themeRoutes");
+const locationSharingRoutes = require("./routes/locationSharingRoutes");
 
 const app = express();
 
@@ -105,6 +106,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/terminals", terminalRoutes);
 app.use("/api/theme", themeRoutes);
+app.use("/api/location-sharing", locationSharingRoutes);
 
 // 404 handler
 app.use((req, res) => {

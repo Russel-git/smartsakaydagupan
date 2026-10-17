@@ -23,6 +23,7 @@ const Profile = () => {
   const { admin, logout, updateUser } = useAuth();
   const {
     colors,
+    isDark,
     theme,
     themeMode,
     changeTheme,
@@ -208,7 +209,7 @@ const Profile = () => {
       style={{
         width: "100%",
         minHeight: "100%",
-        backgroundColor: "#FFFFFF",
+        backgroundColor: colors.background,
         color: colors.textPrimary,
         padding: "24px",
         boxSizing: "border-box",
@@ -251,12 +252,14 @@ const Profile = () => {
 
       <div
         style={{
-          backgroundColor: "#FFFFFF",
+          backgroundColor: colors.surface,
           border: `1px solid ${colors.border}`,
           borderRadius: "12px",
           padding: "24px",
           marginBottom: "20px",
-          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
+          boxShadow: isDark
+            ? "0 4px 20px rgba(0, 0, 0, 0.25)"
+            : "0 2px 8px rgba(0, 0, 0, 0.04)",
         }}
       >
         <div
@@ -313,8 +316,10 @@ const Profile = () => {
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: uploadingPhoto ? "not-allowed" : "pointer",
-                boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
-                border: "2px solid #FFFFFF",
+                boxShadow: isDark
+                  ? "0 2px 6px rgba(0,0,0,0.6)"
+                  : "0 2px 6px rgba(0,0,0,0.3)",
+                border: `2px solid ${colors.surface}`,
                 transition: "transform 0.15s ease",
               }}
               title="Upload new profile picture"
@@ -396,9 +401,9 @@ const Profile = () => {
               gap: "6px",
               padding: "7px 11px",
               borderRadius: "7px",
-              backgroundColor: "#FFFFFF",
-              color: colors.success,
-              border: `1px solid ${colors.success}`,
+              backgroundColor: isDark ? "rgba(34, 197, 94, 0.15)" : "#FFFFFF",
+              color: isDark ? "#4ADE80" : colors.success,
+              border: `1px solid ${isDark ? "rgba(34, 197, 94, 0.35)" : colors.success}`,
               fontSize: "12px",
               fontWeight: "600",
             }}
@@ -427,10 +432,13 @@ const Profile = () => {
 
         <div
           style={{
-            backgroundColor: "#FFFFFF",
+            backgroundColor: colors.surface,
             border: `1px solid ${colors.border}`,
             borderRadius: "12px",
             padding: "22px",
+            boxShadow: isDark
+              ? "0 4px 20px rgba(0, 0, 0, 0.25)"
+              : "0 2px 8px rgba(0, 0, 0, 0.04)",
           }}
         >
           <div
@@ -466,6 +474,7 @@ const Profile = () => {
               value={admin?.firstName || "—"}
               icon={<User size={16} />}
               colors={colors}
+              isDark={isDark}
             />
 
             <InfoField
@@ -473,6 +482,7 @@ const Profile = () => {
               value={admin?.lastName || "—"}
               icon={<User size={16} />}
               colors={colors}
+              isDark={isDark}
             />
 
             <InfoField
@@ -480,6 +490,7 @@ const Profile = () => {
               value={admin?.email || "—"}
               icon={<Mail size={16} />}
               colors={colors}
+              isDark={isDark}
             />
 
             <InfoField
@@ -487,6 +498,7 @@ const Profile = () => {
               value={getRoleName()}
               icon={<Shield size={16} />}
               colors={colors}
+              isDark={isDark}
             />
           </div>
         </div>
@@ -497,10 +509,13 @@ const Profile = () => {
 
         <div
           style={{
-            backgroundColor: "#FFFFFF",
+            backgroundColor: colors.surface,
             border: `1px solid ${colors.border}`,
             borderRadius: "12px",
             padding: "22px",
+            boxShadow: isDark
+              ? "0 4px 20px rgba(0, 0, 0, 0.25)"
+              : "0 2px 8px rgba(0, 0, 0, 0.04)",
           }}
         >
           <div
@@ -580,12 +595,22 @@ const Profile = () => {
                       padding: "10px",
                       borderRadius: "8px",
 
-                      border: `1px solid ${
+                      border: `1.5px solid ${
                         active ? colors.primary : colors.border
                       }`,
 
                       backgroundColor:
-                        saving || isThemeChanging ? "#F3F3F3" : "#FFFFFF",
+                        saving || isThemeChanging
+                          ? isDark
+                            ? "rgba(15, 23, 42, 0.5)"
+                            : "#F3F3F3"
+                          : active
+                          ? isDark
+                            ? "rgba(249, 115, 22, 0.15)"
+                            : "rgba(249, 115, 22, 0.06)"
+                          : isDark
+                          ? "rgba(15, 23, 42, 0.7)"
+                          : "#FFFFFF",
 
                       color: colors.textPrimary,
 
@@ -595,6 +620,7 @@ const Profile = () => {
                       textAlign: "left",
 
                       opacity: saving ? 0.7 : 1,
+                      transition: "all 0.15s ease",
                     }}
                   >
                     <span
@@ -604,10 +630,9 @@ const Profile = () => {
                         minWidth: "18px",
                         borderRadius: "50%",
                         backgroundColor: item.color,
-
-                        border: active
-                          ? `2px solid ${colors.textPrimary}`
-                          : "2px solid transparent",
+                        boxShadow: active
+                          ? `0 0 0 2px ${isDark ? colors.surface : "#FFFFFF"}, 0 0 0 4px ${item.color}`
+                          : "none",
                       }}
                     />
 
@@ -615,6 +640,7 @@ const Profile = () => {
                       style={{
                         fontSize: "12px",
                         fontWeight: active ? "700" : "500",
+                        color: active && !isDark ? colors.primary : colors.textPrimary,
                       }}
                     >
                       {item.name}
@@ -655,6 +681,7 @@ const Profile = () => {
                 label="Light"
                 onClick={() => handleModeChange("light")}
                 colors={colors}
+                isDark={isDark}
               />
 
               <ModeButton
@@ -663,6 +690,7 @@ const Profile = () => {
                 label="Dark"
                 onClick={() => handleModeChange("dark")}
                 colors={colors}
+                isDark={isDark}
               />
             </div>
 
@@ -674,7 +702,9 @@ const Profile = () => {
                 padding: "10px 12px",
                 borderRadius: "7px",
 
-                backgroundColor: "#FFFFFF",
+                backgroundColor: isDark
+                  ? "rgba(15, 23, 42, 0.7)"
+                  : "#F9FAFB",
 
                 border: `1px solid ${colors.border}`,
 
@@ -728,13 +758,16 @@ const Profile = () => {
         style={{
           marginTop: "20px",
 
-          backgroundColor: "#FFFFFF",
+          backgroundColor: colors.surface,
 
           border: `1px solid ${colors.border}`,
 
           borderRadius: "12px",
 
           padding: "22px",
+          boxShadow: isDark
+            ? "0 4px 20px rgba(0, 0, 0, 0.25)"
+            : "0 2px 8px rgba(0, 0, 0, 0.04)",
         }}
       >
         <div
@@ -793,14 +826,17 @@ const Profile = () => {
 
               border: `1px solid ${colors.error}`,
 
-              backgroundColor: "#FFFFFF",
+              backgroundColor: isDark
+                ? "rgba(239, 68, 68, 0.12)"
+                : "#FFFFFF",
 
-              color: colors.error,
+              color: isDark ? "#F87171" : colors.error,
 
               fontSize: "13px",
               fontWeight: "600",
 
               cursor: "pointer",
+              transition: "all 0.15s ease",
             }}
           >
             <LogOut size={15} />
@@ -841,7 +877,7 @@ const Profile = () => {
 // INFO FIELD
 // ============================================================
 
-const InfoField = ({ label, value, icon, colors }) => {
+const InfoField = ({ label, value, icon, colors, isDark }) => {
   return (
     <div>
       <div
@@ -873,7 +909,9 @@ const InfoField = ({ label, value, icon, colors }) => {
 
           borderRadius: "7px",
 
-          backgroundColor: "#FFFFFF",
+          backgroundColor: isDark
+            ? "rgba(15, 23, 42, 0.7)"
+            : "#F8FAFC",
 
           border: `1px solid ${colors.border}`,
 
@@ -894,7 +932,7 @@ const InfoField = ({ label, value, icon, colors }) => {
 // MODE BUTTON
 // ============================================================
 
-const ModeButton = ({ active, icon, label, onClick, colors }) => {
+const ModeButton = ({ active, icon, label, onClick, colors, isDark }) => {
   return (
     <button
       onClick={onClick}
@@ -908,17 +946,28 @@ const ModeButton = ({ active, icon, label, onClick, colors }) => {
 
         borderRadius: "8px",
 
-        border: `1px solid ${active ? colors.primary : colors.border}`,
+        border: `1.5px solid ${active ? colors.primary : colors.border}`,
 
-        backgroundColor: "#FFFFFF",
+        backgroundColor: active
+          ? isDark
+            ? "rgba(249, 115, 22, 0.18)"
+            : "rgba(249, 115, 22, 0.08)"
+          : isDark
+          ? "rgba(15, 23, 42, 0.7)"
+          : "#FFFFFF",
 
-        color: active ? colors.primary : colors.textSecondary,
+        color: active
+          ? colors.primary
+          : isDark
+          ? colors.textPrimary
+          : colors.textSecondary,
 
         cursor: "pointer",
 
         fontSize: "12px",
 
         fontWeight: active ? "700" : "500",
+        transition: "all 0.15s ease",
       }}
     >
       {icon}

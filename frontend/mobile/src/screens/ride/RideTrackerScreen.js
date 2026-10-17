@@ -45,8 +45,8 @@ const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.45) => {
   if (!routePath || !Array.isArray(routePath) || routePath.length === 0) return true;
   for (let i = 0; i < routePath.length; i++) {
     const p = routePath[i];
-    const rLat = Array.isArray(p) ? p[0] : p.lat;
-    const rLng = Array.isArray(p) ? p[1] : p.lng;
+    const rLat = Array.isArray(p) ? p[0] : (p.lat ?? p.latitude);
+    const rLng = Array.isArray(p) ? p[1] : (p.lng ?? p.longitude);
     if (rLat && rLng) {
       const d = calculateDistanceKm(ptLat, ptLng, rLat, rLng);
       if (d !== null && d <= thresholdKm) return true;
@@ -256,13 +256,17 @@ const RideTrackerScreen = ({ route, navigation }) => {
       return;
     }
 
-    // Geofence corridor check: commute must be along selected Jeepney route corridor
-    if (selectedRoute?.path && Array.isArray(selectedRoute.path) && selectedRoute.path.length > 0) {
-      const isAlongRoute = isPointNearRoute(currentLocation.lat, currentLocation.lng, selectedRoute.path, 0.45);
+    // Geofence corridor check: commuter cannot board a jeepney that is not within its route corridor
+    const routePoints =
+      selectedRoute?.path && Array.isArray(selectedRoute.path) && selectedRoute.path.length > 0
+        ? selectedRoute.path
+        : selectedRoute?.waypoints;
+    if (routePoints && Array.isArray(routePoints) && routePoints.length > 0) {
+      const isAlongRoute = isPointNearRoute(currentLocation.lat, currentLocation.lng, routePoints, 0.45);
       if (!isAlongRoute) {
         showWarning(
           'Outside Jeepney Route Corridor',
-          `You cannot use the live tracker for "${selectedRoute.name}" because your current GPS location is not within this static route corridor. Live tracking in jeepneys requires you to be along the route corridor. For off-corridor trips, please select Solo Ride / Visitor.`
+          `You cannot board "${selectedRoute.name}" because your current location is not within its designated route corridor. Commuters cannot board a jeepney that is not within its route.`
         );
         return;
       }

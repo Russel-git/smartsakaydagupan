@@ -11,7 +11,7 @@ const complaintSchema = new mongoose.Schema(
     subject: { type: String, required: [true, 'Subject is required'], trim: true },
     description: { type: String, required: [true, 'Description is required'], trim: true },
     routeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Route', default: null },
-    vehiclePlateNumber: { type: String, default: '', trim: true },
+    vehiclePlateNumber: { type: String, default: '', trim: true, uppercase: true },
     location: {
       lat: { type: Number, default: null },
       lng: { type: Number, default: null },
@@ -30,10 +30,14 @@ const complaintSchema = new mongoose.Schema(
         'endorsed_to_ltfrb',
         'resolved',
         'dismissed',
+        'rejected',
       ],
       default: 'pending',
     },
     adminNotes: { type: String, default: '' },
+    rejectionReason: { type: String, default: '' },
+    rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    rejectedAt: { type: Date, default: null },
     verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
     // POSO Road Triage & Field Report

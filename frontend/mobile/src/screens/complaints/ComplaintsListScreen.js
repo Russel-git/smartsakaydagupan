@@ -193,6 +193,26 @@ const ComplaintsListScreen = ({ navigation }) => {
     });
   };
 
+  const promptPermanentDelete = (item) => {
+    setConfirmDialog({
+      visible: true,
+      type: 'danger',
+      title: 'Permanently Delete Report?',
+      message: `Are you sure you want to permanently delete "${item.subject}"? This action cannot be undone and will erase this report forever.`,
+      confirmText: 'Delete Permanently',
+      onConfirm: async () => {
+        setConfirmDialog((p) => ({ ...p, visible: false }));
+        try {
+          await complaintsAPI.deletePermanentlyMyComplaint(item._id);
+          showSuccess('Report Erased', 'Report has been permanently deleted from Trash.');
+          loadComplaints(activeTab);
+        } catch (err) {
+          showError('Permanent Delete Failed', err.response?.data?.message || 'Could not permanently delete report.');
+        }
+      },
+    });
+  };
+
   const filteredComplaints = useMemo(() => {
     if (!searchQuery.trim()) return complaints;
     const query = searchQuery.toLowerCase().trim();
@@ -578,16 +598,27 @@ const ComplaintsListScreen = ({ navigation }) => {
                     </TouchableOpacity>
                   ) : null}
 
-                  {/* UNDO / RESTORE BUTTON (For deleted reports) */}
+                  {/* UNDO / RESTORE AND PERMANENT DELETE (For deleted reports) */}
                   {isDeleted ? (
-                    <TouchableOpacity
-                      style={[styles.actionBtn, { borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}
-                      onPress={() => handleUndo(item._id)}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialCommunityIcons name="undo-variant" size={16} color="#10B981" />
-                      <Text style={[styles.actionBtnText, { color: '#10B981', fontWeight: '800' }]}>Undo / Restore</Text>
-                    </TouchableOpacity>
+                    <>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}
+                        onPress={() => handleUndo(item._id)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialCommunityIcons name="undo-variant" size={16} color="#10B981" />
+                        <Text style={[styles.actionBtnText, { color: '#10B981', fontWeight: '800' }]}>Undo / Restore</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { borderColor: 'rgba(239, 68, 68, 0.4)', backgroundColor: 'rgba(239, 68, 68, 0.08)' }]}
+                        onPress={() => promptPermanentDelete(item)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialCommunityIcons name="trash-can-alert" size={15} color="#EF4444" />
+                        <Text style={[styles.actionBtnText, { color: '#EF4444', fontWeight: '800' }]}>Delete Permanently</Text>
+                      </TouchableOpacity>
+                    </>
                   ) : null}
 
                   {/* VIEW DETAILS LINK */}

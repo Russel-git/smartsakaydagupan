@@ -18,6 +18,7 @@ const LayoutContent = () => {
       style={{
         minHeight: "100vh",
         display: "flex",
+        backgroundColor: "var(--bg-main)",
       }}
     >
       <Sidebar />
@@ -29,7 +30,7 @@ const LayoutContent = () => {
         style={{
           flex: 1,
           minWidth: 0,
-
+          backgroundColor: "var(--bg-main)",
           marginLeft: isMobile ? "0px" : sidebarWidth,
 
           transition: "margin-left 300ms ease",
@@ -41,6 +42,7 @@ const LayoutContent = () => {
           className="content-body"
           style={{
             minHeight: "calc(100vh - 64px)",
+            backgroundColor: "var(--bg-main)",
           }}
         >
           <Outlet />

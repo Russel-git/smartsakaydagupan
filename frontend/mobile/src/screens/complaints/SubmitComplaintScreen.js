@@ -26,6 +26,8 @@ import {
   COMPLAINT_CATEGORIES,
 } from "../../utils/constants";
 
+const JEEPNEY_PLATE_REGEX = /^[A-Z]{3}[ -]?[0-9]{3,4}$/i;
+
 const countWords = (text) => {
   if (!text || typeof text !== "string") return 0;
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -172,10 +174,19 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
       e.description = "Description must be at least 10 characters long.";
     }
 
+    const cleanPlate = (form.vehiclePlateNumber || "").trim().toUpperCase();
+    if (!cleanPlate) {
+      e.vehiclePlateNumber = "Vehicle plate number is required.";
+    } else if (!JEEPNEY_PLATE_REGEX.test(cleanPlate)) {
+      e.vehiclePlateNumber =
+        "Invalid plate number. Must be a Philippine jeepney plate (e.g., ABC 123 or ABC 1234).";
+    }
+
     setErrors(e);
 
     if (Object.keys(e).length > 0) {
-      const firstError = e.category || e.subject || e.description;
+      const firstError =
+        e.category || e.subject || e.description || e.vehiclePlateNumber;
       return { isValid: false, message: firstError };
     }
     return { isValid: true };
@@ -237,6 +248,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
 
       await complaintsAPI.createComplaint({
         ...form,
+        vehiclePlateNumber: (form.vehiclePlateNumber || "").trim().toUpperCase(),
         routeId: form.routeId || undefined,
         attachments,
       });
@@ -699,13 +711,27 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
           </ScrollView>
 
           <Input
-            label="Vehicle Plate Number (Optional)"
-            placeholder="e.g., ABC 1234"
+            label="Vehicle Plate Number *"
+            placeholder="e.g., ABC 123 or ABC 1234"
             value={form.vehiclePlateNumber}
-            onChangeText={(t) => updateField("vehiclePlateNumber", t)}
+            onChangeText={(t) => updateField("vehiclePlateNumber", t.toUpperCase())}
+            error={errors.vehiclePlateNumber}
             leftIcon="car"
             autoCapitalize="characters"
+            maxLength={8}
+            style={{ marginBottom: errors.vehiclePlateNumber ? 4 : 8 }}
           />
+          <Text
+            style={[
+              styles.fieldHint,
+              {
+                color: errors.vehiclePlateNumber ? colors.error : colors.textSecondary,
+                marginBottom: SPACING.lg,
+              },
+            ]}
+          >
+            Philippine Jeepney Format: ABC 123 (Traditional) or ABC 1234 (Modern / Traditional)
+          </Text>
 
           <Button
             title={

@@ -28,6 +28,10 @@ const getNotifications = async (req, res, next) => {
       ],
     };
 
+    if (req.user) {
+      filter.deletedForUsers = { $ne: req.user._id };
+    }
+
     if (category && category !== 'all') {
       if (category === 'weather_updates') {
         filter.$and = [{ $or: [{ category: 'weather_updates' }, { type: 'weather_alert' }] }];
@@ -47,10 +51,44 @@ const getNotifications = async (req, res, next) => {
       filter.type = type;
     }
 
-    const total = await Notification.countDocuments(filter);
-    const notifications = await Notification.find(filter).sort({ createdAt: -1 })
-      .skip((page - 1) * limit).limit(parseInt(limit));
-    return apiResponse.paginated(res, notifications, total, page, limit);
+    const rawNotifications = await Notification.find(filter)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // De-duplicate: Ensure that if an alert exists as both broadcast (userId: null)
+    // and legacy user copy, or was broadcast multiple times, each alert appears exactly once!
+    const seenMap = new Set();
+    const uniqueNotifications = [];
+
+    for (const notif of rawNotifications) {
+      const normTitle = (notif.title || '').trim().replace(/^🚨\s*/, '');
+      const createdMinute = Math.floor(new Date(notif.createdAt).getTime() / 60000);
+      const originalAlertId = notif.metadata?.originalAlertId?.toString();
+      const dedupKey = originalAlertId || `${normTitle}_${notif.category || notif.type}_${createdMinute}`;
+
+      if (notif.userId == null || notif.type === 'broadcast' || notif.category === 'weather_updates' || notif.category === 'broadcast_by_admin') {
+        if (seenMap.has(dedupKey)) {
+          continue;
+        }
+        seenMap.add(dedupKey);
+      }
+
+      if (req.user) {
+        if (notif.userId == null) {
+          const isReadByUser = Array.isArray(notif.readByUsers) &&
+            notif.readByUsers.some((u) => u.toString() === req.user._id.toString());
+          notif.isRead = Boolean(notif.isRead || isReadByUser);
+        }
+      }
+
+      uniqueNotifications.push(notif);
+    }
+
+    const total = uniqueNotifications.length;
+    const startIndex = (page - 1) * limit;
+    const paginatedNotifs = uniqueNotifications.slice(startIndex, startIndex + parseInt(limit));
+
+    return apiResponse.paginated(res, paginatedNotifs, total, page, limit);
   } catch (error) { next(error); }
 };
 
@@ -60,38 +98,126 @@ const getUnreadCount = async (req, res, next) => {
       return apiResponse.success(res, { count: 0 });
     }
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    const count = await Notification.countDocuments({
-      $or: [{ userId: req.user._id }, { userId: null }],
+    const userId = req.user._id;
+
+    const unreadCandidates = await Notification.find({
+      $or: [{ userId }, { userId: null }],
       status: 'published',
-      isRead: false,
+      deletedForUsers: { $ne: userId },
       $nor: [
         {
           $or: [{ category: 'weather_updates' }, { type: 'weather_alert' }],
           createdAt: { $lt: threeDaysAgo },
         },
       ],
-    });
+    }).sort({ createdAt: -1 }).lean();
+
+    const seenMap = new Set();
+    let count = 0;
+
+    for (const notif of unreadCandidates) {
+      const normTitle = (notif.title || '').trim().replace(/^🚨\s*/, '');
+      const createdMinute = Math.floor(new Date(notif.createdAt).getTime() / 60000);
+      const originalAlertId = notif.metadata?.originalAlertId?.toString();
+      const dedupKey = originalAlertId || `${normTitle}_${notif.category || notif.type}_${createdMinute}`;
+
+      if (notif.userId == null || notif.type === 'broadcast' || notif.category === 'weather_updates' || notif.category === 'broadcast_by_admin') {
+        if (seenMap.has(dedupKey)) continue;
+        seenMap.add(dedupKey);
+
+        const isReadByUser = Array.isArray(notif.readByUsers) &&
+          notif.readByUsers.some((u) => u.toString() === userId.toString());
+        if (!notif.isRead && !isReadByUser) {
+          count++;
+        }
+      } else {
+        if (!notif.isRead) count++;
+      }
+    }
+
     return apiResponse.success(res, { count });
   } catch (error) { next(error); }
 };
 
 const markAsRead = async (req, res, next) => {
   try {
-    const notification = await Notification.findOneAndUpdate(
-      { _id: req.params.id, $or: [{ userId: req.user._id }, { userId: null }] },
-      { isRead: true }, { new: true }
-    );
+    const notification = await Notification.findById(req.params.id);
     if (!notification) return apiResponse.error(res, 'Notification not found', 404);
+
+    if (notification.userId && notification.userId.toString() === req.user._id.toString()) {
+      notification.isRead = true;
+      await notification.save();
+    } else {
+      await Notification.findByIdAndUpdate(req.params.id, {
+        $addToSet: { readByUsers: req.user._id },
+      });
+      notification.isRead = true;
+    }
     return apiResponse.success(res, notification, 'Marked as read');
   } catch (error) { next(error); }
 };
 
 const markAllAsRead = async (req, res, next) => {
   try {
-    await Notification.updateMany(
-      { $or: [{ userId: req.user._id }, { userId: null }], isRead: false }, { isRead: true }
-    );
+    await Promise.all([
+      Notification.updateMany({ userId: req.user._id, isRead: false }, { isRead: true }),
+      Notification.updateMany(
+        { userId: null, status: 'published' },
+        { $addToSet: { readByUsers: req.user._id } }
+      ),
+    ]);
     return apiResponse.success(res, null, 'All notifications marked as read');
+  } catch (error) { next(error); }
+};
+
+const deleteNotification = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const notification = await Notification.findById(id);
+    if (!notification) return apiResponse.error(res, 'Notification not found.', 404);
+
+    if (notification.userId && notification.userId.toString() === req.user._id.toString()) {
+      await Notification.findByIdAndDelete(id);
+    } else {
+      // Broadcast notification (userId: null) or public alert: add user to deletedForUsers
+      await Notification.findByIdAndUpdate(id, {
+        $addToSet: { deletedForUsers: req.user._id },
+      });
+    }
+    return apiResponse.success(res, null, 'Notification deleted successfully.');
+  } catch (error) { next(error); }
+};
+
+const deleteAllRead = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+
+    // 1. Delete user-specific notifications that are marked as read
+    const userDeleteResult = await Notification.deleteMany({
+      userId,
+      isRead: true,
+    });
+
+    // 2. Hide broadcast/public notifications that this user has marked as read
+    const broadcastUpdateResult = await Notification.updateMany(
+      {
+        userId: null,
+        status: 'published',
+        $or: [{ readByUsers: userId }, { isRead: true }],
+      },
+      {
+        $addToSet: { deletedForUsers: userId },
+      }
+    );
+
+    return apiResponse.success(
+      res,
+      {
+        deletedUserCount: userDeleteResult.deletedCount || 0,
+        hiddenBroadcastCount: broadcastUpdateResult.modifiedCount || 0,
+      },
+      'All read notifications deleted successfully.'
+    );
   } catch (error) { next(error); }
 };
 
@@ -118,11 +244,11 @@ const broadcast = async (req, res, next) => {
       ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
       : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    // Save primary broadcast record
+    // Save only ONE primary broadcast record (sent to all commuters via userId: null)
     const primaryAlert = await Notification.create({
       userId: null,
-      title,
-      message,
+      title: title.trim(),
+      message: message.trim(),
       type: finalType,
       category: finalCategory,
       status: 'published',
@@ -136,25 +262,7 @@ const broadcast = async (req, res, next) => {
       expiresAt,
     });
 
-    const commuters = await User.find({ role: 'commuter', isActive: true }).select('_id');
-    const notifications = commuters.map((user) => ({
-      userId: user._id,
-      title,
-      message,
-      type: finalType,
-      category: finalCategory,
-      status: 'published',
-      createdByRole: req.user.role || 'admin',
-      authorUser: req.user._id,
-      approvedBy: req.user._id,
-      approvedAt: new Date(),
-      severity,
-      locationArea: locationArea || '',
-      metadata: finalMetadata,
-      expiresAt,
-    }));
-    if (notifications.length > 0) await Notification.insertMany(notifications);
-    return apiResponse.success(res, { primaryAlert, sentTo: notifications.length }, 'Broadcast sent successfully');
+    return apiResponse.success(res, primaryAlert, 'Broadcast sent successfully');
   } catch (error) { next(error); }
 };
 
@@ -277,32 +385,6 @@ const approveRoadAlert = async (req, res, next) => {
     alert.approvedAt = new Date();
     await alert.save();
 
-    // Broadcast to all active commuters
-    const commuters = await User.find({ role: 'commuter', isActive: true }).select('_id');
-    if (commuters.length > 0) {
-      const commuterNotifs = commuters.map((u) => ({
-        userId: u._id,
-        title: `🚨 ${alert.title}`,
-        message: alert.message,
-        type: 'broadcast',
-        category: 'broadcast_by_admin',
-        status: 'published',
-        createdByRole: alert.createdByRole,
-        authorUser: alert.authorUser,
-        approvedBy: req.user._id,
-        approvedAt: new Date(),
-        severity: alert.severity,
-        locationArea: alert.locationArea,
-        metadata: {
-          originalAlertId: alert._id,
-          verifiedByLgu: true,
-          photoUrl: alert.metadata?.photoUrl || alert.metadata?.evidencePhoto || null,
-          evidencePhoto: alert.metadata?.photoUrl || alert.metadata?.evidencePhoto || null,
-        },
-      }));
-      await Notification.insertMany(commuterNotifs);
-    }
-
     return apiResponse.success(res, alert, 'Road alert verified and broadcast to all commuters.');
   } catch (error) { next(error); }
 };
@@ -360,6 +442,8 @@ module.exports = {
   getUnreadCount,
   markAsRead,
   markAllAsRead,
+  deleteNotification,
+  deleteAllRead,
   broadcast,
   sendToUser,
   requestRoadAlert,

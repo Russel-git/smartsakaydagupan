@@ -42,4 +42,24 @@ const uploadEvidence = multer({
   fileFilter,
 });
 
-module.exports = { uploadEvidence };
+const uploadAvatar = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max for avatars
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      "image/jpeg",
+      "image/jpg",
+      "image/pjpeg",
+      "image/png",
+      "image/webp",
+      "application/octet-stream",
+    ];
+    if (allowed.includes(file.mimetype) || (file.mimetype && file.mimetype.startsWith("image/"))) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JPEG, PNG, and WebP images are supported."), false);
+    }
+  },
+});
+
+module.exports = { uploadEvidence, uploadAvatar };

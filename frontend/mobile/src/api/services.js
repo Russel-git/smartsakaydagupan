@@ -14,6 +14,13 @@ export const authAPI = {
 export const usersAPI = {
   getProfile: () => apiClient.get("/users/me"),
   updateProfile: (data) => apiClient.put("/users/me", data),
+  uploadPhoto: (formData) =>
+    apiClient.post("/users/me/photo", formData, {
+      headers:
+        typeof window !== "undefined"
+          ? {}
+          : { "Content-Type": "multipart/form-data" },
+    }),
   changePassword: (data) => apiClient.put("/users/me/password", data),
   deleteMyAccount: (data) => apiClient.delete("/users/me", { data }),
   getAllUsers: (params) => apiClient.get("/users", { params }),
@@ -50,7 +57,10 @@ export const complaintsAPI = {
   createComplaint: (data) => apiClient.post("/complaints", data),
   uploadPhoto: (formData) =>
     apiClient.post("/complaints/upload-photo", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
+      headers:
+        typeof window !== "undefined"
+          ? {}
+          : { "Content-Type": "multipart/form-data" },
     }),
   getMyComplaints: (params) => apiClient.get("/complaints/my", { params }),
   getComplaintById: (id) => apiClient.get(`/complaints/${id}`),
@@ -64,6 +74,7 @@ export const complaintsAPI = {
   deleteMyComplaint: (id, data) =>
     apiClient.delete(`/complaints/my/${id}`, { data }),
   undoMyComplaint: (id) => apiClient.put(`/complaints/my/${id}/undo`),
+  deletePermanentlyMyComplaint: (id) => apiClient.delete(`/complaints/my/${id}/permanent`),
 };
 
 export const assistantAPI = {
@@ -83,6 +94,8 @@ export const notificationsAPI = {
   getUnreadCount: () => apiClient.get("/notifications/unread-count"),
   markAsRead: (id) => apiClient.put(`/notifications/${id}/read`),
   markAllAsRead: () => apiClient.put("/notifications/read-all"),
+  deleteNotification: (id) => apiClient.delete(`/notifications/${id}`),
+  deleteAllRead: () => apiClient.delete("/notifications/delete-all-read"),
   broadcast: (data) => apiClient.post("/notifications/broadcast", data),
   sendToUser: (data) => apiClient.post("/notifications/send", data),
 };
@@ -95,4 +108,15 @@ export const adminAPI = {
 export const themeAPI = {
   getTheme: () => apiClient.get("/theme/"),
   updateTheme: (theme) => apiClient.patch("/theme", { theme }),
+};
+
+export const locationSharingAPI = {
+  searchUser: (query) => apiClient.get("/location-sharing/search", { params: { query } }),
+  sendRequest: (targetUserId) => apiClient.post("/location-sharing/request", { targetUserId }),
+  getConnections: () => apiClient.get("/location-sharing/connections"),
+  respondToRequest: (id, action) => apiClient.patch(`/location-sharing/connections/${id}/respond`, { action }),
+  toggleSharing: (id, enabled) => apiClient.patch(`/location-sharing/connections/${id}/toggle`, { enabled }),
+  removeConnection: (id, block = false) => apiClient.delete(`/location-sharing/connections/${id}`, { params: { block } }),
+  updateMyLocation: (coords) => apiClient.post("/location-sharing/my-location", coords),
+  getPeerLocations: () => apiClient.get("/location-sharing/peers"),
 };

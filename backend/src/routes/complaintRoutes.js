@@ -28,6 +28,7 @@ router.put('/my/:id', rbac('commuter'), validate(updateCommuterComplaintSchema),
 router.put('/my/:id/archive', rbac('commuter'), complaintController.archiveMyComplaint);
 router.put('/my/:id/unarchive', rbac('commuter'), complaintController.unarchiveMyComplaint);
 router.delete('/my/:id', rbac('commuter'), complaintController.deleteMyComplaint);
+router.delete('/my/:id/permanent', rbac('commuter'), complaintController.permanentDeleteComplaint);
 router.put('/my/:id/undo', rbac('commuter'), complaintController.undoMyComplaint);
 router.get('/:id', rbac('commuter', 'admin', 'lgu', 'poso'), complaintController.getComplaintById);
 
@@ -38,13 +39,14 @@ router.get('/', rbac('admin', 'lgu', 'poso'), complaintController.getAllComplain
 router.post('/field-report', rbac('poso', 'admin'), validate(posoFieldReportSchema), complaintController.createFieldReport);
 router.patch('/:id/endorse', rbac('poso', 'admin'), validate(posoEndorseSchema), complaintController.endorseToLgu);
 router.put('/:id/verify-lgu', rbac('poso', 'admin'), complaintController.verifyAndEndorseToLgu);
+router.patch('/:id/reject', rbac('poso', 'admin'), complaintController.rejectComplaint);
 
 // LGU Action Desk & Admin Management routes
 router.put('/:id/lgu-action', rbac('lgu', 'admin'), validate(lguActionSchema), complaintController.lguTakeAction);
 router.put('/:id/lgu-terminate', rbac('lgu', 'admin'), validate(lguTerminateSchema), complaintController.lguTerminate);
 router.delete('/:id', rbac('admin', 'lgu'), validate(deleteComplaintSchema), complaintController.deleteComplaintWithReason);
 router.patch('/:id/restore', rbac('admin', 'lgu'), complaintController.restoreComplaint);
-router.delete('/:id/permanent', rbac('admin', 'lgu'), complaintController.permanentDeleteComplaint);
+router.delete('/:id/permanent', rbac('admin', 'lgu', 'commuter'), complaintController.permanentDeleteComplaint);
 router.put('/:id/status', rbac('admin', 'lgu'), validate(updateComplaintStatusSchema), complaintController.updateComplaintStatus);
 router.put('/:id/notes', rbac('admin', 'lgu', 'poso'), validate(addAdminNotesSchema), complaintController.addAdminNotes);
 

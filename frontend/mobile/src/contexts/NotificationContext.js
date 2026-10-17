@@ -57,6 +57,35 @@ export const NotificationProvider = ({ children }) => {
     }
   }, []);
 
+  const deleteNotification = useCallback(
+    async (id) => {
+      try {
+        const target = notifications.find((n) => n._id === id);
+        if (isAuthenticated) {
+          await notificationsAPI.deleteNotification(id);
+        }
+        setNotifications((prev) => prev.filter((n) => n._id !== id));
+        if (target && !target.isRead) {
+          setUnreadCount((prev) => Math.max(0, prev - 1));
+        }
+      } catch (e) {
+        setNotifications((prev) => prev.filter((n) => n._id !== id));
+      }
+    },
+    [isAuthenticated, notifications]
+  );
+
+  const deleteAllRead = useCallback(async () => {
+    try {
+      if (isAuthenticated) {
+        await notificationsAPI.deleteAllRead();
+      }
+      setNotifications((prev) => prev.filter((n) => !n.isRead));
+    } catch (e) {
+      setNotifications((prev) => prev.filter((n) => !n.isRead));
+    }
+  }, [isAuthenticated]);
+
   // Poll unread count every 60 seconds
   useEffect(() => {
     if (!isAuthenticated) {
@@ -79,6 +108,8 @@ export const NotificationProvider = ({ children }) => {
         fetchUnreadCount,
         markAsRead,
         markAllAsRead,
+        deleteNotification,
+        deleteAllRead,
       }}
     >
       {children}

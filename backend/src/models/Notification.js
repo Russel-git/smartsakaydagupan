@@ -16,6 +16,8 @@ const notificationSchema = new mongoose.Schema(
       },
     },
     isRead: { type: Boolean, default: false },
+    readByUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    deletedForUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     status: {
       type: String,
       enum: ['pending_approval', 'published', 'rejected', 'archived'],

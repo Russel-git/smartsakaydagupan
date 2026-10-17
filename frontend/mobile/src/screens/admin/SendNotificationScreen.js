@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useFeedback } from '../../contexts/FeedbackContext';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { notificationsAPI } from '../../api/services';
@@ -39,6 +40,7 @@ const NOTIF_CATEGORIES = [
 
 const SendNotificationScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
+  const { showSuccess, showError } = useFeedback();
   const [selectedCat, setSelectedCat] = useState(NOTIF_CATEGORIES[0]);
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
@@ -46,7 +48,7 @@ const SendNotificationScreen = ({ navigation }) => {
 
   const handleSend = async () => {
     if (!title.trim() || !message.trim()) {
-      Alert.alert('Error', 'Title and message are required');
+      showError('Validation Error', 'Title and message are required.');
       return;
     }
     setLoading(true);
@@ -57,11 +59,13 @@ const SendNotificationScreen = ({ navigation }) => {
         type: selectedCat.type,
         category: selectedCat.id,
       });
-      Alert.alert('Success', `Notification dispatched under "${selectedCat.label}" category to all commuters.`, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      showSuccess(
+        'Notification Dispatched',
+        `Broadcast sent under "${selectedCat.label}" to all commuters.`
+      );
+      navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', e.response?.data?.message || 'Failed to send');
+      showError('Send Failed', e.response?.data?.message || 'Failed to dispatch notification.');
     }
     setLoading(false);
   };

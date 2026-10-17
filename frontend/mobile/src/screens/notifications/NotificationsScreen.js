@@ -13,7 +13,9 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { useFeedback } from '../../contexts/FeedbackContext';
 import { EmptyState } from '../../components/common/SharedComponents';
+import ConfirmDialogModal from '../../components/common/ConfirmDialogModal';
 import { FONTS, SPACING, RADIUS, API_BASE_URL } from '../../utils/constants';
 import { formatDate, formatDateTime } from '../../utils/helpers';
 
@@ -167,11 +169,77 @@ const NotificationsScreen = ({ navigation }) => {
     fetchNotifications,
     markAsRead,
     markAllAsRead,
+    deleteNotification,
+    deleteAllRead,
     unreadCount,
   } = useNotifications();
+  const { showSuccess } = useFeedback();
 
   const [activeTab, setActiveTab] = useState('all');
   const [selectedNotif, setSelectedNotif] = useState(null);
+  const [confirmModalConfig, setConfirmModalConfig] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    type: 'danger',
+    icon: 'trash-can-outline',
+    onConfirm: () => {},
+  });
+
+  const handleDeleteNotification = (notif) => {
+    if (!notif?._id) return;
+    const title = notif.title || 'Notification';
+
+    setConfirmModalConfig({
+      visible: true,
+      title: 'Delete Notification',
+      message: `Are you sure you want to remove this notification?\n\n"${title}"`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+      icon: 'trash-can-outline',
+      onConfirm: async () => {
+        setConfirmModalConfig((prev) => ({ ...prev, visible: false }));
+        if (selectedNotif?._id === notif._id) {
+          setSelectedNotif(null);
+        }
+        await deleteNotification(notif._id);
+        showSuccess('Notification Deleted', `"${title}" has been removed.`);
+      },
+    });
+  };
+
+  const handleDeleteAllRead = () => {
+    const readItems = validNotifications.filter((n) => n.isRead);
+    if (readItems.length === 0) return;
+
+    setConfirmModalConfig({
+      visible: true,
+      title: 'Delete Read Notifications',
+      message: `Are you sure you want to delete all ${readItems.length} read notification${
+        readItems.length > 1 ? 's' : ''
+      }? Unread notifications will remain in your inbox.`,
+      confirmText: 'Delete All Read',
+      cancelText: 'Cancel',
+      type: 'danger',
+      icon: 'delete-sweep-outline',
+      onConfirm: async () => {
+        setConfirmModalConfig((prev) => ({ ...prev, visible: false }));
+        if (selectedNotif?.isRead) {
+          setSelectedNotif(null);
+        }
+        await deleteAllRead();
+        showSuccess(
+          'Notifications Cleared',
+          `Successfully removed ${readItems.length} read notification${
+            readItems.length > 1 ? 's' : ''
+          }.`
+        );
+      },
+    });
+  };
 
   useEffect(() => {
     fetchNotifications();
@@ -257,25 +325,65 @@ const NotificationsScreen = ({ navigation }) => {
     }
   };
 
+  const readCount = useMemo(() => {
+    return validNotifications.filter((n) => n.isRead).length;
+  }, [validNotifications]);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header Bar */}
       <View style={styles.headerRow}>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 160 }}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Notifications</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Weather advisories, complaint updates & admin broadcasts
           </Text>
         </View>
-        {unreadCount > 0 && (
-          <TouchableOpacity
-            onPress={markAllAsRead}
-            style={[styles.markAllBtn, { backgroundColor: colors.primary + '18' }]}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.markAll, { color: colors.primary }]}>Mark all read</Text>
-          </TouchableOpacity>
-        )}
+
+        <View style={styles.headerActions}>
+          {unreadCount > 0 && (
+            <TouchableOpacity
+              onPress={markAllAsRead}
+              style={[styles.headerActionBtn, { backgroundColor: colors.primary + '18' }]}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name="check-all"
+                size={15}
+                color={colors.primary}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.headerActionText, { color: colors.primary }]}>
+                Mark all read
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {readCount > 0 && (
+            <TouchableOpacity
+              onPress={handleDeleteAllRead}
+              style={[
+                styles.headerActionBtn,
+                {
+                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2',
+                  borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#FEE2E2',
+                  borderWidth: 1,
+                },
+              ]}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name="delete-sweep-outline"
+                size={15}
+                color="#EF4444"
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.headerActionText, { color: '#EF4444' }]}>
+                Delete all read
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Category Selection Tabs Bar */}
@@ -480,12 +588,32 @@ const NotificationsScreen = ({ navigation }) => {
                   {item.message}
                 </Text>
 
-                {/* Bottom Action Prompt */}
+                {/* Bottom Action Prompt with Delete Action */}
                 <View style={styles.viewFullRow}>
-                  <Text style={[styles.viewFullText, { color: cfg.color }]}>
-                    Tap to view announcement
-                  </Text>
-                  <MaterialCommunityIcons name="chevron-right" size={15} color={cfg.color} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flex: 1 }}>
+                    <Text style={[styles.viewFullText, { color: cfg.color }]}>
+                      Tap to view announcement
+                    </Text>
+                    <MaterialCommunityIcons name="chevron-right" size={15} color={cfg.color} />
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={(e) => {
+                      e?.stopPropagation?.();
+                      handleDeleteNotification(item);
+                    }}
+                    style={[
+                      styles.cardDeleteBtn,
+                      {
+                        backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#FEF2F2',
+                        borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#FEE2E2',
+                      },
+                    ]}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialCommunityIcons name="trash-can-outline" size={16} color="#EF4444" />
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -553,19 +681,37 @@ const NotificationsScreen = ({ navigation }) => {
                       </View>
                     </View>
 
-                    <TouchableOpacity
-                      onPress={() => setSelectedNotif(null)}
-                      style={[
-                        styles.closeBtn,
-                        {
-                          backgroundColor: isDark
-                            ? 'rgba(255, 255, 255, 0.08)'
-                            : colors.background,
-                        },
-                      ]}
-                    >
-                      <MaterialCommunityIcons name="close" size={20} color={colors.textPrimary} />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteNotification(selectedNotif)}
+                        style={[
+                          styles.headerTrashBtn,
+                          {
+                            backgroundColor: isDark
+                              ? 'rgba(239, 68, 68, 0.15)'
+                              : '#FEE2E2',
+                          },
+                        ]}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialCommunityIcons name="trash-can-outline" size={18} color="#EF4444" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => setSelectedNotif(null)}
+                        style={[
+                          styles.closeBtn,
+                          {
+                            backgroundColor: isDark
+                              ? 'rgba(255, 255, 255, 0.08)'
+                              : colors.background,
+                          },
+                        ]}
+                      >
+                        <MaterialCommunityIcons name="close" size={20} color={colors.textPrimary} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Modal Body / Full Message */}
@@ -697,6 +843,26 @@ const NotificationsScreen = ({ navigation }) => {
 
                   {/* Modal Action Footer */}
                   <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
+                    <TouchableOpacity
+                      style={[
+                        styles.deleteActionBtn,
+                        {
+                          backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#FEF2F2',
+                          borderColor: isDark ? 'rgba(239, 68, 68, 0.35)' : '#FECACA',
+                        },
+                      ]}
+                      onPress={() => handleDeleteNotification(selectedNotif)}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialCommunityIcons
+                        name="trash-can-outline"
+                        size={17}
+                        color="#EF4444"
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={styles.deleteActionText}>Delete</Text>
+                    </TouchableOpacity>
+
                     {cfg.actionScreen ? (
                       <TouchableOpacity
                         style={[styles.primaryActionBtn, { backgroundColor: cfg.color }]}
@@ -718,7 +884,6 @@ const NotificationsScreen = ({ navigation }) => {
                         {
                           backgroundColor: colors.background,
                           borderColor: colors.border,
-                          flex: cfg.actionScreen ? undefined : 1,
                         },
                       ]}
                       onPress={() => setSelectedNotif(null)}
@@ -734,6 +899,19 @@ const NotificationsScreen = ({ navigation }) => {
           </Modal>
         );
       })() : null}
+
+      {/* Universal In-App Confirmation Modal */}
+      <ConfirmDialogModal
+        visible={confirmModalConfig.visible}
+        onClose={() => setConfirmModalConfig((prev) => ({ ...prev, visible: false }))}
+        onConfirm={confirmModalConfig.onConfirm}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        confirmText={confirmModalConfig.confirmText}
+        cancelText={confirmModalConfig.cancelText}
+        type={confirmModalConfig.type}
+        icon={confirmModalConfig.icon}
+      />
     </View>
   );
 };
@@ -751,15 +929,25 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: FONTS.sizes.xl, fontWeight: '800' },
   subtitle: { fontSize: FONTS.sizes.xs, marginTop: 2 },
-  markAllBtn: {
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  headerActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: RADIUS.full,
-    minHeight: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
+    minHeight: 34,
   },
-  markAll: { fontSize: FONTS.sizes.xs, fontWeight: '700' },
+  headerActionText: {
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '700',
+  },
 
   // Category Tabs Filter Bar
   categoryContainer: {
@@ -1013,6 +1201,35 @@ const styles = StyleSheet.create({
   },
   secondaryCloseText: {
     fontWeight: '600',
+    fontSize: FONTS.sizes.sm,
+  },
+  cardDeleteBtn: {
+    padding: 6,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTrashBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 48,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+  },
+  deleteActionText: {
+    color: '#EF4444',
+    fontWeight: '700',
     fontSize: FONTS.sizes.sm,
   },
 });

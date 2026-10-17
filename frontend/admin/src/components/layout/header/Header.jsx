@@ -1,5 +1,5 @@
 import React from "react";
-import { Menu, X, ChevronRight } from "lucide-react";
+import { Menu, X, ChevronRight, Sun, Moon } from "lucide-react";
 
 import { useSidebar } from "../../../contexts/SidebarContext";
 import { useTheme } from "../../../contexts/theme/ThemeContext";
@@ -9,7 +9,7 @@ const Header = () => {
   const { isMobile, isMobileOpen, toggleSidebar, toggleMobileSidebar } =
     useSidebar();
 
-  const { colors } = useTheme();
+  const { colors, isDark, toggleTheme } = useTheme();
 
   const { isAdmin, isLgu, isPoso } = useAuth();
 
@@ -139,6 +139,30 @@ const Header = () => {
           gap: "10px",
         }}
       >
+        {/* QUICK THEME TOGGLE */}
+        <button
+          onClick={() => toggleTheme(isDark ? "light" : "dark")}
+          title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 36,
+            height: 36,
+            borderRadius: "8px",
+            border: `1px solid ${colors.border}`,
+            backgroundColor: colors.background,
+            color: colors.textPrimary,
+            cursor: "pointer",
+          }}
+        >
+          {isDark ? (
+            <Sun size={17} color="#FBBF24" />
+          ) : (
+            <Moon size={17} color={colors.textSecondary} />
+          )}
+        </button>
+
         {/* ROLE */}
 
         <RoleBadge />

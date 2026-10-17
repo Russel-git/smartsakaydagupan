@@ -18,6 +18,31 @@ export const AuthProvider = ({ children }) => {
   });
   const [loading, setLoading] = useState(false);
 
+  // Periodic heartbeat check: immediately logs out if LGU suspends the account
+  useEffect(() => {
+    if (!admin) return;
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await api.get('/auth/me');
+        if (data?.data && data.data.isActive === false) {
+          logout();
+          window.location.href = '/login?suspended=true';
+        }
+      } catch (err) {
+        if (
+          err.response?.status === 401 ||
+          (err.response?.status === 403 &&
+            (err.response?.data?.message?.toLowerCase().includes('deactivated') ||
+             err.response?.data?.message?.toLowerCase().includes('suspended')))
+        ) {
+          logout();
+          window.location.href = '/login?suspended=true';
+        }
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [admin]);
+
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
     const user = data.data.user;

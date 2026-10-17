@@ -29,7 +29,16 @@ const createComplaintSchema = Joi.object({
       'any.required': 'Description is required.',
     }),
   routeId: Joi.string().allow(null, ''),
-  vehiclePlateNumber: Joi.string().allow('').max(20),
+  vehiclePlateNumber: Joi.string()
+    .trim()
+    .uppercase()
+    .pattern(/^[A-Z]{3}[ -]?[0-9]{3,4}$/i)
+    .required()
+    .messages({
+      'string.empty': 'Vehicle plate number is required.',
+      'any.required': 'Vehicle plate number is required.',
+      'string.pattern.base': 'Please enter a valid Philippine jeepney plate number (e.g., ABC 123 or ABC 1234).',
+    }),
   location: Joi.object({
     lat: Joi.number().min(-90).max(90),
     lng: Joi.number().min(-180).max(180),
@@ -49,7 +58,8 @@ const updateComplaintStatusSchema = Joi.object({
       'deleted',
       'endorsed_to_ltfrb',
       'resolved',
-      'dismissed'
+      'dismissed',
+      'rejected'
     )
     .required(),
   adminNotes: Joi.string().allow('', null).max(2000),
@@ -127,7 +137,13 @@ const updateCommuterComplaintSchema = Joi.object({
   subject: Joi.string().trim().min(5).max(200),
   description: Joi.string().trim().min(10).max(2000),
   routeId: Joi.string().allow(null, ''),
-  vehiclePlateNumber: Joi.string().allow('').max(20),
+  vehiclePlateNumber: Joi.string()
+    .trim()
+    .uppercase()
+    .pattern(/^[A-Z]{3}[ -]?[0-9]{3,4}$/i)
+    .messages({
+      'string.pattern.base': 'Please enter a valid Philippine jeepney plate number (e.g., ABC 123 or ABC 1234).',
+    }),
   location: Joi.object({
     lat: Joi.number().min(-90).max(90),
     lng: Joi.number().min(-180).max(180),
