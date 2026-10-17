@@ -67,7 +67,7 @@ const Sidebar = () => {
       "You have been safely signed out of the Administrator Console.",
     );
 
-    navigate("/login");
+    navigate("/");
   };
 
   // ============================================================
@@ -82,7 +82,7 @@ const Sidebar = () => {
           title: "Field Enforcement",
           items: [
             {
-              to: "/",
+              to: "/dashboard",
               label: "Field Dashboard",
               icon: LayoutDashboard,
               exact: true,
@@ -124,7 +124,7 @@ const Sidebar = () => {
           title: "Transit Operations",
           items: [
             {
-              to: "/",
+              to: "/dashboard",
               label: "Master Dashboard",
               icon: LayoutDashboard,
               exact: true,
@@ -195,7 +195,7 @@ const Sidebar = () => {
         title: "System Governance",
         items: [
           {
-            to: "/",
+            to: "/dashboard",
             label: "Accounts Dashboard",
             icon: LayoutDashboard,
             exact: true,

@@ -37,7 +37,7 @@ const AdminLayout = () => {
       "You have been safely signed out of the Administrator Console.",
     );
 
-    navigate("/login");
+    navigate("/");
   };
 
   // ============================================================
@@ -51,7 +51,7 @@ const AdminLayout = () => {
           title: "Authority Overview",
           items: [
             {
-              to: "/",
+              to: "/dashboard",
               label: "Overview Dashboard",
               icon: LayoutDashboard,
               exact: true,
@@ -87,7 +87,7 @@ const AdminLayout = () => {
           title: "Transit Operations",
           items: [
             {
-              to: "/",
+              to: "/dashboard",
               label: "Operations Dashboard",
               icon: LayoutDashboard,
               exact: true,
@@ -146,7 +146,7 @@ const AdminLayout = () => {
         title: "System & Transit Core",
         items: [
           {
-            to: "/",
+            to: "/dashboard",
             label: "Dashboard",
             icon: LayoutDashboard,
             exact: true,

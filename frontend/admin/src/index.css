@@ -1,10 +1,128 @@
+@import "tailwindcss";
+
+/* Global styles belong in the base layer so Tailwind utilities
+   can override them on individual components. */
+@layer base {
+  :root {
+    --font-heading:
+      "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+    --font-body:
+      "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+    --bg-main: #f5f6fa;
+    --bg-white: #ffffff;
+    --bg-surface: #ffffff;
+    --bg-surface-elevated: #f9fafb;
+    --bg-sidebar: #ffffff;
+
+    --primary: #f97316;
+    --primary-hover: #ea6c0a;
+    --primary-light: #ffedd5;
+    --primary-glow: rgba(249, 115, 22, 0.2);
+    --primary-dark: #c2550f;
+
+    --accent: #22c55e;
+    --accent-light: #dcfce7;
+    --accent-text: #16a34a;
+
+    --warning: #f59e0b;
+    --warning-light: #fef3c7;
+    --warning-text: #b45309;
+
+    --danger: #ef4444;
+    --danger-light: #fee2e2;
+    --danger-text: #b91c1c;
+
+    --info: #3b82f6;
+    --info-light: #dbeafe;
+    --info-text: #1d4ed8;
+
+    --text-main: #111827;
+    --text-secondary: #374151;
+    --text-muted: #6b7280;
+    --text-dim: #9ca3af;
+    --text-placeholder: #d1d5db;
+
+    --border: #e5e7eb;
+    --border-focus: rgba(249, 115, 22, 0.5);
+    --border-hover: #d1d5db;
+
+    --radius-xs: 4px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+    --radius-full: 9999px;
+
+    --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+    --shadow-primary: 0 4px 14px rgba(249, 115, 22, 0.35);
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-body);
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    min-height: 100vh;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: inherit;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  img,
+  svg {
+    max-width: 100%;
+  }
+}
+/*
 :root {
   --font-heading:
     "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-body:
     "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
-  /* GoBus-inspired Color Palette: Clean White + Orange */
+  GoBus-inspired Color Palette: Clean White + Orange
   --bg-main: #f5f6fa;
   --bg-white: #ffffff;
   --bg-surface: #ffffff;
@@ -140,7 +258,7 @@ button {
   outline: none;
   transition: all 0.2s ease;
 }
-
+*/
 /* ===== App Layout ===== */
 .app-container {
   display: flex;

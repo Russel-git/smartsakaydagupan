@@ -155,12 +155,15 @@ const Profile = () => {
         updateUser({ ...admin, profilePhoto: photoUrl });
       }
 
-      showSuccess("Profile Photo Updated", "Your official account photo has been saved.");
+      showSuccess(
+        "Profile Photo Updated",
+        "Your official account photo has been saved.",
+      );
     } catch (err) {
       console.error("Profile photo upload failed:", err);
       showError(
         "Upload Failed",
-        err.response?.data?.message || "Failed to update profile photo."
+        err.response?.data?.message || "Failed to update profile photo.",
       );
     } finally {
       setUploadingPhoto(false);
@@ -174,7 +177,7 @@ const Profile = () => {
   const handleLogout = () => {
     setShowLogoutConfirm(false);
     logout();
-    window.location.href = "/login";
+    window.location.href = "/";
   };
 
   // ============================================================
