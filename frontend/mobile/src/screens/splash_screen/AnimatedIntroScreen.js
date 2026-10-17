@@ -13,5 +13,5 @@ export default function AnimatedIntroScreen({ onFinish }) {
   }
 
   // Phones / smaller screens
-  return <AnimatedSplash_V2 onFinish={onFinish} />;
+  return <AnimatedSplash_V1 onFinish={onFinish} />;
 }
