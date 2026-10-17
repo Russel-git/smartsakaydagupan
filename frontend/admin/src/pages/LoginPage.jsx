@@ -66,14 +66,6 @@ const LoginPage = () => {
     }
   };
 
-  // ============================================================
-  // DEMO CREDENTIALS
-  // ============================================================
-
-  const handleFillDemo = () => {
-    setEmail("admin@smartsakay.com");
-    setPassword("Admin@12345");
-  };
 
   // ============================================================
   // BRANDING FEATURES
@@ -468,37 +460,6 @@ const LoginPage = () => {
             </button>
           </form>
 
-          {/* ==================================================
-              DEMO LOGIN
-          ================================================== */}
-
-          <div
-            style={{
-              marginTop: "20px",
-            }}
-          >
-            <hr
-              className="divider"
-              style={{
-                borderColor: colors.border,
-              }}
-            />
-
-            <button
-              type="button"
-              onClick={handleFillDemo}
-              className="btn"
-              style={{
-                width: "100%",
-                fontSize: "13px",
-                backgroundColor: colors.surfaceElevated,
-                color: colors.primary,
-                border: `1px solid ${colors.border}`,
-              }}
-            >
-              ⚡ Autofill Default Admin Credentials
-            </button>
-          </div>
 
           {/* ==================================================
               RETURN LINK & FOOTER
