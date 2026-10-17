@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "../../../contexts/theme/ThemeContext";
 
 const NAV_LINKS = [
@@ -12,8 +12,8 @@ const NAV_LINKS = [
 
 function Logo({ colors }) {
   return (
-    <a
-      href="/"
+    <Link
+      to="/"
       aria-label="SmartSakay home"
       className="inline-flex items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2"
       style={{ "--tw-ring-color": colors.primary }}
@@ -25,7 +25,7 @@ function Logo({ colors }) {
         Smart
         <span style={{ color: colors.primary }}>Sakay</span>
       </span>
-    </a>
+    </Link>
   );
 }
 
@@ -96,8 +96,8 @@ export default function Header() {
 
             return (
               <li key={link.label}>
-                <a
-                  href={link.href}
+                <Link
+                  to={link.href}
                   aria-current={active ? "page" : undefined}
                   className="rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200"
                   style={getLinkStyle(active)}
@@ -110,20 +110,20 @@ export default function Header() {
                   }}
                 >
                   {link.label}
-                </a>
+                </Link>
               </li>
             );
           })}
         </ul>
 
         <div className="flex items-center gap-3">
-          <a
-            href={import.meta.env.VITE_APP_URL}
-            className="hidden rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95 md:inline-flex"
+          <Link
+            to="/login"
+            className="hidden rounded-xl px-5 py-2.5 text-sm font-bold text-white transition hover:brightness-95 md:inline-flex"
             style={{ background: colors.primary }}
           >
-            Get Started
-          </a>
+            Admin Sign In
+          </Link>
 
           {/* Mobile menu button */}
           <button
@@ -156,27 +156,27 @@ export default function Header() {
             const active = isActive(link.href);
 
             return (
-              <a
+              <Link
                 key={link.label}
-                href={link.href}
+                to={link.href}
                 aria-current={active ? "page" : undefined}
                 onClick={() => setOpen(false)}
                 className="mb-1 block rounded-xl px-4 py-3 font-semibold transition-all duration-200"
                 style={getLinkStyle(active)}
               >
                 {link.label}
-              </a>
+              </Link>
             );
           })}
 
-          <a
-            href={import.meta.env.VITE_APP_URL}
+          <Link
+            to="/login"
             onClick={() => setOpen(false)}
             className="mt-2 block rounded-xl px-4 py-3 text-center font-bold text-white"
             style={{ background: colors.primary }}
           >
-            Get Started
-          </a>
+            Admin Sign In
+          </Link>
         </div>
       )}
     </header>

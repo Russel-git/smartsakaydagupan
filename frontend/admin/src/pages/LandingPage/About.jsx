@@ -1,6 +1,7 @@
 import { useTheme } from "../../contexts/theme/ThemeContext";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+import jeepImg from "../../../assets/jeep.png";
 
 const FEATURES = [
   {
@@ -214,7 +215,7 @@ function AboutHero({ colors }) {
               }}
             >
               <img
-                src="/assets/jeep.png"
+                src={jeepImg}
                 alt="Jeepney representing public transportation in SmartSakay"
                 className="h-56 w-full object-contain p-4 sm:h-64"
                 onError={(event) => {

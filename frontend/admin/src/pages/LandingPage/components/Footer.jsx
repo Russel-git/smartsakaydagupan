@@ -1,29 +1,31 @@
+import { Link } from "react-router-dom";
 import { useTheme } from "../../../contexts/theme/ThemeContext";
 
 const FOOTER_COLUMNS = [
   {
     heading: "Explore",
     links: [
-      { label: "About", href: "/about" },
-      { label: "Blog", href: "/blog" },
-      { label: "FAQ", href: "/faqs" },
-      { label: "Contact", href: "/contact" },
+      { label: "About", href: "/about", isExternal: false },
+      { label: "Blog", href: "/blog", isExternal: false },
+      { label: "FAQ", href: "/faqs", isExternal: false },
+      { label: "Contact", href: "/contact", isExternal: false },
+      { label: "Admin Portal", href: "/login", isExternal: false },
     ],
   },
   {
     heading: "Follow us",
     links: [
-      { label: "Facebook", href: "https://www.facebook.com/" },
-      { label: "Twitter", href: "https://x.com/" },
-      { label: "Instagram", href: "https://www.instagram.com/" },
+      { label: "Facebook", href: "https://www.facebook.com/", isExternal: true },
+      { label: "Twitter", href: "https://x.com/", isExternal: true },
+      { label: "Instagram", href: "https://www.instagram.com/", isExternal: true },
     ],
   },
 ];
 
 function Logo({ colors }) {
   return (
-    <a
-      href="/"
+    <Link
+      to="/"
       aria-label="SmartSakay home"
       className="inline-flex items-center gap-3 rounded-xl"
     >
@@ -34,7 +36,7 @@ function Logo({ colors }) {
         Smart
         <span style={{ color: colors.primaryLight }}>Sakay</span>
       </span>
-    </a>
+    </Link>
   );
 }
 
@@ -71,23 +73,43 @@ export default function Footer() {
             <ul className="mt-5 space-y-3">
               {column.links.map((link) => (
                 <li key={link.label}>
-                  <a
-                    href={link.href}
-                    target="_blank"
-                    className="text-sm transition hover:underline"
-                    style={{
-                      color: colors.textMuted,
-                      textUnderlineOffset: 4,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.color = colors.primary;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.color = colors.textMuted;
-                    }}
-                  >
-                    {link.label}
-                  </a>
+                  {link.isExternal ? (
+                    <a
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm transition hover:underline"
+                      style={{
+                        color: colors.textMuted,
+                        textUnderlineOffset: 4,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = colors.primary;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = colors.textMuted;
+                      }}
+                    >
+                      {link.label}
+                    </a>
+                  ) : (
+                    <Link
+                      to={link.href}
+                      className="text-sm transition hover:underline"
+                      style={{
+                        color: colors.textMuted,
+                        textUnderlineOffset: 4,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = colors.primary;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = colors.textMuted;
+                      }}
+                    >
+                      {link.label}
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>

@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Bus,
   Lock,
   Mail,
   AlertCircle,
   ArrowRight,
+  ArrowLeft,
   MapPin,
   Users,
   Navigation,
@@ -254,6 +255,41 @@ const LoginPage = () => {
           }}
         >
           {/* ==================================================
+              BACK TO LANDING PAGE
+          ================================================== */}
+
+          <Link
+            to="/"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "7px",
+              fontSize: "13px",
+              fontWeight: "600",
+              color: colors.textSecondary,
+              textDecoration: "none",
+              marginBottom: "20px",
+              padding: "7px 14px",
+              borderRadius: "8px",
+              backgroundColor: colors.surfaceElevated || "rgba(0, 0, 0, 0.04)",
+              border: `1px solid ${colors.border}`,
+              transition: "all 0.15s ease",
+              width: "fit-content",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = colors.primary;
+              e.currentTarget.style.borderColor = colors.primary;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = colors.textSecondary;
+              e.currentTarget.style.borderColor = colors.border;
+            }}
+          >
+            <ArrowLeft size={16} />
+            <span>Back to SmartSakay Website</span>
+          </Link>
+
+          {/* ==================================================
               LOGO
           ================================================== */}
 
@@ -465,12 +501,33 @@ const LoginPage = () => {
           </div>
 
           {/* ==================================================
-              FOOTER
+              RETURN LINK & FOOTER
           ================================================== */}
+
+          <div
+            style={{
+              marginTop: "16px",
+              textAlign: "center",
+              fontSize: "13px",
+              color: colors.textMuted,
+            }}
+          >
+            Not an administrator?{" "}
+            <Link
+              to="/"
+              style={{
+                color: colors.primary,
+                fontWeight: "600",
+                textDecoration: "none",
+              }}
+            >
+              Return to landing page
+            </Link>
+          </div>
 
           <p
             style={{
-              marginTop: "20px",
+              marginTop: "16px",
               fontSize: "12px",
               color: colors.textMuted,
               textAlign: "center",

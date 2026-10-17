@@ -1,8 +1,14 @@
 import { useEffect, useState, useRef } from "react";
+import { Link } from "react-router-dom";
 import { useTheme } from "../../contexts/theme/ThemeContext";
 import useIntersectionObserver from "../../hooks/IntersectionObserver";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+
+import mapImg from "../../../assets/map.jpg";
+import townImg from "../../../assets/town.jpg";
+import informImg from "../../../assets/inform.jpg";
+import jeepImg from "../../../assets/jeep.png";
 
 const SLIDES = [
   {
@@ -12,7 +18,7 @@ const SLIDES = [
     colorKey: "primary",
     tintKey: "primaryLight",
     buttonText: "Learn More",
-    image: "../../../assets/map.jpg",
+    image: mapImg,
     to: "/about",
   },
   {
@@ -22,7 +28,7 @@ const SLIDES = [
     colorKey: "secondaryDark",
     tintKey: "secondaryLight",
     buttonText: "Contact Us",
-    image: "../../../assets/town.jpg",
+    image: townImg,
     to: "/contact",
   },
   {
@@ -31,8 +37,8 @@ const SLIDES = [
     text: "Add routes, terminals, broadcast announcements, and review file reports.",
     colorKey: "accentDark",
     tintKey: "accentLight",
-    buttonText: "Login",
-    image: "../../../assets/inform.jpg",
+    buttonText: "Admin Login",
+    image: informImg,
     to: "/login",
   },
 ];
@@ -406,8 +412,8 @@ function ImageSlot({ src, alt, Art, dark, colors }) {
 
 function Logo({ dark, light = false, colors }) {
   return (
-    <a
-      href="/"
+    <Link
+      to="/"
       className="inline-flex items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2"
       style={{ "--tw-ring-color": colors.primary }}
     >
@@ -422,7 +428,7 @@ function Logo({ dark, light = false, colors }) {
           Sakay
         </span>
       </span>
-    </a>
+    </Link>
   );
 }
 
@@ -507,7 +513,7 @@ function Hero({ dark, colors }) {
           >
             <div className="aspect-4/3 overflow-hidden rounded-3xl">
               <img
-                src="../../../assets/jeep.png"
+                src={jeepImg}
                 alt="Jeepney"
                 className="h-full w-full object-cover"
               />
@@ -612,16 +618,16 @@ function Slides({ dark, colors }) {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <a
-              href={slide.to}
-              className="rounded-xl w-50 py-3.5 font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:brightness-110 cursor-pointer"
+            <Link
+              to={slide.to}
+              className="rounded-xl w-50 py-3.5 font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:brightness-110 cursor-pointer block text-center"
               style={{
                 background: slideColor,
                 boxShadow: `0 10px 30px ${slideColor}55`,
               }}
             >
               {slide.buttonText}
-            </a>
+            </Link>
           </div>
         </div>
 
