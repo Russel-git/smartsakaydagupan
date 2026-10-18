@@ -64,9 +64,9 @@ const RegisterScreen = ({ navigation }) => {
 
   const handleBack = () => {
     if (navigation.canGoBack()) {
-      navigation.navigate("Welcome");
+      navigation.navigate("Welcome - SmartSakay");
     } else {
-      navigation.navigate("Welcome");
+      navigation.navigate("Welcome - SmartSakay");
     }
   };
 
@@ -158,7 +158,7 @@ const RegisterScreen = ({ navigation }) => {
         `A 6-digit verification code has been dispatched to ${form.email.trim()}.`,
       );
       if (res?.data?.requiresVerification || !res?.data?.accessToken) {
-        navigation.navigate("Otp", {
+        navigation.navigate("OTP - SmartSakay", {
           email: form.email.trim(),
           type: "registration",
           demoOtp: res?.data?.demoOtp,
@@ -422,9 +422,11 @@ const RegisterScreen = ({ navigation }) => {
                   borderColor: errors.terms
                     ? colors.error
                     : termsAccepted
+                      ? colors.primary
+                      : colors.border,
+                  backgroundColor: termsAccepted
                     ? colors.primary
-                    : colors.border,
-                  backgroundColor: termsAccepted ? colors.primary : colors.surface,
+                    : colors.surface,
                 },
               ]}
               onPress={() => {
@@ -439,7 +441,11 @@ const RegisterScreen = ({ navigation }) => {
               accessibilityLabel="Accept Terms and Conditions checkbox"
             >
               {termsAccepted && (
-                <MaterialCommunityIcons name="check" size={15} color="#FFFFFF" />
+                <MaterialCommunityIcons
+                  name="check"
+                  size={15}
+                  color="#FFFFFF"
+                />
               )}
             </TouchableOpacity>
 

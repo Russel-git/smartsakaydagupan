@@ -122,7 +122,6 @@ export default function Header() {
               import.meta.env.VITE_APP_URL ||
               "https://smartsakaydagupan-mobilev1.vercel.app/"
             }
-            target="_blank"
             rel="noopener noreferrer"
             className="hidden rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95 md:inline-flex"
             style={{ background: colors.primary }}

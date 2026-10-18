@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "SmartSakay",
+    "slug": "SmartSakay",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -18,10 +18,9 @@
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "name": "SmartSakay",
+      "favicon": "../admin/assets/favicon.png"
     },
-    "plugins": [
-      "expo-font"
-    ]
+    "plugins": ["expo-font"]
   }
 }

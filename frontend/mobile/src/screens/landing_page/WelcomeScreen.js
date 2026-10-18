@@ -671,14 +671,14 @@ const WelcomeScreen = ({ navigation }) => {
       >
         <Button
           title="Get Started"
-          onPress={() => navigation.navigate("GetStarted")}
+          onPress={() => navigation.navigate("Get Started - SmartSakay")}
           size="lg"
           style={styles.btn}
         />
 
         <Button
           title="Sign In"
-          onPress={() => navigation.navigate("Login")}
+          onPress={() => navigation.navigate("Login - SmartSakay")}
           variant="outline"
           size="lg"
           style={styles.btn}
