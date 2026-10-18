@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  Alert,
   Platform,
   useWindowDimensions,
 } from "react-native";
@@ -27,6 +26,7 @@ import {
 } from "../../utils/constants";
 
 const JEEPNEY_PLATE_REGEX = /^[A-Z]{3}[ -]?[0-9]{3,4}$/i;
+const OTHER_CATEGORY = "other";
 
 const countWords = (text) => {
   if (!text || typeof text !== "string") return 0;
@@ -41,11 +41,19 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
   const { width, height } = useWindowDimensions();
   const isTablet = Math.min(width, height) >= 600;
 
+  const initialCategory = route?.params?.category || "";
+  const initialCategoryLabel = COMPLAINT_CATEGORIES.find(
+    (cat) => cat.value === initialCategory,
+  )?.label;
+
   const [promptVisible, setPromptVisible] = useState(false);
   const [routes, setRoutes] = useState([]);
   const [form, setForm] = useState({
-    category: route?.params?.category || "",
-    subject: route?.params?.subject || "",
+    category: initialCategory,
+    subject:
+      initialCategory === OTHER_CATEGORY
+        ? route?.params?.subject || ""
+        : initialCategoryLabel || route?.params?.subject || "",
     description: route?.params?.description || "",
     routeId: route?.params?.routeId || "",
     vehiclePlateNumber: route?.params?.vehiclePlateNumber || "",
@@ -57,15 +65,25 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     if (route?.params) {
-      setForm((prev) => ({
-        ...prev,
-        category: route.params.category || prev.category,
-        subject: route.params.subject || prev.subject,
-        description: route.params.description || prev.description,
-        vehiclePlateNumber:
-          route.params.vehiclePlateNumber || prev.vehiclePlateNumber,
-        routeId: route.params.routeId || prev.routeId,
-      }));
+      setForm((prev) => {
+        const nextCategory = route.params.category || prev.category;
+        const categoryLabel = COMPLAINT_CATEGORIES.find(
+          (cat) => cat.value === nextCategory,
+        )?.label;
+
+        return {
+          ...prev,
+          category: nextCategory,
+          subject:
+            nextCategory === OTHER_CATEGORY
+              ? (route.params.subject ?? prev.subject)
+              : categoryLabel || prev.subject,
+          description: route.params.description || prev.description,
+          vehiclePlateNumber:
+            route.params.vehiclePlateNumber || prev.vehiclePlateNumber,
+          routeId: route.params.routeId || prev.routeId,
+        };
+      });
     }
   }, [route?.params]);
 
@@ -101,6 +119,25 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         return next;
       });
     }
+  };
+
+  const handleCategoryChange = (category) => {
+    const selectedCategory = COMPLAINT_CATEGORIES.find(
+      (cat) => cat.value === category,
+    );
+
+    setForm((prev) => ({
+      ...prev,
+      category,
+      subject: category === OTHER_CATEGORY ? "" : selectedCategory?.label || "",
+    }));
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.category;
+      delete next.subject;
+      return next;
+    });
   };
 
   const handlePickFromGallery = async () => {
@@ -153,21 +190,28 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
 
   const validate = () => {
     const e = {};
+
     if (!form.category) {
       e.category = "Please select a grievance category.";
     }
 
     const cleanSubject = (form.subject || "").trim();
-    if (!cleanSubject) {
-      e.subject = "Subject is required.";
-    } else if (cleanSubject.length < 5) {
-      e.subject = "Subject must be at least 5 characters long (e.g., Overcharging on Route 3).";
+
+    if (form.category === OTHER_CATEGORY) {
+      if (!cleanSubject) {
+        e.subject = "Subject is required.";
+      } else if (cleanSubject.length < 5) {
+        e.subject =
+          "Subject must be at least 5 characters long (e.g., Overcharging on Route 3).";
+      }
     }
 
     const cleanDesc = (form.description || "").trim();
     const wordCount = countWords(cleanDesc);
+
     if (!cleanDesc) {
-      e.description = "Description is required. Please write at least 5 to 8 words.";
+      e.description =
+        "Description is required. Please write at least 5 to 8 words.";
     } else if (wordCount < 5) {
       e.description = `Description must have at least 5 to 8 words to describe what happened (currently only ${wordCount} word${wordCount === 1 ? "" : "s"}).`;
     } else if (cleanDesc.length < 10) {
@@ -175,6 +219,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
     }
 
     const cleanPlate = (form.vehiclePlateNumber || "").trim().toUpperCase();
+
     if (!cleanPlate) {
       e.vehiclePlateNumber = "Vehicle plate number is required.";
     } else if (!JEEPNEY_PLATE_REGEX.test(cleanPlate)) {
@@ -189,6 +234,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         e.category || e.subject || e.description || e.vehiclePlateNumber;
       return { isValid: false, message: firstError };
     }
+
     return { isValid: true };
   };
 
@@ -207,15 +253,18 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
     }
 
     const validation = validate();
+
     if (!validation.isValid) {
       showWarning(
         "Incomplete Report Details",
-        validation.message || "Please complete all required fields with sufficient detail before submitting.",
+        validation.message ||
+          "Please complete all required fields with sufficient detail before submitting.",
       );
       return;
     }
 
     setLoading(true);
+
     try {
       let attachments = [];
 
@@ -241,6 +290,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         }
 
         const uploadRes = await complaintsAPI.uploadPhoto(formData);
+
         if (uploadRes.data?.data?.url) {
           attachments.push(uploadRes.data.data.url);
         }
@@ -248,7 +298,10 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
 
       await complaintsAPI.createComplaint({
         ...form,
-        vehiclePlateNumber: (form.vehiclePlateNumber || "").trim().toUpperCase(),
+        subject: (form.subject || "").trim(),
+        vehiclePlateNumber: (form.vehiclePlateNumber || "")
+          .trim()
+          .toUpperCase(),
         routeId: form.routeId || undefined,
         attachments,
       });
@@ -257,18 +310,22 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         "Complaint Submitted!",
         "Your report has been received and queued for investigation by Dagupan transit authorities.",
       );
+
       navigation.goBack();
     } catch (e) {
       console.error("Complaint submission error:", e?.response?.data || e);
+
       let errorMsg = "Failed to submit complaint. Please try again.";
+
       if (e.response?.data) {
         const resData = e.response.data;
+
         if (Array.isArray(resData.errors) && resData.errors.length > 0) {
           errorMsg = resData.errors
             .map((err) =>
               typeof err === "string"
                 ? err.replace(/^"|"$/g, "").replace(/"/g, "")
-                : JSON.stringify(err)
+                : JSON.stringify(err),
             )
             .join("\n");
         } else if (resData.message) {
@@ -277,6 +334,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
       } else if (e.message) {
         errorMsg = e.message;
       }
+
       showError("Submission Failed", errorMsg);
     } finally {
       setLoading(false);
@@ -297,6 +355,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         icon="clipboard-alert"
         featureTag="Verified Report"
       />
+
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
         keyboardShouldPersistTaps="handled"
@@ -383,11 +442,13 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
           <Text style={[styles.label, { color: colors.textPrimary }]}>
             Violation Category *
           </Text>
+
           {Boolean(errors.category) ? (
             <Text style={[styles.error, { color: colors.error }]}>
               {errors.category}
             </Text>
           ) : null}
+
           <View style={styles.categoryGrid}>
             {COMPLAINT_CATEGORIES.map((cat) => (
               <TouchableOpacity
@@ -395,7 +456,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
                 style={[
                   styles.categoryChip,
                   {
-                    width: isTablet ? "23.5%" : "31%",
+                    width: "31.5%",
                     backgroundColor:
                       form.category === cat.value
                         ? colors.primary + "15"
@@ -406,7 +467,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
                         : colors.border,
                   },
                 ]}
-                onPress={() => updateField("category", cat.value)}
+                onPress={() => handleCategoryChange(cat.value)}
                 activeOpacity={0.8}
               >
                 <MaterialCommunityIcons
@@ -418,6 +479,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
                       : colors.textMuted
                   }
                 />
+
                 <Text
                   style={{
                     color:
@@ -439,24 +501,31 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
             ))}
           </View>
 
-          <Input
-            label="Subject *"
-            placeholder="Brief summary (e.g., Overcharging on Perez Blvd)"
-            value={form.subject}
-            onChangeText={(t) => updateField("subject", t)}
-            error={errors.subject}
-            leftIcon="text-short"
-            style={{
-              marginBottom:
-                form.subject && subjectLength > 0 && subjectLength < 5
-                  ? 4
-                  : SPACING.lg,
-            }}
-          />
-          {Boolean(form.subject && subjectLength > 0 && subjectLength < 5) && (
-            <Text style={[styles.fieldHint, { color: "#D97706" }]}>
-              ⚠️ Subject must have at least 5 characters ({subjectLength}/5)
-            </Text>
+          {form.category === OTHER_CATEGORY && (
+            <>
+              <Input
+                label="Subject *"
+                placeholder="Brief summary (e.g., Overcharging on Perez Blvd)"
+                value={form.subject}
+                onChangeText={(t) => updateField("subject", t)}
+                error={errors.subject}
+                leftIcon="text-short"
+                style={{
+                  marginBottom:
+                    form.subject && subjectLength > 0 && subjectLength < 5
+                      ? 4
+                      : SPACING.lg,
+                }}
+              />
+
+              {Boolean(
+                form.subject && subjectLength > 0 && subjectLength < 5,
+              ) && (
+                <Text style={[styles.fieldHint, { color: "#D97706" }]}>
+                  ⚠️ Subject must have at least 5 characters ({subjectLength}/5)
+                </Text>
+              )}
+            </>
           )}
 
           <View style={{ marginBottom: SPACING.lg }}>
@@ -481,14 +550,14 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
                     descWordCount >= 5
                       ? "rgba(34, 197, 94, 0.08)"
                       : descWordCount > 0
-                      ? "rgba(245, 158, 11, 0.08)"
-                      : colors.surfaceElevated,
+                        ? "rgba(245, 158, 11, 0.08)"
+                        : colors.surfaceElevated,
                   borderColor:
                     descWordCount >= 5
                       ? "rgba(34, 197, 94, 0.25)"
                       : descWordCount > 0
-                      ? "rgba(245, 158, 11, 0.25)"
-                      : colors.border,
+                        ? "rgba(245, 158, 11, 0.25)"
+                        : colors.border,
                 },
               ]}
             >
@@ -506,18 +575,19 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
                       descWordCount >= 5
                         ? "checkbox-marked-circle"
                         : descWordCount > 0
-                        ? "alert-circle"
-                        : "information"
+                          ? "alert-circle"
+                          : "information"
                     }
                     size={16}
                     color={
                       descWordCount >= 5
                         ? "#16A34A"
                         : descWordCount > 0
-                        ? "#D97706"
-                        : colors.primary
+                          ? "#D97706"
+                          : colors.primary
                     }
                   />
+
                   <Text
                     style={{
                       fontSize: FONTS.sizes.xs,
@@ -526,15 +596,15 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
                         descWordCount >= 5
                           ? "#16A34A"
                           : descWordCount > 0
-                          ? "#D97706"
-                          : colors.textPrimary,
+                            ? "#D97706"
+                            : colors.textPrimary,
                     }}
                   >
                     {descWordCount >= 5
                       ? "Description Requirement Met"
                       : descWordCount > 0
-                      ? `Need ${Math.max(0, 5 - descWordCount)} more word${5 - descWordCount === 1 ? "" : "s"}`
-                      : "Description Requirement (5–8 Words Min)"}
+                        ? `Need ${Math.max(0, 5 - descWordCount)} more word${5 - descWordCount === 1 ? "" : "s"}`
+                        : "Description Requirement (5–8 Words Min)"}
                   </Text>
                 </View>
 
@@ -546,8 +616,8 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
                         descWordCount >= 5
                           ? "#16A34A"
                           : descWordCount > 0
-                          ? "#D97706"
-                          : colors.border,
+                            ? "#D97706"
+                            : colors.border,
                     },
                   ]}
                 >
@@ -579,6 +649,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
           >
             Photo Evidence (Optional)
           </Text>
+
           <Text style={[styles.photoHelper, { color: colors.textSecondary }]}>
             Clear photos of vehicle plate numbers, fares, or incidents
             significantly speed up LGU investigations.
@@ -658,6 +729,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
           >
             Route (Optional)
           </Text>
+
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -684,6 +756,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
                 None
               </Text>
             </TouchableOpacity>
+
             {routes.map((r) => (
               <TouchableOpacity
                 key={r._id}
@@ -714,23 +787,29 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
             label="Vehicle Plate Number *"
             placeholder="e.g., ABC 123 or ABC 1234"
             value={form.vehiclePlateNumber}
-            onChangeText={(t) => updateField("vehiclePlateNumber", t.toUpperCase())}
+            onChangeText={(t) =>
+              updateField("vehiclePlateNumber", t.toUpperCase())
+            }
             error={errors.vehiclePlateNumber}
             leftIcon="car"
             autoCapitalize="characters"
             maxLength={8}
             style={{ marginBottom: errors.vehiclePlateNumber ? 4 : 8 }}
           />
+
           <Text
             style={[
               styles.fieldHint,
               {
-                color: errors.vehiclePlateNumber ? colors.error : colors.textSecondary,
+                color: errors.vehiclePlateNumber
+                  ? colors.error
+                  : colors.textSecondary,
                 marginBottom: SPACING.lg,
               },
             ]}
           >
-            Philippine Jeepney Format: ABC 123 (Traditional) or ABC 1234 (Modern / Traditional)
+            Philippine Jeepney Format: ABC 123 (Traditional) or ABC 1234 (Modern
+            / Traditional)
           </Text>
 
           <Button

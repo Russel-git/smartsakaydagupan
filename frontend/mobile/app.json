@@ -19,7 +19,7 @@
     },
     "web": {
       "name": "SmartSakay",
-      "favicon": "../admin/assets/favicon.png"
+      "favicon": "./assets/favicon.png"
     },
     "plugins": ["expo-font"]
   }
