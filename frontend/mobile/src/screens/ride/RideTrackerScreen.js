@@ -109,7 +109,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
   const mapHeight = isLandscape
     ? Math.max(220, Math.min(360, windowHeight * 0.42))
     : isTablet
-      ? Math.min(420, windowHeight * 0.40)
+      ? Math.min(420, windowHeight * 0.4)
       : Math.min(320, Math.max(220, windowHeight * 0.35));
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState({
@@ -160,8 +160,6 @@ const RideTrackerScreen = ({ route, navigation }) => {
   const [gpsError, setGpsError] = useState("");
   const [distanceTraveledKm, setDistanceTraveledKm] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [simulationIndex, setSimulationIndex] = useState(0);
 
   // References for live subscriptions & timers
   const lastLocationRef = useRef(null);
@@ -443,7 +441,6 @@ const RideTrackerScreen = ({ route, navigation }) => {
     if (simulationIntervalRef.current) {
       clearInterval(simulationIntervalRef.current);
       simulationIntervalRef.current = null;
-      setIsSimulating(false);
     }
   };
 
@@ -516,42 +513,6 @@ const RideTrackerScreen = ({ route, navigation }) => {
     setElapsedSeconds(0);
     setStartLocation(null);
     setRideState("idle");
-  };
-
-  // Desktop Motion Simulation along selected route path
-  const toggleSimulation = () => {
-    if (isGuest) {
-      setAuthModalVisible(true);
-      return;
-    }
-    if (isSimulating) {
-      if (simulationIntervalRef.current)
-        clearInterval(simulationIntervalRef.current);
-      simulationIntervalRef.current = null;
-      setIsSimulating(false);
-    } else {
-      if (!selectedRoute?.path || selectedRoute.path.length < 2) {
-        showWarning(
-          "Simulation Notice",
-          "Selected route does not have GPS path coordinates to simulate.",
-        );
-        return;
-      }
-
-      setIsSimulating(true);
-      let idx = simulationIndex;
-      const path = selectedRoute.path;
-
-      simulationIntervalRef.current = setInterval(() => {
-        idx = (idx + 1) % path.length;
-        setSimulationIndex(idx);
-        const pt = path[idx];
-        const nextCoords = Array.isArray(pt)
-          ? { lat: pt[0], lng: pt[1] }
-          : { lat: pt.lat, lng: pt.lng };
-        handleNewPosition(nextCoords);
-      }, 1500);
-    }
   };
 
   // Format MM:SS
@@ -721,25 +682,6 @@ const RideTrackerScreen = ({ route, navigation }) => {
             </Text>
           </View>
         </View>
-
-        {activeTab === "tracker" && rideState === "riding" && (
-          <TouchableOpacity
-            style={[
-              styles.simBtn,
-              { backgroundColor: isSimulating ? "#DC2626" : "#2563EB" },
-            ]}
-            onPress={toggleSimulation}
-          >
-            <MaterialCommunityIcons
-              name={isSimulating ? "motion-pause" : "motion-play"}
-              size={16}
-              color="#FFFFFF"
-            />
-            <Text style={styles.simBtnText}>
-              {isSimulating ? "Pause Sim" : "Simulate"}
-            </Text>
-          </TouchableOpacity>
-        )}
 
         {activeTab === "history" && rideHistory.length > 0 && (
           <TouchableOpacity

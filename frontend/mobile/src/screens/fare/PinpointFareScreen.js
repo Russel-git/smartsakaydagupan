@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -11,24 +11,29 @@ import {
   Modal,
   Image,
   useWindowDimensions,
-} from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import { WebView } from 'react-native-webview';
-import { useTheme } from '../../contexts/ThemeContext';
-import { useFeedback } from '../../contexts/FeedbackContext';
-import { Card } from '../../components/common/SharedComponents';
-import ConfirmDialogModal from '../../components/common/ConfirmDialogModal';
-import { saveRideToHistory } from '../../utils/storage';
-import { FONTS, SPACING, RADIUS, SHADOWS } from '../../utils/constants';
+} from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import { WebView } from "react-native-webview";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useFeedback } from "../../contexts/FeedbackContext";
+import { Card } from "../../components/common/SharedComponents";
+import ConfirmDialogModal from "../../components/common/ConfirmDialogModal";
+import { saveRideToHistory } from "../../utils/storage";
+import { FONTS, SPACING, RADIUS, SHADOWS } from "../../utils/constants";
+import { useSharedLocation } from "../../contexts/LocationContext";
+import {
+  LocationPermissionBanner,
+  LocationPermissionModal,
+} from "../../components/common/LocationPermissionPrompt";
 
-const GPS_ICON = require('../../../assets/gps_access_icon.png');
+const GPS_ICON = require("../../../assets/gps_access_icon.png");
 
 // Default fallback location: Dagupan City Plaza
 const DAGUPAN_CENTER = {
   lat: 16.0433,
   lng: 120.3342,
-  name: 'Dagupan City Plaza',
+  name: "Dagupan City Plaza",
 };
 
 // Base speed for accurate estimated travel time: 30 km/h - 35 km/h (average: 32.5 km/h)
@@ -40,16 +45,76 @@ const calculateEstMinutes = (distanceKm) => {
 
 // Popular in Dagupan to Visit for 1-tap pinpoint with exact coordinates
 const POPULAR_DESTINATIONS = [
-  { name: 'Region 1', fullName: 'Region 1 Medical Center', lat: 16.04858883203431, lng: 120.34159201507514, icon: 'hospital-building' },
-  { name: 'University of Luzon', fullName: 'University of Luzon', lat: 16.03979698464543, lng: 120.33585706611083, icon: 'school' },
-  { name: 'UPang', fullName: 'PHINMA University of Pangasinan', lat: 16.047073152284103, lng: 120.3424288642609, icon: 'school' },
-  { name: 'Lyceum NorthWestern University', fullName: 'Lyceum Northwestern University', lat: 16.035223066160448, lng: 120.33011439807963, icon: 'school' },
-  { name: 'UDD', fullName: 'Universidad de Dagupan (UDD)', lat: 16.050671455090622, lng: 120.34088198010957, icon: 'school' },
-  { name: 'CSI Lucao', fullName: 'CSI The City Mall Lucao', lat: 16.023527558411267, lng: 120.32342891959715, icon: 'shopping' },
-  { name: 'SM Dagupan', fullName: 'SM Center Dagupan', lat: 16.044318662785823, lng: 120.34369785261799, icon: 'shopping' },
-  { name: 'Nepo Mall Dagupan', fullName: 'Nepo Mall Downtown Dagupan', lat: 16.05119585865268, lng: 120.34159281889808, icon: 'store' },
-  { name: 'CSI Square', fullName: 'CSI Square Downtown', lat: 16.043433644436057, lng: 120.33567150740232, icon: 'shopping' },
-  { name: 'City Mall Mayombo', fullName: 'CityMall Mayombo Dagupan', lat: 16.038098156410296, lng: 120.34736306873677, icon: 'shopping' },
+  {
+    name: "Region 1",
+    fullName: "Region 1 Medical Center",
+    lat: 16.04858883203431,
+    lng: 120.34159201507514,
+    icon: "hospital-building",
+  },
+  {
+    name: "University of Luzon",
+    fullName: "University of Luzon",
+    lat: 16.03979698464543,
+    lng: 120.33585706611083,
+    icon: "school",
+  },
+  {
+    name: "UPang",
+    fullName: "PHINMA University of Pangasinan",
+    lat: 16.047073152284103,
+    lng: 120.3424288642609,
+    icon: "school",
+  },
+  {
+    name: "Lyceum NorthWestern University",
+    fullName: "Lyceum Northwestern University",
+    lat: 16.035223066160448,
+    lng: 120.33011439807963,
+    icon: "school",
+  },
+  {
+    name: "UDD",
+    fullName: "Universidad de Dagupan (UDD)",
+    lat: 16.050671455090622,
+    lng: 120.34088198010957,
+    icon: "school",
+  },
+  {
+    name: "CSI Lucao",
+    fullName: "CSI The City Mall Lucao",
+    lat: 16.023527558411267,
+    lng: 120.32342891959715,
+    icon: "shopping",
+  },
+  {
+    name: "SM Dagupan",
+    fullName: "SM Center Dagupan",
+    lat: 16.044318662785823,
+    lng: 120.34369785261799,
+    icon: "shopping",
+  },
+  {
+    name: "Nepo Mall Dagupan",
+    fullName: "Nepo Mall Downtown Dagupan",
+    lat: 16.05119585865268,
+    lng: 120.34159281889808,
+    icon: "store",
+  },
+  {
+    name: "CSI Square",
+    fullName: "CSI Square Downtown",
+    lat: 16.043433644436057,
+    lng: 120.33567150740232,
+    icon: "shopping",
+  },
+  {
+    name: "City Mall Mayombo",
+    fullName: "CityMall Mayombo Dagupan",
+    lat: 16.038098156410296,
+    lng: 120.34736306873677,
+    icon: "shopping",
+  },
 ];
 
 // Haversine distance in km
@@ -61,9 +126,9 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-    Math.cos((lat2 * Math.PI) / 180) *
-    Math.sin(dLon / 2) *
-    Math.sin(dLon / 2);
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(R * c * 10) / 10;
 };
@@ -75,7 +140,9 @@ const calculateBearing = (lat1, lon1, lat2, lon2) => {
   const lat1Rad = (lat1 * Math.PI) / 180;
   const lat2Rad = (lat2 * Math.PI) / 180;
   const y = Math.sin(dLon) * Math.cos(lat2Rad);
-  const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+  const x =
+    Math.cos(lat1Rad) * Math.sin(lat2Rad) -
+    Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
   const brng = (Math.atan2(y, x) * 180) / Math.PI;
   return (brng + 360) % 360;
 };
@@ -84,6 +151,8 @@ const PinpointFareScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
   const { showSuccess, showWarning, showError, showInfo } = useFeedback();
   const webViewRef = useRef(null);
+  const { ensureLocationPermission, locationPermission } = useSharedLocation();
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
 
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isTablet = Math.min(windowWidth, windowHeight) >= 600;
@@ -91,21 +160,21 @@ const PinpointFareScreen = ({ navigation }) => {
   const mapHeight = isLandscape
     ? Math.max(220, windowHeight * 0.44)
     : isTablet
-      ? Math.min(480, windowHeight * 0.40)
+      ? Math.min(480, windowHeight * 0.4)
       : Math.min(360, Math.max(250, windowHeight * 0.38));
 
   // Origin & Destination State
   const [origin, setOrigin] = useState({
     lat: DAGUPAN_CENTER.lat,
     lng: DAGUPAN_CENTER.lng,
-    name: 'Current Location',
+    name: "Current Location",
     isGPS: false,
   });
 
   const [destination, setDestination] = useState({
     lat: 16.023527558411267,
     lng: 120.32342891959715,
-    name: 'CSI Lucao',
+    name: "CSI Lucao",
   });
 
   // Pending Pinpoint state waiting for commuter to tap "Set"
@@ -113,17 +182,21 @@ const PinpointFareScreen = ({ navigation }) => {
   const [isDestinationSet, setIsDestinationSet] = useState(true);
 
   // Location Permission State: 'checking' | 'granted' | 'denied'
-  const [permissionStatus, setPermissionStatus] = useState('checking');
+  const [permissionStatus, setPermissionStatus] = useState("checking");
   const [gpsLoading, setGpsLoading] = useState(false);
 
   // Road Routing State (OSRM road-aligned data)
   const [roadDistanceKm, setRoadDistanceKm] = useState(2.4);
-  const [roadDurationMins, setRoadDurationMins] = useState(calculateEstMinutes(2.4));
-  const [roadSummary, setRoadSummary] = useState('Aligning to Dagupan road network...');
+  const [roadDurationMins, setRoadDurationMins] = useState(
+    calculateEstMinutes(2.4),
+  );
+  const [roadSummary, setRoadSummary] = useState(
+    "Aligning to Dagupan road network...",
+  );
   const [isRouting, setIsRouting] = useState(false);
 
   // Live Tracking Mode State: 'idle' | 'tracking' | 'arrived'
-  const [trackingState, setTrackingState] = useState('idle');
+  const [trackingState, setTrackingState] = useState("idle");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [distanceTraveledKm, setDistanceTraveledKm] = useState(0);
   const [arrivalModalVisible, setArrivalModalVisible] = useState(false);
@@ -140,7 +213,12 @@ const PinpointFareScreen = ({ navigation }) => {
   // Calculate Distance (km)
   const effectiveDistanceKm = useMemo(() => {
     if (roadDistanceKm && roadDistanceKm > 0) return roadDistanceKm;
-    const direct = calculateDistanceKm(origin.lat, origin.lng, destination.lat, destination.lng);
+    const direct = calculateDistanceKm(
+      origin.lat,
+      origin.lng,
+      destination.lat,
+      destination.lng,
+    );
     return Math.round(direct * 1.25 * 10) / 10;
   }, [roadDistanceKm, origin, destination]);
 
@@ -148,7 +226,12 @@ const PinpointFareScreen = ({ navigation }) => {
   const remainingDistToDestKm = useMemo(() => {
     const loc = currentGpsPos || origin;
     if (!loc || !destination) return effectiveDistanceKm;
-    return calculateDistanceKm(loc.lat, loc.lng, destination.lat, destination.lng);
+    return calculateDistanceKm(
+      loc.lat,
+      loc.lng,
+      destination.lat,
+      destination.lng,
+    );
   }, [currentGpsPos, origin, destination, effectiveDistanceKm]);
 
   // Destination arrival lock check: within 150 meters (0.15 km)
@@ -156,86 +239,116 @@ const PinpointFareScreen = ({ navigation }) => {
 
   // Forward live compass heading to Leaflet Map without triggering React component re-renders
   const sendHeadingToMap = (deg) => {
-    if (typeof deg !== 'number' || isNaN(deg)) return;
+    if (typeof deg !== "number" || isNaN(deg)) return;
     const rounded = Math.round(deg);
     if (Math.abs(rounded - lastSentHeadingRef.current) < 1) return;
     lastSentHeadingRef.current = rounded;
     currentHeadingRef.current = rounded;
 
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const iframe = document.getElementById('solo-ride-pinpoint-map');
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const iframe = document.getElementById("solo-ride-pinpoint-map");
       if (iframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage(JSON.stringify({ type: 'UPDATE_HEADING', heading: rounded }), '*');
+        iframe.contentWindow.postMessage(
+          JSON.stringify({ type: "UPDATE_HEADING", heading: rounded }),
+          "*",
+        );
       }
     } else if (webViewRef.current) {
-      webViewRef.current.injectJavaScript(`if (window.updateHeading) { window.updateHeading(${rounded}); } true;`);
+      webViewRef.current.injectJavaScript(
+        `if (window.updateHeading) { window.updateHeading(${rounded}); } true;`,
+      );
     }
   };
 
   // Forward user location and heading to Leaflet Map
   const sendUserLocationToMap = (lat, lng, heading) => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const iframe = document.getElementById('solo-ride-pinpoint-map');
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const iframe = document.getElementById("solo-ride-pinpoint-map");
       if (iframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage(JSON.stringify({ type: 'UPDATE_USER_LOCATION', lat, lng, heading }), '*');
+        iframe.contentWindow.postMessage(
+          JSON.stringify({ type: "UPDATE_USER_LOCATION", lat, lng, heading }),
+          "*",
+        );
       }
     } else if (webViewRef.current) {
-      webViewRef.current.injectJavaScript(`if (window.updateUserLocation) { window.updateUserLocation(${lat}, ${lng}, ${heading !== undefined ? heading : 'null'}); } true;`);
+      webViewRef.current.injectJavaScript(
+        `if (window.updateUserLocation) { window.updateUserLocation(${lat}, ${lng}, ${heading !== undefined ? heading : "null"}); } true;`,
+      );
     }
   };
 
   // Request GPS Permission & Initial Location directly from system
-  const requestLocation = async () => {
+  const requestLocation = async (userInitiated = false) => {
     setGpsLoading(true);
+    const state = await ensureLocationPermission();
+    if (state !== "granted") {
+      setPermissionStatus("denied");
+      setGpsLoading(false);
+      if (userInitiated === true) setShowPermissionModal(true);
+      return;
+    }
+
     try {
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && navigator.geolocation) {
+      if (
+        Platform.OS === "web" &&
+        typeof window !== "undefined" &&
+        navigator.geolocation
+      ) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             const coords = {
               lat: pos.coords.latitude,
               lng: pos.coords.longitude,
-              name: 'My Current Location (GPS)',
+              name: "My Current Location (GPS)",
               isGPS: true,
             };
             setOrigin(coords);
             setCurrentGpsPos(coords);
-            sendUserLocationToMap(coords.lat, coords.lng, currentHeadingRef.current);
-            setPermissionStatus('granted');
+            sendUserLocationToMap(
+              coords.lat,
+              coords.lng,
+              currentHeadingRef.current,
+            );
+            setPermissionStatus("granted");
             setGpsLoading(false);
-            showInfo('GPS Updated', 'Recentered map to your current location.');
+            showInfo("GPS Updated", "Recentered map to your current location.");
           },
           (err) => {
-            console.warn('Web GPS fallback:', err.message);
-            setPermissionStatus('denied');
+            console.warn("Web GPS fallback:", err.message);
+            setPermissionStatus("denied");
             setGpsLoading(false);
           },
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 },
         );
       } else {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          setPermissionStatus('granted');
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === "granted") {
+          setPermissionStatus("granted");
           const loc = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Balanced,
           });
           const coords = {
             lat: loc.coords.latitude,
             lng: loc.coords.longitude,
-            name: 'My Current Location (GPS)',
+            name: "My Current Location (GPS)",
             isGPS: true,
           };
           setOrigin(coords);
           setCurrentGpsPos(coords);
-          sendUserLocationToMap(coords.lat, coords.lng, currentHeadingRef.current);
-          showInfo('GPS Updated', 'Recentered map to your current location.');
+          sendUserLocationToMap(
+            coords.lat,
+            coords.lng,
+            currentHeadingRef.current,
+          );
+          showInfo("GPS Updated", "Recentered map to your current location.");
         } else {
-          setPermissionStatus('denied');
+          setPermissionStatus("denied");
         }
         setGpsLoading(false);
       }
     } catch (err) {
-      console.warn('GPS error:', err.message);
-      setPermissionStatus('denied');
+      console.warn("GPS error:", err.message);
+      setPermissionStatus("denied");
       setGpsLoading(false);
     }
   };
@@ -245,31 +358,46 @@ const PinpointFareScreen = ({ navigation }) => {
     requestLocation();
   }, []);
 
+  // Auto-recover when the user allows location from settings
+  useEffect(() => {
+    if (locationPermission === "granted") {
+      setShowPermissionModal(false);
+      if (permissionStatus === "denied") requestLocation();
+    }
+  }, [locationPermission]);
+
   // Watch Device Compass / Orientation in Real-Time (Rotates flashlight as phone turns)
   useEffect(() => {
     let isMounted = true;
 
     const startHeadingWatcher = async () => {
       try {
-        if (Platform.OS !== 'web') {
+        if (Platform.OS !== "web") {
           const { status } = await Location.getForegroundPermissionsAsync();
-          if (status === 'granted') {
-            if (headingSubRef.current && typeof headingSubRef.current.remove === 'function') {
+          if (status === "granted") {
+            if (
+              headingSubRef.current &&
+              typeof headingSubRef.current.remove === "function"
+            ) {
               headingSubRef.current.remove();
             }
             headingSubRef.current = await Location.watchHeadingAsync((data) => {
               if (!isMounted) return;
-              const h = data.trueHeading >= 0 ? data.trueHeading : data.magHeading;
-              if (typeof h === 'number' && !isNaN(h)) {
+              const h =
+                data.trueHeading >= 0 ? data.trueHeading : data.magHeading;
+              if (typeof h === "number" && !isNaN(h)) {
                 sendHeadingToMap(h);
               }
             });
           }
-        } else if (typeof window !== 'undefined') {
+        } else if (typeof window !== "undefined") {
           const handleWebOrientation = (ev) => {
             if (!isMounted) return;
             let h = null;
-            if (ev.webkitCompassHeading !== undefined && ev.webkitCompassHeading !== null) {
+            if (
+              ev.webkitCompassHeading !== undefined &&
+              ev.webkitCompassHeading !== null
+            ) {
               h = ev.webkitCompassHeading;
             } else if (ev.alpha !== null && ev.alpha !== undefined) {
               h = (360 - ev.alpha) % 360;
@@ -278,21 +406,32 @@ const PinpointFareScreen = ({ navigation }) => {
               sendHeadingToMap(h);
             }
           };
-          window.addEventListener('deviceorientationabsolute', handleWebOrientation, false);
-          window.addEventListener('deviceorientation', handleWebOrientation, false);
+          window.addEventListener(
+            "deviceorientationabsolute",
+            handleWebOrientation,
+            false,
+          );
+          window.addEventListener(
+            "deviceorientation",
+            handleWebOrientation,
+            false,
+          );
         }
       } catch (err) {
-        console.warn('Heading watch initialization error:', err);
+        console.warn("Heading watch initialization error:", err);
       }
     };
 
-    if (permissionStatus === 'granted') {
+    if (permissionStatus === "granted") {
       startHeadingWatcher();
     }
 
     return () => {
       isMounted = false;
-      if (headingSubRef.current && typeof headingSubRef.current.remove === 'function') {
+      if (
+        headingSubRef.current &&
+        typeof headingSubRef.current.remove === "function"
+      ) {
         headingSubRef.current.remove();
         headingSubRef.current = null;
       }
@@ -318,16 +457,22 @@ const PinpointFareScreen = ({ navigation }) => {
     const destName = toSet?.name || destination.name;
     setIsDestinationSet(true);
     setPendingPinpoint(null);
-    showSuccess('Destination Set', `Destination set to ${destName}. Ready to guide ride!`);
+    showSuccess(
+      "Destination Set",
+      `Destination set to ${destName}. Ready to guide ride!`,
+    );
 
     // Signal map to update pin popup
     const script = `if (window.onDestinationConfirmed) { window.onDestinationConfirmed('${destName.replace(/'/g, "\\'")}'); }`;
-    if (webViewRef.current && Platform.OS !== 'web') {
+    if (webViewRef.current && Platform.OS !== "web") {
       webViewRef.current.injectJavaScript(script);
-    } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const iframe = document.getElementById('solo-ride-pinpoint-map');
+    } else if (Platform.OS === "web" && typeof window !== "undefined") {
+      const iframe = document.getElementById("solo-ride-pinpoint-map");
       if (iframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage(JSON.stringify({ type: 'CONFIRM_SET_PINPOINT', name: destName }), '*');
+        iframe.contentWindow.postMessage(
+          JSON.stringify({ type: "CONFIRM_SET_PINPOINT", name: destName }),
+          "*",
+        );
       }
     }
   };
@@ -335,13 +480,17 @@ const PinpointFareScreen = ({ navigation }) => {
   // Handle message from Leaflet Web / WebView
   const handleMapEvent = (data) => {
     if (!data) return;
-    if (data.type === 'CONFIRM_SET_PINPOINT') {
+    if (data.type === "CONFIRM_SET_PINPOINT") {
       handleConfirmSet(data);
       return;
     }
-    if (data.type === 'ROUTE_CALCULATED') {
+    if (data.type === "ROUTE_CALCULATED") {
       setIsRouting(false);
-      const name = data.name || (data.summary ? `Near ${data.summary.split('➔')[0].trim()}` : destination.name);
+      const name =
+        data.name ||
+        (data.summary
+          ? `Near ${data.summary.split("➔")[0].trim()}`
+          : destination.name);
       const dist = data.distanceKm || roadDistanceKm;
       const mins = calculateEstMinutes(dist);
       setPendingPinpoint({
@@ -356,7 +505,7 @@ const PinpointFareScreen = ({ navigation }) => {
       setRoadDistanceKm(dist);
       setRoadDurationMins(mins);
       if (data.summary) setRoadSummary(data.summary);
-    } else if (data.type === 'PINPOINT_DESTINATION') {
+    } else if (data.type === "PINPOINT_DESTINATION") {
       setIsRouting(false);
       const d = calculateDistanceKm(origin.lat, origin.lng, data.lat, data.lng);
       const dist = Math.round(d * 1.25 * 10) / 10;
@@ -364,35 +513,40 @@ const PinpointFareScreen = ({ navigation }) => {
       setPendingPinpoint({
         lat: data.lat,
         lng: data.lng,
-        name: data.name || 'Pinpointed Location',
+        name: data.name || "Pinpointed Location",
         distanceKm: dist,
         durationMins: mins,
       });
       setIsDestinationSet(false);
       setRoadDistanceKm(dist);
       setRoadDurationMins(mins);
-    } else if (data.type === 'ROUTING_STARTED') {
+    } else if (data.type === "ROUTING_STARTED") {
       setIsRouting(true);
     }
   };
 
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
       const handleWindowMsg = (e) => {
         try {
-          const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+          const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
           handleMapEvent(data);
-        } catch (_) { }
+        } catch (_) {}
       };
-      window.addEventListener('message', handleWindowMsg);
-      return () => window.removeEventListener('message', handleWindowMsg);
+      window.addEventListener("message", handleWindowMsg);
+      return () => window.removeEventListener("message", handleWindowMsg);
     }
   }, [origin, pendingPinpoint, destination]);
 
   // Send destination to Leaflet map from Popular in Dagupan to Visit chips
   const selectLandmark = (item) => {
     setIsRouting(true);
-    const dist = calculateDistanceKm(origin.lat, origin.lng, item.lat, item.lng);
+    const dist = calculateDistanceKm(
+      origin.lat,
+      origin.lng,
+      item.lat,
+      item.lng,
+    );
     const estDist = Math.round(dist * 1.25 * 10) / 10;
     const mins = calculateEstMinutes(estDist);
     setPendingPinpoint({
@@ -404,12 +558,20 @@ const PinpointFareScreen = ({ navigation }) => {
     });
     setIsDestinationSet(false);
     const script = `if (window.setDestinationFromApp) { window.setDestinationFromApp(${item.lat}, ${item.lng}, '${item.name.replace(/'/g, "\\'")}'); }`;
-    if (webViewRef.current && Platform.OS !== 'web') {
+    if (webViewRef.current && Platform.OS !== "web") {
       webViewRef.current.injectJavaScript(script);
-    } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const iframe = document.getElementById('solo-ride-pinpoint-map');
+    } else if (Platform.OS === "web" && typeof window !== "undefined") {
+      const iframe = document.getElementById("solo-ride-pinpoint-map");
       if (iframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage(JSON.stringify({ type: 'SET_DESTINATION', lat: item.lat, lng: item.lng, name: item.name }), '*');
+        iframe.contentWindow.postMessage(
+          JSON.stringify({
+            type: "SET_DESTINATION",
+            lat: item.lat,
+            lng: item.lng,
+            name: item.name,
+          }),
+          "*",
+        );
       }
     }
   };
@@ -419,11 +581,14 @@ const PinpointFareScreen = ({ navigation }) => {
     if (!isDestinationSet && pendingPinpoint) {
       handleConfirmSet();
     }
-    setTrackingState('tracking');
+    setTrackingState("tracking");
     setElapsedSeconds(0);
     setDistanceTraveledKm(0);
     lastLocationRef.current = origin;
-    showSuccess('Live Tracker Started', `Tracking your solo ride to ${destination.name}`);
+    showSuccess(
+      "Live Tracker Started",
+      `Tracking your solo ride to ${destination.name}`,
+    );
 
     // Elapsed timer
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -436,30 +601,54 @@ const PinpointFareScreen = ({ navigation }) => {
   };
 
   const startContinuousTracking = async () => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && navigator.geolocation) {
+    if (
+      Platform.OS === "web" &&
+      typeof window !== "undefined" &&
+      navigator.geolocation
+    ) {
       const id = navigator.geolocation.watchPosition(
         (pos) => {
-          const heading = typeof pos.coords.heading === 'number' && !isNaN(pos.coords.heading) && pos.coords.heading >= 0
-            ? pos.coords.heading
-            : undefined;
-          handleNextPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }, heading);
+          const heading =
+            typeof pos.coords.heading === "number" &&
+            !isNaN(pos.coords.heading) &&
+            pos.coords.heading >= 0
+              ? pos.coords.heading
+              : undefined;
+          handleNextPosition(
+            { lat: pos.coords.latitude, lng: pos.coords.longitude },
+            heading,
+          );
         },
-        () => { },
-        { enableHighAccuracy: true, maximumAge: 2000, timeout: 5000 }
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 2000, timeout: 5000 },
       );
-      watchSubscriptionRef.current = { remove: () => navigator.geolocation.clearWatch(id) };
+      watchSubscriptionRef.current = {
+        remove: () => navigator.geolocation.clearWatch(id),
+      };
     } else {
       Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 3 },
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 2000,
+          distanceInterval: 3,
+        },
         (loc) => {
-          const heading = typeof loc.coords.heading === 'number' && !isNaN(loc.coords.heading) && loc.coords.heading >= 0
-            ? loc.coords.heading
-            : undefined;
-          handleNextPosition({ lat: loc.coords.latitude, lng: loc.coords.longitude }, heading);
-        }
-      ).then((sub) => {
-        watchSubscriptionRef.current = sub;
-      }).catch(() => { });
+          const heading =
+            typeof loc.coords.heading === "number" &&
+            !isNaN(loc.coords.heading) &&
+            loc.coords.heading >= 0
+              ? loc.coords.heading
+              : undefined;
+          handleNextPosition(
+            { lat: loc.coords.latitude, lng: loc.coords.longitude },
+            heading,
+          );
+        },
+      )
+        .then((sub) => {
+          watchSubscriptionRef.current = sub;
+        })
+        .catch(() => {});
     }
   };
 
@@ -472,7 +661,7 @@ const PinpointFareScreen = ({ navigation }) => {
         lastLocationRef.current.lat,
         lastLocationRef.current.lng,
         nextPos.lat,
-        nextPos.lng
+        nextPos.lng,
       );
       if (step > 0.003 && step < 2.0) {
         setDistanceTraveledKm((prev) => parseFloat((prev + step).toFixed(2)));
@@ -483,8 +672,8 @@ const PinpointFareScreen = ({ navigation }) => {
               lastLocationRef.current.lat,
               lastLocationRef.current.lng,
               nextPos.lat,
-              nextPos.lng
-            )
+              nextPos.lng,
+            ),
           );
         }
         lastLocationRef.current = nextPos;
@@ -496,7 +685,12 @@ const PinpointFareScreen = ({ navigation }) => {
     sendUserLocationToMap(nextPos.lat, nextPos.lng, effectiveHeading);
 
     // Check if reached destination (< 80 meters)
-    const distToDest = calculateDistanceKm(nextPos.lat, nextPos.lng, destination.lat, destination.lng);
+    const distToDest = calculateDistanceKm(
+      nextPos.lat,
+      nextPos.lng,
+      destination.lat,
+      destination.lng,
+    );
     if (distToDest <= 0.08) {
       handleArrival();
     }
@@ -506,63 +700,82 @@ const PinpointFareScreen = ({ navigation }) => {
   const handleStopRideEarly = async () => {
     setStopConfirmVisible(false);
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    if (watchSubscriptionRef.current && typeof watchSubscriptionRef.current.remove === 'function') {
+    if (
+      watchSubscriptionRef.current &&
+      typeof watchSubscriptionRef.current.remove === "function"
+    ) {
       watchSubscriptionRef.current.remove();
     }
 
-    const actualDistKm = Math.max(0.4, distanceTraveledKm > 0.05 ? distanceTraveledKm : 0.8);
+    const actualDistKm = Math.max(
+      0.4,
+      distanceTraveledKm > 0.05 ? distanceTraveledKm : 0.8,
+    );
     const completedRide = {
       id: `ride_solo_${Date.now()}`,
       timestamp: new Date().toISOString(),
       routeName: `Solo Ride / Visitor to ${destination.name} (Early Drop-Off)`,
-      destination: `Early Drop-off near ${currentGpsPos?.name || 'Current Stop'}`,
-      vehicleType: 'solo_ride',
-      mode: 'Private / Solo Ride',
+      destination: `Early Drop-off near ${currentGpsPos?.name || "Current Stop"}`,
+      vehicleType: "solo_ride",
+      mode: "Private / Solo Ride",
       distanceKm: parseFloat(actualDistKm.toFixed(2)),
       durationSecs: elapsedSeconds || 60,
     };
 
     setLastCompletedRide(completedRide);
     await saveRideToHistory(completedRide);
-    setTrackingState('arrived');
+    setTrackingState("arrived");
     setArrivalModalVisible(true);
-    showSuccess('Ride Ended', 'Ended solo ride and logged travel stats.');
+    showSuccess("Ride Ended", "Ended solo ride and logged travel stats.");
   };
 
   // Arrived at destination
   const handleArrival = async () => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    if (watchSubscriptionRef.current && typeof watchSubscriptionRef.current.remove === 'function') {
+    if (
+      watchSubscriptionRef.current &&
+      typeof watchSubscriptionRef.current.remove === "function"
+    ) {
       watchSubscriptionRef.current.remove();
     }
 
-    const finalDist = distanceTraveledKm > 0.1 ? distanceTraveledKm : effectiveDistanceKm;
+    const finalDist =
+      distanceTraveledKm > 0.1 ? distanceTraveledKm : effectiveDistanceKm;
     const completedRide = {
       id: `ride_solo_${Date.now()}`,
       timestamp: new Date().toISOString(),
       routeName: `Solo Ride / Visitor to ${destination.name}`,
       destination: destination.name,
-      vehicleType: 'solo_ride',
-      mode: 'Private / Solo Ride',
+      vehicleType: "solo_ride",
+      mode: "Private / Solo Ride",
       distanceKm: parseFloat(finalDist.toFixed(2)),
-      durationSecs: elapsedSeconds || (roadDurationMins * 60),
+      durationSecs: elapsedSeconds || roadDurationMins * 60,
     };
 
     setLastCompletedRide(completedRide);
     await saveRideToHistory(completedRide);
-    setTrackingState('arrived');
+    setTrackingState("arrived");
     setArrivalModalVisible(true);
-    showSuccess("You've arrived!", `You successfully arrived at ${destination.name}!`);
+    showSuccess(
+      "You've arrived!",
+      `You successfully arrived at ${destination.name}!`,
+    );
   };
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-      if (watchSubscriptionRef.current && typeof watchSubscriptionRef.current.remove === 'function') {
+      if (
+        watchSubscriptionRef.current &&
+        typeof watchSubscriptionRef.current.remove === "function"
+      ) {
         watchSubscriptionRef.current.remove();
       }
-      if (headingSubRef.current && typeof headingSubRef.current.remove === 'function') {
+      if (
+        headingSubRef.current &&
+        typeof headingSubRef.current.remove === "function"
+      ) {
         headingSubRef.current.remove();
         headingSubRef.current = null;
       }
@@ -1018,45 +1231,117 @@ const PinpointFareScreen = ({ navigation }) => {
       {/* Arrival Celebration Modal: "You've successfully arrived!" */}
       <Modal visible={arrivalModalVisible} transparent animationType="fade">
         <View style={styles.arrivalModalBackdrop}>
-          <View style={[styles.arrivalModalCard, { backgroundColor: colors.surface }]}>
+          <View
+            style={[
+              styles.arrivalModalCard,
+              { backgroundColor: colors.surface },
+            ]}
+          >
             <View style={styles.arrivalIconCircle}>
-              <MaterialCommunityIcons name="check-decagram" size={44} color="#16A34A" />
+              <MaterialCommunityIcons
+                name="check-decagram"
+                size={44}
+                color="#16A34A"
+              />
             </View>
 
             <Text style={[styles.arrivalTitle, { color: colors.textPrimary }]}>
               You've successfully arrived!
             </Text>
-            <Text style={[styles.arrivalSubtitle, { color: colors.textSecondary }]}>
+            <Text
+              style={[styles.arrivalSubtitle, { color: colors.textSecondary }]}
+            >
               {lastCompletedRide?.destination
                 ? `You reached your destination at ${lastCompletedRide.destination}.`
                 : `You reached your destination at ${destination.name}.`}
             </Text>
 
-            <View style={[styles.arrivalSummaryCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View
+              style={[
+                styles.arrivalSummaryCard,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
               <View style={styles.arrivalMetaRow}>
                 <View style={styles.arrivalMetaCol}>
-                  <Text style={[styles.arrivalMetaLabel, { color: colors.textMuted }]}>Distance</Text>
-                  <Text style={[styles.arrivalMetaVal, { color: colors.textPrimary }]}>
+                  <Text
+                    style={[
+                      styles.arrivalMetaLabel,
+                      { color: colors.textMuted },
+                    ]}
+                  >
+                    Distance
+                  </Text>
+                  <Text
+                    style={[
+                      styles.arrivalMetaVal,
+                      { color: colors.textPrimary },
+                    ]}
+                  >
                     {lastCompletedRide?.distanceKm || effectiveDistanceKm} km
                   </Text>
                 </View>
                 <View style={styles.arrivalMetaCol}>
-                  <Text style={[styles.arrivalMetaLabel, { color: colors.textMuted }]}>Trip Duration</Text>
-                  <Text style={[styles.arrivalMetaVal, { color: colors.textPrimary }]}>
-                    {Math.max(1, Math.round((elapsedSeconds || roadDurationMins * 60) / 60))} mins
+                  <Text
+                    style={[
+                      styles.arrivalMetaLabel,
+                      { color: colors.textMuted },
+                    ]}
+                  >
+                    Trip Duration
+                  </Text>
+                  <Text
+                    style={[
+                      styles.arrivalMetaVal,
+                      { color: colors.textPrimary },
+                    ]}
+                  >
+                    {Math.max(
+                      1,
+                      Math.round(
+                        (elapsedSeconds || roadDurationMins * 60) / 60,
+                      ),
+                    )}{" "}
+                    mins
                   </Text>
                 </View>
                 <View style={styles.arrivalMetaCol}>
-                  <Text style={[styles.arrivalMetaLabel, { color: colors.textMuted }]}>Base Speed</Text>
-                  <Text style={[styles.arrivalMetaVal, { color: '#0284C7' }]}>30–35 km/h</Text>
+                  <Text
+                    style={[
+                      styles.arrivalMetaLabel,
+                      { color: colors.textMuted },
+                    ]}
+                  >
+                    Base Speed
+                  </Text>
+                  <Text style={[styles.arrivalMetaVal, { color: "#0284C7" }]}>
+                    30–35 km/h
+                  </Text>
                 </View>
               </View>
 
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <View
+                style={[styles.divider, { backgroundColor: colors.border }]}
+              />
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialCommunityIcons name="shield-check" size={16} color="#16A34A" />
-                <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600' }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <MaterialCommunityIcons
+                  name="shield-check"
+                  size={16}
+                  color="#16A34A"
+                />
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: colors.textSecondary,
+                    fontWeight: "600",
+                  }}
+                >
                   Solo / Visitor Navigation Route Completed
                 </Text>
               </View>
@@ -1064,22 +1349,39 @@ const PinpointFareScreen = ({ navigation }) => {
 
             <View style={styles.arrivalBtnRow}>
               <TouchableOpacity
-                style={[styles.arrivalHistoryBtn, { borderColor: colors.border }]}
+                style={[
+                  styles.arrivalHistoryBtn,
+                  { borderColor: colors.border },
+                ]}
                 onPress={() => {
                   setArrivalModalVisible(false);
-                  setTrackingState('idle');
-                  navigation.navigate('RideHistory');
+                  setTrackingState("idle");
+                  navigation.navigate("RideHistory");
                 }}
               >
-                <MaterialCommunityIcons name="history" size={18} color={colors.primary} />
-                <Text style={[styles.arrivalHistoryBtnText, { color: colors.primary }]}>View History</Text>
+                <MaterialCommunityIcons
+                  name="history"
+                  size={18}
+                  color={colors.primary}
+                />
+                <Text
+                  style={[
+                    styles.arrivalHistoryBtnText,
+                    { color: colors.primary },
+                  ]}
+                >
+                  View History
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.arrivalDoneBtn, { backgroundColor: colors.primary }]}
+                style={[
+                  styles.arrivalDoneBtn,
+                  { backgroundColor: colors.primary },
+                ]}
                 onPress={() => {
                   setArrivalModalVisible(false);
-                  setTrackingState('idle');
+                  setTrackingState("idle");
                 }}
               >
                 <Text style={styles.arrivalDoneBtnText}>Done</Text>
@@ -1095,7 +1397,7 @@ const PinpointFareScreen = ({ navigation }) => {
         onClose={() => setStopConfirmVisible(false)}
         onConfirm={handleStopRideEarly}
         title="End Navigation & Stop Here?"
-        message={`Are you ending your solo ride before reaching ${destination.name}? This will complete your route navigation for the ${distanceTraveledKm > 0 ? distanceTraveledKm.toFixed(2) : 'actual'} km traveled.`}
+        message={`Are you ending your solo ride before reaching ${destination.name}? This will complete your route navigation for the ${distanceTraveledKm > 0 ? distanceTraveledKm.toFixed(2) : "actual"} km traveled.`}
         confirmText="Yes, End Trip Here"
         cancelText="Continue Riding"
         type="warning"
@@ -1103,25 +1405,45 @@ const PinpointFareScreen = ({ navigation }) => {
       />
 
       {/* Popular in Dagupan to Visit Quick Chips */}
-      <View style={[styles.quickChipsSection, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.quickChipsSection,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
         <View style={styles.chipHeaderRow}>
-          <MaterialCommunityIcons name="star-outline" size={16} color="#0284C7" />
-          <Text style={[styles.chipHeaderTitle, { color: colors.textSecondary }]}>
+          <MaterialCommunityIcons
+            name="star-outline"
+            size={16}
+            color="#0284C7"
+          />
+          <Text
+            style={[styles.chipHeaderTitle, { color: colors.textSecondary }]}
+          >
             Popular in Dagupan to Visit:
           </Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipsScroll}
+        >
           {POPULAR_DESTINATIONS.map((dest, idx) => {
-            const isSelected = pendingPinpoint ? pendingPinpoint.name === dest.name : destination.name === dest.name;
+            const isSelected = pendingPinpoint
+              ? pendingPinpoint.name === dest.name
+              : destination.name === dest.name;
             return (
               <TouchableOpacity
                 key={`dest-${idx}`}
                 style={[
                   styles.landmarkChip,
-                  { backgroundColor: colors.background, borderColor: colors.border },
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                  },
                   isSelected && {
-                    borderColor: '#16A34A',
-                    backgroundColor: '#16A34A15',
+                    borderColor: "#16A34A",
+                    backgroundColor: "#16A34A15",
                   },
                 ]}
                 onPress={() => selectLandmark(dest)}
@@ -1130,12 +1452,12 @@ const PinpointFareScreen = ({ navigation }) => {
                 <MaterialCommunityIcons
                   name={dest.icon}
                   size={14}
-                  color={isSelected ? '#16A34A' : colors.textMuted}
+                  color={isSelected ? "#16A34A" : colors.textMuted}
                 />
                 <Text
                   style={[
                     styles.landmarkChipText,
-                    { color: isSelected ? '#16A34A' : colors.textPrimary },
+                    { color: isSelected ? "#16A34A" : colors.textPrimary },
                   ]}
                 >
                   {dest.name}
@@ -1147,43 +1469,34 @@ const PinpointFareScreen = ({ navigation }) => {
       </View>
 
       {/* Location Permission Prompt Banner (if denied) */}
-      {permissionStatus === 'denied' && (
-        <View style={styles.permissionBanner}>
-          <MaterialCommunityIcons name="map-marker-alert" size={20} color="#EA580C" />
-          <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text style={styles.permissionBannerTitle}>Location Permission Needed</Text>
-            <Text style={styles.permissionBannerSub}>
-              Allow location access to pinpoint routes from your current GPS position.
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.permissionAllowBtn} onPress={requestLocation}>
-            <Text style={styles.permissionAllowBtnText}>Allow</Text>
-          </TouchableOpacity>
-        </View>
+      {permissionStatus === "denied" && (
+        <LocationPermissionBanner
+          onPress={() => setShowPermissionModal(true)}
+        />
       )}
 
       {/* Interactive Map with Directional Light Beam, Set Button, and Non-overlapping GPS Access Button */}
       <View style={[styles.mapContainer, { height: mapHeight }]}>
-        {Platform.OS === 'web' ? (
+        {Platform.OS === "web" ? (
           <iframe
             id="solo-ride-pinpoint-map"
             key="solo-ride-pinpoint-map"
             title="Dagupan Solo Ride / Visitor Pinpoint Map"
             srcDoc={leafletHtml}
-            style={{ width: '100%', height: '100%', border: 'none' }}
+            style={{ width: "100%", height: "100%", border: "none" }}
           />
         ) : (
           <WebView
             ref={webViewRef}
             key="solo-ride-pinpoint-webview"
-            originWhitelist={['*']}
+            originWhitelist={["*"]}
             source={{ html: leafletHtml }}
-            style={{ flex: 1, backgroundColor: '#0f172a' }}
+            style={{ flex: 1, backgroundColor: "#0f172a" }}
             onMessage={(e) => {
               try {
                 const data = JSON.parse(e.nativeEvent.data);
                 handleMapEvent(data);
-              } catch (_) { }
+              } catch (_) {}
             }}
           />
         )}
@@ -1194,24 +1507,33 @@ const PinpointFareScreen = ({ navigation }) => {
             style={[
               styles.floatingSetBar,
               {
-                backgroundColor: isDark ? 'rgba(15, 23, 42, 0.96)' : 'rgba(255, 255, 255, 0.97)',
-                borderColor: '#16A34A',
+                backgroundColor: isDark
+                  ? "rgba(15, 23, 42, 0.96)"
+                  : "rgba(255, 255, 255, 0.97)",
+                borderColor: "#16A34A",
               },
             ]}
           >
             <View style={{ flex: 1, marginRight: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
                 <View style={styles.pulseGreenDot} />
-                <Text style={styles.floatingSetHeader}>Pinpointed Destination</Text>
+                <Text style={styles.floatingSetHeader}>
+                  Pinpointed Destination
+                </Text>
               </View>
               <Text
                 style={[styles.floatingSetTitle, { color: colors.textPrimary }]}
                 numberOfLines={1}
               >
-                {pendingPinpoint.name || 'Selected Location'}
+                {pendingPinpoint.name || "Selected Location"}
               </Text>
-              <Text style={[styles.floatingSetSub, { color: colors.textMuted }]}>
-                ~{pendingPinpoint.distanceKm || roadDistanceKm} km • Tap "Set" to confirm
+              <Text
+                style={[styles.floatingSetSub, { color: colors.textMuted }]}
+              >
+                ~{pendingPinpoint.distanceKm || roadDistanceKm} km • Tap "Set"
+                to confirm
               </Text>
             </View>
 
@@ -1220,7 +1542,11 @@ const PinpointFareScreen = ({ navigation }) => {
               onPress={() => handleConfirmSet()}
               activeOpacity={0.85}
             >
-              <MaterialCommunityIcons name="check-bold" size={16} color="#FFFFFF" />
+              <MaterialCommunityIcons
+                name="check-bold"
+                size={16}
+                color="#FFFFFF"
+              />
               <Text style={styles.floatingSetBtnText}>Set</Text>
             </TouchableOpacity>
           </View>
@@ -1232,14 +1558,26 @@ const PinpointFareScreen = ({ navigation }) => {
             style={[
               styles.confirmedDestBar,
               {
-                backgroundColor: isDark ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.92)',
-                borderColor: '#16A34A60',
+                backgroundColor: isDark
+                  ? "rgba(15, 23, 42, 0.88)"
+                  : "rgba(255, 255, 255, 0.92)",
+                borderColor: "#16A34A60",
               },
             ]}
           >
-            <MaterialCommunityIcons name="check-circle" size={15} color="#16A34A" />
-            <Text style={[styles.confirmedDestText, { color: colors.textPrimary }]} numberOfLines={1}>
-              Destination Set: <Text style={{ fontWeight: '800', color: '#16A34A' }}>{destination.name}</Text>
+            <MaterialCommunityIcons
+              name="check-circle"
+              size={15}
+              color="#16A34A"
+            />
+            <Text
+              style={[styles.confirmedDestText, { color: colors.textPrimary }]}
+              numberOfLines={1}
+            >
+              Destination Set:{" "}
+              <Text style={{ fontWeight: "800", color: "#16A34A" }}>
+                {destination.name}
+              </Text>
             </Text>
           </View>
         )}
@@ -1247,33 +1585,68 @@ const PinpointFareScreen = ({ navigation }) => {
         {/* Floating Custom GPS Access Button (Bottom-Right, Zero Overlap with Top-Right Zoom) */}
         <TouchableOpacity
           style={styles.floatingGpsBtn}
-          onPress={requestLocation}
+          onPress={() => requestLocation(true)}
           activeOpacity={0.85}
           disabled={gpsLoading}
         >
           {gpsLoading ? (
             <ActivityIndicator size="small" color="#EA580C" />
           ) : (
-            <Image source={GPS_ICON} style={styles.gpsIconImg} resizeMode="contain" />
+            <Image
+              source={GPS_ICON}
+              style={styles.gpsIconImg}
+              resizeMode="contain"
+            />
           )}
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.contentPadding, { maxWidth: isTablet ? 780 : '100%', alignSelf: 'center', width: '100%' }]}>
+      <View
+        style={[
+          styles.contentPadding,
+          {
+            maxWidth: isTablet ? 780 : "100%",
+            alignSelf: "center",
+            width: "100%",
+          },
+        ]}
+      >
         {/* Real-time Trip Navigation & Time Estimate Card (Private / Solo Visitor) */}
-        <Card style={[styles.metricsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Card
+          style={[
+            styles.metricsCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
           <View style={styles.metricsHeader}>
             <View>
-              <Text style={[styles.metricsHeading, { color: colors.textPrimary }]}>
+              <Text
+                style={[styles.metricsHeading, { color: colors.textPrimary }]}
+              >
                 Route Navigation & Time Estimate
               </Text>
-              <Text style={[styles.metricsSubtitle, { color: colors.textMuted }]}>
+              <Text
+                style={[styles.metricsSubtitle, { color: colors.textMuted }]}
+              >
                 Private solo ride & visitor point-to-point road guidance
               </Text>
             </View>
-            <View style={[styles.routingBadge, { backgroundColor: '#16A34A15', borderColor: '#16A34A50', borderWidth: 1 }]}>
-              <MaterialCommunityIcons name="compass" size={13} color="#16A34A" />
-              <Text style={[styles.routingBadgeText, { color: '#16A34A' }]}>
+            <View
+              style={[
+                styles.routingBadge,
+                {
+                  backgroundColor: "#16A34A15",
+                  borderColor: "#16A34A50",
+                  borderWidth: 1,
+                },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="compass"
+                size={13}
+                color="#16A34A"
+              />
+              <Text style={[styles.routingBadgeText, { color: "#16A34A" }]}>
                 Compass Flashlight
               </Text>
             </View>
@@ -1281,9 +1654,27 @@ const PinpointFareScreen = ({ navigation }) => {
 
           {/* Road Path Summary */}
           {Boolean(roadSummary) && (
-            <View style={[styles.roadSummaryRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <MaterialCommunityIcons name="directions-fork" size={16} color="#0284C7" />
-              <Text style={[styles.roadSummaryText, { color: colors.textSecondary }]} numberOfLines={1}>
+            <View
+              style={[
+                styles.roadSummaryRow,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="directions-fork"
+                size={16}
+                color="#0284C7"
+              />
+              <Text
+                style={[
+                  styles.roadSummaryText,
+                  { color: colors.textSecondary },
+                ]}
+                numberOfLines={1}
+              >
                 {roadSummary}
               </Text>
             </View>
@@ -1292,22 +1683,35 @@ const PinpointFareScreen = ({ navigation }) => {
           {/* Stats Row: Distance, Est. Time (30-35 km/h), Target Location */}
           <View style={styles.metricStatsRow}>
             <View style={styles.metricItem}>
-              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Road Distance</Text>
-              <Text style={[styles.metricValue, { color: '#0284C7' }]}>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>
+                Road Distance
+              </Text>
+              <Text style={[styles.metricValue, { color: "#0284C7" }]}>
                 {effectiveDistanceKm} km
               </Text>
             </View>
-            <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
+            <View
+              style={[styles.metricDivider, { backgroundColor: colors.border }]}
+            />
             <View style={styles.metricItem}>
-              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Est. Time (30-35 km/h)</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>
+                Est. Time (30-35 km/h)
+              </Text>
               <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
                 ~{roadDurationMins} mins
               </Text>
             </View>
-            <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
+            <View
+              style={[styles.metricDivider, { backgroundColor: colors.border }]}
+            />
             <View style={styles.metricItem}>
-              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Destination</Text>
-              <Text style={[styles.metricValue, { color: '#16A34A', fontSize: 13 }]} numberOfLines={1}>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>
+                Destination
+              </Text>
+              <Text
+                style={[styles.metricValue, { color: "#16A34A", fontSize: 13 }]}
+                numberOfLines={1}
+              >
                 {destination.name}
               </Text>
             </View>
@@ -1315,31 +1719,58 @@ const PinpointFareScreen = ({ navigation }) => {
         </Card>
 
         {/* Live Tracking Actions */}
-        {trackingState === 'idle' ? (
+        {trackingState === "idle" ? (
           <TouchableOpacity
-            style={[styles.startRideBtn, { backgroundColor: '#0284C7' }]}
+            style={[styles.startRideBtn, { backgroundColor: "#0284C7" }]}
             onPress={handleStartTracking}
             activeOpacity={0.88}
           >
-            <MaterialCommunityIcons name="navigation-variant" size={24} color="#FFFFFF" />
-            <Text style={styles.startRideBtnText}>Start Solo / Visitor Navigation</Text>
+            <MaterialCommunityIcons
+              name="navigation-variant"
+              size={24}
+              color="#FFFFFF"
+            />
+            <Text style={styles.startRideBtnText}>
+              Start Solo / Visitor Navigation
+            </Text>
           </TouchableOpacity>
         ) : (
-          <View style={[styles.activeTrackingCard, { backgroundColor: colors.surface, borderColor: '#0284C7' }]}>
+          <View
+            style={[
+              styles.activeTrackingCard,
+              { backgroundColor: colors.surface, borderColor: "#0284C7" },
+            ]}
+          >
             <View style={styles.activeTrackingHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
                 <View style={styles.pulseDot} />
-                <Text style={[styles.activeTrackingTitle, { color: colors.textPrimary }]}>
+                <Text
+                  style={[
+                    styles.activeTrackingTitle,
+                    { color: colors.textPrimary },
+                  ]}
+                >
                   Live Route Guidance Active
                 </Text>
               </View>
-              <Text style={[styles.timerText, { color: '#0284C7' }]}>
-                {Math.floor(elapsedSeconds / 60)}:{(elapsedSeconds % 60).toString().padStart(2, '0')}
+              <Text style={[styles.timerText, { color: "#0284C7" }]}>
+                {Math.floor(elapsedSeconds / 60)}:
+                {(elapsedSeconds % 60).toString().padStart(2, "0")}
               </Text>
             </View>
 
-            <Text style={[styles.activeTrackingDest, { color: colors.textSecondary }]}>
-              Destination: <Text style={{ fontWeight: '700', color: colors.textPrimary }}>{destination.name}</Text>
+            <Text
+              style={[
+                styles.activeTrackingDest,
+                { color: colors.textSecondary },
+              ]}
+            >
+              Destination:{" "}
+              <Text style={{ fontWeight: "700", color: colors.textPrimary }}>
+                {destination.name}
+              </Text>
             </Text>
 
             {/* Proximity & Distance Status Card */}
@@ -1347,29 +1778,41 @@ const PinpointFareScreen = ({ navigation }) => {
               style={[
                 styles.proximityCard,
                 {
-                  backgroundColor: isNearDestination ? 'rgba(22, 163, 74, 0.1)' : 'rgba(2, 132, 199, 0.08)',
-                  borderColor: isNearDestination ? '#16A34A' : '#0284C740',
+                  backgroundColor: isNearDestination
+                    ? "rgba(22, 163, 74, 0.1)"
+                    : "rgba(2, 132, 199, 0.08)",
+                  borderColor: isNearDestination ? "#16A34A" : "#0284C740",
                 },
               ]}
             >
               <MaterialCommunityIcons
-                name={isNearDestination ? 'check-circle' : 'map-marker-distance'}
+                name={
+                  isNearDestination ? "check-circle" : "map-marker-distance"
+                }
                 size={20}
-                color={isNearDestination ? '#16A34A' : '#0284C7'}
+                color={isNearDestination ? "#16A34A" : "#0284C7"}
               />
               <View style={{ flex: 1 }}>
                 <Text
                   style={[
                     styles.proximityStatusTitle,
-                    { color: isNearDestination ? '#16A34A' : colors.textPrimary },
+                    {
+                      color: isNearDestination ? "#16A34A" : colors.textPrimary,
+                    },
                   ]}
                 >
                   {isNearDestination
-                    ? 'Within Destination Area (< 150m)'
+                    ? "Within Destination Area (< 150m)"
                     : `Remaining: ~${remainingDistToDestKm.toFixed(2)} km to destination`}
                 </Text>
-                <Text style={[styles.proximityStatusSub, { color: colors.textMuted }]}>
-                  Traveled: {distanceTraveledKm.toFixed(2)} km • Est. Time Remaining: ~{calculateEstMinutes(remainingDistToDestKm)} mins
+                <Text
+                  style={[
+                    styles.proximityStatusSub,
+                    { color: colors.textMuted },
+                  ]}
+                >
+                  Traveled: {distanceTraveledKm.toFixed(2)} km • Est. Time
+                  Remaining: ~{calculateEstMinutes(remainingDistToDestKm)} mins
                 </Text>
               </View>
             </View>
@@ -1378,11 +1821,15 @@ const PinpointFareScreen = ({ navigation }) => {
             <View style={styles.trackingBtnRow}>
               {/* STOP BUTTON: Always pressable to end ride early */}
               <TouchableOpacity
-                style={[styles.stopRideBtn, { borderColor: '#EF4444' }]}
+                style={[styles.stopRideBtn, { borderColor: "#EF4444" }]}
                 onPress={() => setStopConfirmVisible(true)}
                 activeOpacity={0.85}
               >
-                <MaterialCommunityIcons name="stop-circle-outline" size={18} color="#DC2626" />
+                <MaterialCommunityIcons
+                  name="stop-circle-outline"
+                  size={18}
+                  color="#DC2626"
+                />
                 <Text style={styles.stopRideBtnText}>End Navigation</Text>
               </TouchableOpacity>
 
@@ -1397,24 +1844,41 @@ const PinpointFareScreen = ({ navigation }) => {
                 activeOpacity={0.88}
               >
                 <MaterialCommunityIcons
-                  name={isNearDestination ? 'check-circle' : 'lock-outline'}
+                  name={isNearDestination ? "check-circle" : "lock-outline"}
                   size={18}
                   color="#FFFFFF"
                 />
                 <Text style={styles.arriveBtnText}>
-                  {isNearDestination ? 'Arrived at Destination' : 'Arrived (Locked)'}
+                  {isNearDestination
+                    ? "Arrived at Destination"
+                    : "Arrived (Locked)"}
                 </Text>
               </TouchableOpacity>
             </View>
 
             {!isNearDestination && (
-              <Text style={[styles.lockedWarningText, { color: colors.textMuted }]}>
-                🔒 "Arrived" button unlocks when you reach {destination.name}. If you're ending your trip early, tap "End Navigation".
+              <Text
+                style={[styles.lockedWarningText, { color: colors.textMuted }]}
+              >
+                🔒 "Arrived" button unlocks when you reach {destination.name}.
+                If you're ending your trip early, tap "End Navigation".
               </Text>
             )}
           </View>
         )}
       </View>
+
+      <LocationPermissionModal
+        visible={showPermissionModal}
+        onClose={() => setShowPermissionModal(false)}
+        onRetry={async () => {
+          const s = await ensureLocationPermission();
+          if (s === "granted") {
+            setShowPermissionModal(false);
+            requestLocation();
+          }
+        }}
+      />
     </ScrollView>
   );
 };
@@ -1428,23 +1892,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   chipHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: SPACING.md,
     marginBottom: 6,
     gap: 4,
   },
   chipHeaderTitle: {
     fontSize: FONTS.sizes.xs,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   chipsScroll: {
     paddingHorizontal: SPACING.md,
     gap: 8,
   },
   landmarkChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -1453,74 +1917,74 @@ const styles = StyleSheet.create({
   },
   landmarkChipText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   permissionBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF3C7",
     borderWidth: 1,
-    borderColor: '#F59E0B',
+    borderColor: "#F59E0B",
     paddingHorizontal: SPACING.md,
     paddingVertical: 10,
   },
   permissionBannerTitle: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#92400E',
+    fontWeight: "800",
+    color: "#92400E",
   },
   permissionBannerSub: {
     fontSize: 10,
-    color: '#B45309',
+    color: "#B45309",
     marginTop: 1,
   },
   permissionAllowBtn: {
-    backgroundColor: '#D97706',
+    backgroundColor: "#D97706",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: RADIUS.md,
   },
   permissionAllowBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   mapContainer: {
-    width: '100%',
-    backgroundColor: '#0f172a',
-    position: 'relative',
+    width: "100%",
+    backgroundColor: "#0f172a",
+    position: "relative",
   },
   floatingGpsBtn: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 16,
     right: 16,
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000000",
     shadowOpacity: 0.35,
     shadowRadius: 6,
     elevation: 6,
     borderWidth: 1.5,
-    borderColor: '#0284C7',
+    borderColor: "#0284C7",
     zIndex: 1100,
   },
   floatingSetBar: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 12,
     left: 12,
     right: 74,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: RADIUS.lg,
     borderWidth: 1.5,
-    shadowColor: '#000000',
+    shadowColor: "#000000",
     shadowOpacity: 0.35,
     shadowRadius: 6,
     elevation: 8,
@@ -1530,59 +1994,59 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#16A34A',
+    backgroundColor: "#16A34A",
   },
   floatingSetHeader: {
     fontSize: 10,
-    fontWeight: '800',
-    color: '#16A34A',
-    textTransform: 'uppercase',
+    fontWeight: "800",
+    color: "#16A34A",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   floatingSetTitle: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   floatingSetSub: {
     fontSize: 10,
     marginTop: 1,
   },
   floatingSetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
-    backgroundColor: '#16A34A',
+    backgroundColor: "#16A34A",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: RADIUS.md,
-    shadowColor: '#16A34A',
+    shadowColor: "#16A34A",
     shadowOpacity: 0.4,
     shadowRadius: 4,
     elevation: 3,
   },
   floatingSetBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 0.5,
   },
   confirmedDestBar: {
-    position: 'absolute',
+    position: "absolute",
     top: 10,
     left: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: RADIUS.full,
     borderWidth: 1,
     zIndex: 1000,
-    maxWidth: '85%',
+    maxWidth: "85%",
   },
   confirmedDestText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   gpsIconImg: {
     width: 32,
@@ -1599,22 +2063,22 @@ const styles = StyleSheet.create({
     ...SHADOWS.sm,
   },
   metricsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 8,
   },
   metricsHeading: {
     fontSize: FONTS.sizes.sm,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   metricsSubtitle: {
     fontSize: 11,
     marginTop: 1,
   },
   routingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -1622,11 +2086,11 @@ const styles = StyleSheet.create({
   },
   routingBadgeText: {
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   roadSummaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -1636,17 +2100,17 @@ const styles = StyleSheet.create({
   },
   roadSummaryText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
     flex: 1,
   },
   metricStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   metricItem: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: "center",
   },
   metricDivider: {
     width: 1,
@@ -1654,18 +2118,18 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 2,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   metricValue: {
     fontSize: FONTS.sizes.lg,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   startRideBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     paddingVertical: 14,
     minHeight: 52,
@@ -1674,9 +2138,9 @@ const styles = StyleSheet.create({
     ...SHADOWS.md,
   },
   startRideBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: FONTS.sizes.md,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   activeTrackingCard: {
     padding: SPACING.md,
@@ -1686,33 +2150,33 @@ const styles = StyleSheet.create({
     ...SHADOWS.md,
   },
   activeTrackingHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 6,
   },
   pulseDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#16A34A',
+    backgroundColor: "#16A34A",
   },
   activeTrackingTitle: {
     fontSize: FONTS.sizes.sm,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   timerText: {
     fontSize: FONTS.sizes.md,
-    fontWeight: '900',
-    fontFamily: 'monospace',
+    fontWeight: "900",
+    fontFamily: "monospace",
   },
   activeTrackingDest: {
     fontSize: 12,
     marginBottom: 12,
   },
   proximityCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     padding: 10,
     borderRadius: RADIUS.md,
@@ -1721,113 +2185,113 @@ const styles = StyleSheet.create({
   },
   proximityStatusTitle: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   proximityStatusSub: {
     fontSize: 11,
     marginTop: 2,
   },
   trackingBtnRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   stopRideBtn: {
     flex: 1,
-    backgroundColor: '#FEF2F2',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#FEF2F2",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 6,
     paddingVertical: 12,
     borderRadius: RADIUS.md,
     borderWidth: 1.5,
   },
   stopRideBtnText: {
-    color: '#DC2626',
+    color: "#DC2626",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   arriveBtn: {
     flex: 1.3,
-    backgroundColor: '#16A34A',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#16A34A",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 6,
     paddingVertical: 12,
     borderRadius: RADIUS.md,
     ...SHADOWS.sm,
   },
   arriveBtnDisabled: {
-    backgroundColor: '#94A3B8',
+    backgroundColor: "#94A3B8",
     opacity: 0.65,
   },
   arriveBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   lockedWarningText: {
     fontSize: 10,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 8,
     lineHeight: 14,
   },
   arrivalModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
     padding: SPACING.lg,
   },
   arrivalModalCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 360,
     borderRadius: RADIUS.xl,
     padding: SPACING.xl,
-    alignItems: 'center',
+    alignItems: "center",
     ...SHADOWS.lg,
   },
   arrivalIconCircle: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: SPACING.md,
   },
   arrivalTitle: {
     fontSize: FONTS.sizes.xl,
-    fontWeight: '900',
-    textAlign: 'center',
+    fontWeight: "900",
+    textAlign: "center",
     marginBottom: 4,
   },
   arrivalSubtitle: {
     fontSize: 12,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: SPACING.md,
   },
   arrivalSummaryCard: {
-    width: '100%',
+    width: "100%",
     padding: SPACING.md,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: SPACING.lg,
   },
   divider: {
-    width: '100%',
+    width: "100%",
     height: 1,
     marginVertical: 10,
   },
   arrivalMetaRow: {
-    flexDirection: 'row',
-    width: '100%',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    width: "100%",
+    justifyContent: "space-between",
   },
   arrivalMetaCol: {
-    alignItems: 'center',
+    alignItems: "center",
     flex: 1,
   },
   arrivalMetaLabel: {
@@ -1835,19 +2299,19 @@ const styles = StyleSheet.create({
   },
   arrivalMetaVal: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: "800",
     marginTop: 2,
   },
   arrivalBtnRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
-    width: '100%',
+    width: "100%",
   },
   arrivalHistoryBtn: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 6,
     paddingVertical: 12,
     borderRadius: RADIUS.md,
@@ -1855,19 +2319,19 @@ const styles = StyleSheet.create({
   },
   arrivalHistoryBtnText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   arrivalDoneBtn: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 12,
     borderRadius: RADIUS.md,
   },
   arrivalDoneBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -22,6 +22,10 @@ import { routesAPI, locationSharingAPI } from "../../api/services";
 import { FONTS, SPACING, RADIUS, API_BASE_URL } from "../../utils/constants";
 import LocationSharingModal from "./LocationSharingModal";
 import { useSharedLocation } from "../../contexts/LocationContext";
+import {
+  LocationPermissionBanner,
+  LocationPermissionModal,
+} from "../../components/common/LocationPermissionPrompt";
 
 const GPS_ICON = require("../../../assets/gps_access_icon.png");
 
@@ -58,7 +62,13 @@ const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.45) => {
 };
 
 const RouteMapScreen = ({ navigation }) => {
-  const { setLocation: setSharedLocation } = useSharedLocation();
+  const {
+    setLocation: setSharedLocation,
+    locationPermission,
+    ensureLocationPermission,
+  } = useSharedLocation();
+  const iframeRef = useRef(null);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
   const { colors, isDark } = useTheme();
   const { user, isAuthenticated } = useAuth();
   const { showWarning } = useFeedback();
@@ -107,139 +117,61 @@ const RouteMapScreen = ({ navigation }) => {
 
   // Real-time continuous location tracking
   useEffect(() => {
+    if (
+      locationPermission === "unknown" ||
+      locationPermission === "undetermined"
+    ) {
+      ensureLocationPermission();
+      return;
+    }
+    if (locationPermission === "denied") {
+      setLocationStatus("Location is off. Tap Fix to enable");
+      return;
+    }
+
     let isMounted = true;
     let webWatchId = null;
-    let nativeLocationSubscription = null;
+    let nativeSub = null;
 
-    const startLocationTracking = async () => {
-      try {
-        if (
-          Platform.OS === "web" &&
-          typeof window !== "undefined" &&
-          navigator.geolocation
-        ) {
-          // 1. Initial Immediate Fix on Web
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              if (!isMounted) return;
-              setCommuterLocation({
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                accuracy: Math.round(pos.coords.accuracy || 20),
-                isReal: true,
-              });
-              setLocationStatus(
-                `Live GPS Active (±${Math.round(pos.coords.accuracy || 20)}m)`,
-              );
-            },
-            (err) => {
-              console.warn("Web initial GPS warning:", err.message);
-              if (isMounted) {
-                setLocationStatus("Dagupan City Center (GPS Simulated)");
-              }
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
-          );
-
-          // 2. Continuous Real-Time Watch on Web
-          webWatchId = navigator.geolocation.watchPosition(
-            (pos) => {
-              if (!isMounted) return;
-              setCommuterLocation({
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                accuracy: Math.round(pos.coords.accuracy || 20),
-                isReal: true,
-              });
-              setLocationStatus(
-                `Live GPS Active (±${Math.round(pos.coords.accuracy || 20)}m)`,
-              );
-            },
-            (err) => {
-              console.warn("Web continuous GPS watch warning:", err.message);
-            },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
-          );
-        } else {
-          // Native iOS / Android Tracking
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status === "granted") {
-            setLocationStatus("Acquiring Satellite Lock...");
-            try {
-              const initialLoc = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.High,
-              });
-              if (!isMounted) return;
-              setCommuterLocation({
-                lat: initialLoc.coords.latitude,
-                lng: initialLoc.coords.longitude,
-                accuracy: Math.round(initialLoc.coords.accuracy || 20),
-                isReal: true,
-              });
-              setLocationStatus(
-                `Live GPS Active (±${Math.round(initialLoc.coords.accuracy || 20)}m)`,
-              );
-            } catch (posErr) {
-              console.warn("Initial GPS position error, falling back:", posErr);
-              const fallbackLoc = await Location.getLastKnownPositionAsync();
-              if (fallbackLoc && isMounted) {
-                setCommuterLocation({
-                  lat: fallbackLoc.coords.latitude,
-                  lng: fallbackLoc.coords.longitude,
-                  accuracy: Math.round(fallbackLoc.coords.accuracy || 30),
-                  isReal: true,
-                });
-                setLocationStatus("Live GPS (Last Known)");
-              }
-            }
-
-            // Continuous subscription for mobile device movement
-            nativeLocationSubscription = await Location.watchPositionAsync(
-              {
-                accuracy: Location.Accuracy.High,
-                timeInterval: 3000,
-                distanceInterval: 4,
-              },
-              (newLoc) => {
-                if (!isMounted) return;
-                setCommuterLocation({
-                  lat: newLoc.coords.latitude,
-                  lng: newLoc.coords.longitude,
-                  accuracy: Math.round(newLoc.coords.accuracy || 15),
-                  isReal: true,
-                });
-                setLocationStatus(
-                  `Live GPS Active (±${Math.round(newLoc.coords.accuracy || 15)}m)`,
-                );
-              },
-            );
-          } else {
-            setLocationStatus("GPS Permission Denied (Dagupan Center)");
-          }
-        }
-      } catch (e) {
-        console.warn("Location initialization error:", e);
-        if (isMounted) setLocationStatus("Dagupan Center (Simulated)");
-      }
+    const onFix = (c, fallbackAcc = 20) => {
+      if (!isMounted) return;
+      const acc = Math.round(c.accuracy || fallbackAcc);
+      setCommuterLocation({
+        lat: c.latitude,
+        lng: c.longitude,
+        accuracy: acc,
+        isReal: true,
+      });
+      setLocationStatus(`Live GPS Active (±${acc}m)`);
     };
 
-    startLocationTracking();
+    (async () => {
+      if (Platform.OS === "web") {
+        webWatchId = navigator.geolocation.watchPosition(
+          (pos) => onFix(pos.coords),
+          (err) => console.warn("Web GPS watch:", err.message),
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
+        );
+        return;
+      }
+
+      nativeSub = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 3000,
+          distanceInterval: 4,
+        },
+        (loc) => onFix(loc.coords, 15),
+      );
+      if (!isMounted) nativeSub.remove();
+    })();
 
     return () => {
       isMounted = false;
-      if (
-        webWatchId !== null &&
-        typeof navigator !== "undefined" &&
-        navigator.geolocation
-      ) {
-        navigator.geolocation.clearWatch(webWatchId);
-      }
-      if (nativeLocationSubscription) {
-        nativeLocationSubscription.remove();
-      }
+      if (webWatchId !== null) navigator.geolocation.clearWatch(webWatchId);
+      if (nativeSub) nativeSub.remove();
     };
-  }, []);
-
+  }, [locationPermission]);
   // Fetch routes and bus terminals
   const loadData = async () => {
     try {
@@ -357,6 +289,12 @@ const RouteMapScreen = ({ navigation }) => {
 
   // Trigger re-centering on commuter location with fresh GPS fix
   const handleRecenter = async () => {
+    const state = await ensureLocationPermission();
+    if (state !== "granted") {
+      setShowPermissionModal(true);
+      return;
+    }
+
     if (webViewRef.current && Platform.OS !== "web") {
       webViewRef.current.injectJavaScript(
         `if (window.centerOnCommuter) { window.centerOnCommuter(); } true;`,
@@ -385,24 +323,19 @@ const RouteMapScreen = ({ navigation }) => {
           { enableHighAccuracy: true, timeout: 5000 },
         );
       } else {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === "granted") {
-          const cur = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
+        const cur = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        if (cur) {
+          setCommuterLocation({
+            lat: cur.coords.latitude,
+            lng: cur.coords.longitude,
+            accuracy: Math.round(cur.coords.accuracy || 20),
+            isReal: true,
           });
-          if (cur) {
-            setCommuterLocation({
-              lat: cur.coords.latitude,
-              lng: cur.coords.longitude,
-              accuracy: Math.round(cur.coords.accuracy || 20),
-              isReal: true,
-            });
-            setLocationStatus(
-              `Live GPS Active (±${Math.round(cur.coords.accuracy || 20)}m)`,
-            );
-          }
-        } else {
-          setLocationStatus("GPS Permission Denied");
+          setLocationStatus(
+            `Live GPS Active (±${Math.round(cur.coords.accuracy || 20)}m)`,
+          );
         }
         setRecenterCount((c) => c + 1);
       }
@@ -412,8 +345,21 @@ const RouteMapScreen = ({ navigation }) => {
   };
 
   // Launch Live Tracker with route corridor geofence validation
-  const handleTrackJeepney = (routeItem) => {
+  const handleTrackJeepney = async (routeItem) => {
     if (!routeItem) return;
+
+    const state = await ensureLocationPermission();
+    if (state !== "granted") {
+      setShowPermissionModal(true);
+      return;
+    }
+    if (!commuterLocation.isReal) {
+      showWarning(
+        "Still finding you",
+        "Waiting for a GPS fix. Try again in a few seconds.",
+      );
+      return;
+    }
 
     // Check if commuter location is along the static route corridor
     if (
@@ -448,6 +394,28 @@ const RouteMapScreen = ({ navigation }) => {
       },
     });
   };
+
+  const pushLocationToMap = () => {
+    const { lat, lng, accuracy, isReal } = commuterLocation;
+    if (Platform.OS === "web") {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({
+          type: "UPDATE_USER_LOCATION",
+          lat,
+          lng,
+          accuracy,
+          isReal,
+        }),
+        "*",
+      );
+    } else {
+      webViewRef.current?.injectJavaScript(
+        `window.updateUserLocation && window.updateUserLocation(${lat},${lng},${accuracy},${isReal}); true;`,
+      );
+    }
+  };
+
+  useEffect(pushLocationToMap, [commuterLocation]);
 
   // Generate HTML for the embedded Leaflet Map
   const generateLeafletHtml = () => {
@@ -619,21 +587,26 @@ const RouteMapScreen = ({ navigation }) => {
             commuterMarker.openPopup();
           };
 
-          // Continuous Web Geolocation Watch inside Leaflet
-          if (typeof navigator !== 'undefined' && navigator.geolocation) {
-            navigator.geolocation.watchPosition(
-              function(pos) {
-                userLat = pos.coords.latitude;
-                userLng = pos.coords.longitude;
-                userAccuracy = Math.round(pos.coords.accuracy || 20);
-                commuterMarker.setLatLng([userLat, userLng]);
-                commuterCircle.setLatLng([userLat, userLng]);
-                commuterCircle.setRadius(Math.max(userAccuracy, 20));
-              },
-              function(err) {},
-              { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
-            );
-          }
+                    var hasCentered = false;
+          window.updateUserLocation = function(lat, lng, acc, real) {
+            if (typeof lat !== 'number' || typeof lng !== 'number') return;
+            userLat = lat; userLng = lng; userAccuracy = acc || 20;
+            commuterMarker.setLatLng([lat, lng]);
+            commuterCircle.setLatLng([lat, lng]);
+            commuterCircle.setRadius(Math.max(userAccuracy, 20));
+            if (real && !hasCentered && !selectedId) {
+              hasCentered = true;
+              map.setView([lat, lng], 15);
+            }
+          };
+          window.addEventListener('message', function(e) {
+            try {
+              var d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+              if (d && d.type === 'UPDATE_USER_LOCATION') {
+                window.updateUserLocation(d.lat, d.lng, d.accuracy, d.isReal);
+              }
+            } catch (_) {}
+          });
 
           var activeTab = '${activeTab}';
           var routes = ${routesJson};
@@ -829,6 +802,24 @@ const RouteMapScreen = ({ navigation }) => {
     `;
   };
 
+  const mapHtml = useMemo(
+    () => generateLeafletHtml(),
+    [
+      routes,
+      busTerminals,
+      peers,
+      selectedItem,
+      selectedCategory,
+      activeTab,
+      recenterCount,
+      commuterLocation.isReal,
+    ],
+  );
+
+  useEffect(() => {
+    if (locationPermission === "granted") setShowPermissionModal(false);
+  }, [locationPermission]);
+
   if (loading)
     return <LoadingSpinner text="Connecting to Dagupan Transit Grid..." />;
 
@@ -873,6 +864,12 @@ const RouteMapScreen = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {locationPermission === "denied" && (
+        <LocationPermissionBanner
+          onPress={() => setShowPermissionModal(true)}
+        />
+      )}
 
       {/* Sub-Header Bar: Terminals visible notice + Solo Ride + Full Map Arrow Toggle */}
       <View
@@ -1002,17 +999,21 @@ const RouteMapScreen = ({ navigation }) => {
         )}
         {Platform.OS === "web" ? (
           <iframe
+            ref={iframeRef}
+            onLoad={pushLocationToMap}
             key={`leaflet-map-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || "all"}-${isListCollapsed ? "full" : "norm"}-${peers.length}`}
             title="Dagupan Transit Leaflet Map"
-            srcDoc={generateLeafletHtml()}
+            srcDoc={mapHtml}
+            allow="geolocation"
             style={{ width: "100%", height: "100%", border: "none" }}
           />
         ) : (
           <WebView
             ref={webViewRef}
+            onLoadEnd={pushLocationToMap}
             key={`leaflet-webview-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || "all"}-${isListCollapsed ? "full" : "norm"}-${peers.length}`}
             originWhitelist={["*"]}
-            source={{ html: generateLeafletHtml() }}
+            source={{ html: mapHtml }}
             style={{
               width: "100%",
               height: "100%",
@@ -1463,6 +1464,15 @@ const RouteMapScreen = ({ navigation }) => {
         visible={showLocationSharingModal}
         onClose={() => setShowLocationSharingModal(false)}
         onRefreshPeers={fetchPeerLocations}
+      />
+
+      <LocationPermissionModal
+        visible={showPermissionModal}
+        onClose={() => setShowPermissionModal(false)}
+        onRetry={async () => {
+          const s = await ensureLocationPermission();
+          if (s === "granted") setShowPermissionModal(false);
+        }}
       />
     </View>
   );
