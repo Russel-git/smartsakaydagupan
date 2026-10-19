@@ -16,6 +16,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useFeedback } from "../../contexts/FeedbackContext";
 import { routesAPI } from "../../api/services";
 import { Card, LoadingSpinner } from "../../components/common/SharedComponents";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AuthPromptModal from "../../components/common/AuthPromptModal";
 import ConfirmDialogModal from "../../components/common/ConfirmDialogModal";
 import { useSharedLocation } from "../../contexts/LocationContext";
@@ -101,14 +102,15 @@ const RideTrackerScreen = ({ route, navigation }) => {
   const { isGuest } = useAuth();
   const { showSuccess, showInfo, showWarning } = useFeedback();
 
+  const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isTablet = Math.min(windowWidth, windowHeight) >= 600;
   const isLandscape = windowWidth > windowHeight;
-  const panelMaxHeight = isLandscape
-    ? Math.max(180, windowHeight * 0.42)
+  const mapHeight = isLandscape
+    ? Math.max(220, Math.min(360, windowHeight * 0.42))
     : isTablet
-      ? Math.min(520, windowHeight * 0.48)
-      : Math.min(480, Math.max(280, windowHeight * 0.52));
+      ? Math.min(420, windowHeight * 0.40)
+      : Math.min(320, Math.max(220, windowHeight * 0.35));
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState({
     visible: false,
@@ -621,8 +623,17 @@ const RideTrackerScreen = ({ route, navigation }) => {
       <body>
         <div id="map"></div>
         <script>
-          const map = L.map('map', { zoomControl: false }).setView([${lat}, ${lng}], 15);
+          const map = L.map('map', { zoomControl: false, scrollWheelZoom: false }).setView([${lat}, ${lng}], 15);
           L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+          // Forward mouse wheel events to parent window so web users can scroll page seamlessly
+          window.addEventListener('wheel', function(e) {
+            try {
+              if (window.parent && window.parent !== window) {
+                window.parent.scrollBy({ top: e.deltaY, left: 0, behavior: 'auto' });
+              }
+            } catch(err) {}
+          }, { passive: true });
 
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
@@ -827,9 +838,18 @@ const RideTrackerScreen = ({ route, navigation }) => {
 
       {/* TAB 1: LIVE TRACKER VIEW */}
       {activeTab === "tracker" && (
-        <>
+        <ScrollView
+          style={styles.trackerScroll}
+          contentContainerStyle={[
+            styles.trackerScrollContent,
+            { paddingBottom: Math.max(insets.bottom, 24) + 80 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled={true}
+          showsVerticalScrollIndicator={true}
+        >
           {/* Map View Area */}
-          <View style={styles.mapArea}>
+          <View style={[styles.mapArea, { height: mapHeight }]}>
             {Platform.OS === "web" ? (
               <iframe
                 key={`ride-map-${currentLocation ? "ready" : "waiting"}`}
@@ -922,24 +942,20 @@ const RideTrackerScreen = ({ route, navigation }) => {
             </View>
           </View>
 
-          {/* Bottom Sheet / Controls Panel */}
+          {/* Controls Panel */}
           <View
             style={[
               styles.bottomPanel,
               {
                 backgroundColor: colors.surface,
                 borderTopColor: colors.border,
-                maxHeight: panelMaxHeight,
                 maxWidth: isTablet ? 780 : "100%",
                 alignSelf: "center",
                 width: "100%",
               },
             ]}
           >
-            <ScrollView
-              contentContainerStyle={styles.bottomScroll}
-              keyboardShouldPersistTaps="handled"
-            >
+            <View style={styles.bottomPanelInner}>
               {/* STATE: IDLE (Choose route, vehicle, discount, then Start) */}
               {rideState === "idle" && (
                 <>
@@ -1779,9 +1795,9 @@ const RideTrackerScreen = ({ route, navigation }) => {
                   </TouchableOpacity>
                 </View>
               )}
-            </ScrollView>
+            </View>
           </View>
-        </>
+        </ScrollView>
       )}
 
       {/* TAB 2: RIDE HISTORY VIEW */}
@@ -2128,7 +2144,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   mapArea: {
-    flex: 1,
+    width: "100%",
     minHeight: 220,
     position: "relative",
   },
@@ -2198,8 +2214,18 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
   },
+  trackerScroll: {
+    flex: 1,
+  },
+  trackerScrollContent: {
+    flexGrow: 1,
+  },
   bottomPanel: {
     borderTopWidth: 1,
+  },
+  bottomPanelInner: {
+    padding: SPACING.lg,
+    paddingBottom: SPACING.xxl,
   },
   bottomScroll: {
     padding: SPACING.lg,
