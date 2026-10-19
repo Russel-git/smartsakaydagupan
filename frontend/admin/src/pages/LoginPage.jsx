@@ -49,8 +49,7 @@ const LoginPage = () => {
 
       showSuccess(
         "Successfully Logged In",
-        `Welcome back, ${
-          user?.firstName || "Administrator"
+        `Welcome back, ${user?.firstName || "Administrator"
         }! SmartSakay command console active.`,
       );
 
@@ -384,7 +383,7 @@ const LoginPage = () => {
                   type="email"
                   required
                   className="form-input"
-                  placeholder="admin@smartsakay.com"
+                  placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   style={{

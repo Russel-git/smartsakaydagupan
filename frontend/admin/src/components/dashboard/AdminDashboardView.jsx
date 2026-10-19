@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   Users,
-  ShieldAlert,
   Building2,
   UserCheck,
   UserX,
@@ -11,34 +10,55 @@ import {
   PlusCircle,
   Activity,
   CheckCircle2,
-  Clock,
+  TrendingUp,
+  ShieldAlert,
+  Sliders,
+  FileText,
 } from "lucide-react";
 import api from "../../api/client";
 import { useTheme } from "../../contexts/theme/ThemeContext";
+import AnalyticsChart from "./AnalyticsChart";
 
 const AdminDashboardView = () => {
   const { colors } = useTheme();
   const [metrics, setMetrics] = useState({
-    activeAccounts: 0,
-    suspendedAccounts: 0,
-    lguAccounts: 0,
-    posoAccounts: 0,
-    commuterAccounts: 0,
-    adminAccounts: 0,
+    totalUsers: 0,
+    commuters: 0,
+    lgu: 0,
+    poso: 0,
+    admin: 0,
+    active: 0,
+    suspended: 0,
   });
+  const [userTrends, setUserTrends] = useState([]);
+  const [monthsRange, setMonthsRange] = useState(6);
   const [recentStaff, setRecentStaff] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const fetchAnalytics = async (range) => {
+    try {
+      const res = await api.get(`/admin/analytics/users?months=${range}`);
+      if (res.data?.data) {
+        if (res.data.data.totals) {
+          setMetrics(res.data.data.totals);
+        }
+        if (res.data.data.monthlyTrends) {
+          setUserTrends(res.data.data.monthlyTrends);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load user scalability analytics:", err);
+    }
+  };
 
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
-        const [metricsRes, usersRes] = await Promise.all([
-          api.get("/admin/metrics"),
+        const [usersRes] = await Promise.all([
           api.get("/users?role=lgu&limit=5"),
+          fetchAnalytics(monthsRange),
         ]);
-        if (metricsRes.data?.data) {
-          setMetrics(metricsRes.data.data);
-        }
+
         if (usersRes.data?.data?.items) {
           setRecentStaff(usersRes.data.data.items);
         } else if (Array.isArray(usersRes.data?.data)) {
@@ -54,12 +74,17 @@ const AdminDashboardView = () => {
     fetchAdminData();
   }, []);
 
+  const handleRangeChange = (newRange) => {
+    setMonthsRange(newRange);
+    fetchAnalytics(newRange);
+  };
+
   if (loading) {
     return (
       <div style={{ padding: "24px" }}>
         <div style={{ height: "40px", width: "260px", backgroundColor: colors.surfaceElevated, borderRadius: "8px", marginBottom: "24px" }} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
-          {[1, 2, 3].map((i) => (
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} style={{ height: "140px", backgroundColor: colors.surfaceElevated, borderRadius: "14px" }} />
           ))}
         </div>
@@ -69,31 +94,44 @@ const AdminDashboardView = () => {
 
   const statCards = [
     {
-      title: "Active Accounts",
-      value: metrics.activeAccounts,
-      subtitle: "Verified & operating safely",
+      title: "Total Registered Users",
+      value: metrics.totalUsers,
+      subtitle: `${metrics.active || 0} active • ${metrics.suspended || 0} suspended`,
+      icon: Users,
+      color: colors.primary,
+      bgColor: `${colors.primary}15`,
+      borderColor: `${colors.primary}35`,
+      link: "/users",
+    },
+    {
+      title: "Commuter Accounts",
+      value: metrics.commuters,
+      subtitle: "Transit ridership base (Mobile App)",
       icon: UserCheck,
       color: "#10B981",
       bgColor: "#ECFDF5",
       borderColor: "#A7F3D0",
+      link: "/users?role=commuter",
     },
     {
-      title: "Suspended Accounts",
-      value: metrics.suspendedAccounts,
-      subtitle: "Deactivated or locked access",
-      icon: UserX,
-      color: "#EF4444",
-      bgColor: "#FEF2F2",
-      borderColor: "#FECACA",
-    },
-    {
-      title: "LGU Accounts",
-      value: metrics.lguAccounts,
-      subtitle: "City Hall transport authorities",
+      title: "LGU Authorities",
+      value: metrics.lgu,
+      subtitle: "City Hall transport administration",
       icon: Building2,
-      color: "#4F46E5",
+      color: "#6366F1",
       bgColor: "#EEF2FF",
       borderColor: "#C7D2FE",
+      link: "/users?role=lgu",
+    },
+    {
+      title: "POSO Enforcers",
+      value: metrics.poso,
+      subtitle: "Field traffic & road patrol officers",
+      icon: ShieldAlert,
+      color: "#F59E0B",
+      bgColor: "#FEF3C7",
+      borderColor: "#FDE68A",
+      link: "/users?role=poso",
     },
   ];
 
@@ -128,70 +166,77 @@ const AdminDashboardView = () => {
               margin: "4px 0 0 0",
             }}
           >
-            Root administrative control for SmartSakay Dagupan City. Manage LGU authorities and account statuses.
+            Root administrative control and user scalability analytics for SmartSakay Dagupan City.
           </p>
         </div>
 
-        <Link
-          to="/users"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "8px",
-            padding: "10px 18px",
-            backgroundColor: colors.primary,
-            color: "#FFFFFF",
-            borderRadius: "10px",
-            textDecoration: "none",
-            fontWeight: "600",
-            fontSize: "13px",
-            boxShadow: `0 4px 12px ${colors.primaryDark}40`,
-          }}
-        >
-          Provision LGU Account
-        </Link>
+        {/* Quick Governance & Control Actions */}
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          
+          <Link
+            to="/users"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "10px 18px",
+              backgroundColor: colors.primary,
+              color: "#FFFFFF",
+              borderRadius: "10px",
+              textDecoration: "none",
+              fontWeight: "600",
+              fontSize: "13px",
+              boxShadow: `0 4px 12px ${colors.primaryDark || colors.primary}40`,
+            }}
+          >
+            <Sliders size={16} />
+            Provision LGU Account
+          </Link>
+        </div>
       </div>
 
-      {/* 3 Core Metric Cards as Requested */}
+      {/* 4 Total User Breakdown Cards (Scalability Metrics) */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
           gap: "20px",
-          marginBottom: "32px",
+          marginBottom: "28px",
         }}
       >
         {statCards.map((card, idx) => {
           const Icon = card.icon;
           return (
-            <div
+            <Link
               key={idx}
+              to={card.link}
               style={{
+                textDecoration: "none",
                 backgroundColor: colors.surface,
                 borderRadius: "16px",
-                padding: "24px",
+                padding: "22px",
                 border: `1px solid ${colors.border}`,
                 boxShadow: "0 4px 20px rgba(0, 0, 0, 0.03)",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
                 position: "relative",
-                overflow: "hidden",
+                transition: "transform 0.15s ease, box-shadow 0.15s ease",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px" }}>
                 <div>
-                  <div style={{ fontSize: "13px", fontWeight: "600", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     {card.title}
                   </div>
-                  <div style={{ fontSize: "36px", fontWeight: "800", color: colors.textPrimary, marginTop: "6px" }}>
-                    {card.value}
+                  <div style={{ fontSize: "32px", fontWeight: "800", color: colors.textPrimary, marginTop: "4px" }}>
+                    {card.value.toLocaleString()}
                   </div>
                 </div>
                 <div
                   style={{
-                    width: "48px",
-                    height: "48px",
+                    width: "44px",
+                    height: "44px",
                     borderRadius: "12px",
                     backgroundColor: card.bgColor,
                     display: "flex",
@@ -201,17 +246,34 @@ const AdminDashboardView = () => {
                     border: `1px solid ${card.borderColor}`,
                   }}
                 >
-                  <Icon size={24} />
+                  <Icon size={22} />
                 </div>
               </div>
 
-              <div style={{ fontSize: "12px", color: colors.textMuted, display: "flex", alignItems: "center", gap: "6px" }}>
-                <CheckCircle2 size={14} style={{ color: card.color }} />
+              <div style={{ fontSize: "11px", color: colors.textMuted, display: "flex", alignItems: "center", gap: "6px" }}>
+                <CheckCircle2 size={13} style={{ color: card.color }} />
                 <span>{card.subtitle}</span>
               </div>
-            </div>
+            </Link>
           );
         })}
+      </div>
+
+      {/* User Scalability Analytics Chart */}
+      <div style={{ marginBottom: "28px" }}>
+        <AnalyticsChart
+          title="User Growth & Scalability Analytics (Per Month)"
+          subtitle="Monthly breakdown of new commuter, LGU, and POSO accounts to guide infrastructure sizing and capacity planning"
+          data={userTrends}
+          series={[
+            { key: "commuter", label: "Commuters", color: "#10B981" },
+            { key: "lgu", label: "LGU Authorities", color: "#6366F1" },
+            { key: "poso", label: "POSO Enforcers", color: "#F59E0B" },
+          ]}
+          timeRange={monthsRange}
+          onTimeRangeChange={handleRangeChange}
+          emptyMessage="No registration growth trends recorded in this period."
+        />
       </div>
 
       {/* System Distribution & Quick Breakdown */}
@@ -241,25 +303,25 @@ const AdminDashboardView = () => {
 
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", backgroundColor: colors.background, borderRadius: "10px" }}>
+              <span style={{ fontSize: "13px", fontWeight: "600", color: colors.textPrimary }}>Registered Commuters</span>
+              <span style={{ fontSize: "14px", fontWeight: "700", color: "#059669" }}>{metrics.commuters.toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", backgroundColor: colors.background, borderRadius: "10px" }}>
               <span style={{ fontSize: "13px", fontWeight: "600", color: colors.textPrimary }}>LGU Authority Accounts</span>
-              <span style={{ fontSize: "14px", fontWeight: "700", color: "#4F46E5" }}>{metrics.lguAccounts}</span>
+              <span style={{ fontSize: "14px", fontWeight: "700", color: "#4F46E5" }}>{metrics.lgu.toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", backgroundColor: colors.background, borderRadius: "10px" }}>
               <span style={{ fontSize: "13px", fontWeight: "600", color: colors.textPrimary }}>POSO Field Enforcers</span>
-              <span style={{ fontSize: "14px", fontWeight: "700", color: "#D97706" }}>{metrics.posoAccounts}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", backgroundColor: colors.background, borderRadius: "10px" }}>
-              <span style={{ fontSize: "13px", fontWeight: "600", color: colors.textPrimary }}>Registered Commuters</span>
-              <span style={{ fontSize: "14px", fontWeight: "700", color: "#059669" }}>{metrics.commuterAccounts}</span>
+              <span style={{ fontSize: "14px", fontWeight: "700", color: "#D97706" }}>{metrics.poso.toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", backgroundColor: colors.background, borderRadius: "10px" }}>
               <span style={{ fontSize: "13px", fontWeight: "600", color: colors.textPrimary }}>System Administrators</span>
-              <span style={{ fontSize: "14px", fontWeight: "700", color: colors.primary }}>{metrics.adminAccounts}</span>
+              <span style={{ fontSize: "14px", fontWeight: "700", color: colors.primary }}>{metrics.admin.toLocaleString()}</span>
             </div>
           </div>
         </div>
 
-        {/* Governance Guidelines Box */}
+        {/* Scalability Control Panel */}
         <div
           style={{
             backgroundColor: colors.surface,
@@ -275,32 +337,52 @@ const AdminDashboardView = () => {
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
               <Building2 size={20} style={{ color: "#4F46E5" }} />
               <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: colors.textPrimary }}>
-                Account Provisioning Rules
+                Scalability & Access Control
               </h3>
             </div>
             <p style={{ fontSize: "13px", color: colors.textSecondary, lineHeight: "1.6", margin: "0 0 16px 0" }}>
-              As <strong>System Administrator</strong>, your provisioning scope is exclusively restricted to <strong>LGU Authority Accounts</strong>. LGU Officers subsequently manage and provision on-road <strong>POSO Officers</strong>.
+              Use the governance controls to review user registration rates, deactivate compromised profiles, manage role allocations, and inspect security audit trails.
             </p>
           </div>
 
-          <Link
-            to="/users"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "12px 16px",
-              backgroundColor: colors.surfaceElevated,
-              color: colors.primary,
-              borderRadius: "10px",
-              textDecoration: "none",
-              fontSize: "13px",
-              fontWeight: "600",
-            }}
-          >
-            <span>Open LGU Account Management</span>
-            <ArrowRight size={16} />
-          </Link>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <Link
+              to="/users"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "12px 16px",
+                backgroundColor: colors.surfaceElevated,
+                color: colors.primary,
+                borderRadius: "10px",
+                textDecoration: "none",
+                fontSize: "13px",
+                fontWeight: "600",
+              }}
+            >
+              <span>Manage User Roles & Access</span>
+              <ArrowRight size={16} />
+            </Link>
+            <Link
+              to="/audit-logs"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "12px 16px",
+                backgroundColor: colors.surfaceElevated,
+                color: colors.textSecondary,
+                borderRadius: "10px",
+                textDecoration: "none",
+                fontSize: "13px",
+                fontWeight: "600",
+              }}
+            >
+              <span>Inspect Security & Audit Logs</span>
+              <FileText size={16} />
+            </Link>
+          </div>
         </div>
       </div>
 

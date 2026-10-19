@@ -129,5 +129,112 @@ const getAuditLogs = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getStats, getAccountMetrics, getActivity, getAuditLogs };
+const getUserScalabilityAnalytics = async (req, res, next) => {
+  try {
+    const monthsCount = Math.min(Math.max(parseInt(req.query.months, 10) || 6, 3), 24);
+    const now = new Date();
+
+    const monthList = [];
+    for (let i = monthsCount - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      const shortLabel = d.toLocaleString('en-US', { month: 'short' });
+      monthList.push({ key, label, shortLabel });
+    }
+
+    const startDate = new Date(now.getFullYear(), now.getMonth() - (monthsCount - 1), 1, 0, 0, 0, 0);
+
+    const [
+      totalUsers,
+      commutersCount,
+      lguCount,
+      posoCount,
+      adminCount,
+      activeCount,
+      suspendedCount,
+      userGrowthRaw,
+    ] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ role: 'commuter' }),
+      User.countDocuments({ role: 'lgu' }),
+      User.countDocuments({ role: 'poso' }),
+      User.countDocuments({ role: 'admin' }),
+      User.countDocuments({ isActive: true }),
+      User.countDocuments({ isActive: false }),
+      User.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startDate },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              month: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
+              role: '$role',
+            },
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    const growthMap = {};
+    userGrowthRaw.forEach((item) => {
+      const m = item._id?.month;
+      const r = item._id?.role;
+      if (m) {
+        if (!growthMap[m]) growthMap[m] = {};
+        growthMap[m][r] = item.count;
+      }
+    });
+
+    const monthlyTrends = monthList.map((m) => {
+      const counts = growthMap[m.key] || {};
+      const commuter = counts.commuter || 0;
+      const lgu = counts.lgu || 0;
+      const poso = counts.poso || 0;
+      const admin = counts.admin || 0;
+      const totalNew = commuter + lgu + poso + admin;
+      return {
+        key: m.key,
+        label: m.label,
+        shortLabel: m.shortLabel,
+        commuter,
+        lgu,
+        poso,
+        admin,
+        total: totalNew,
+      };
+    });
+
+    return apiResponse.success(
+      res,
+      {
+        totals: {
+          totalUsers,
+          commuters: commutersCount,
+          lgu: lguCount,
+          poso: posoCount,
+          admin: adminCount,
+          active: activeCount,
+          suspended: suspendedCount,
+        },
+        monthlyTrends,
+      },
+      'User scalability analytics retrieved successfully'
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  getStats,
+  getAccountMetrics,
+  getActivity,
+  getAuditLogs,
+  getUserScalabilityAnalytics,
+};
 

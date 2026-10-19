@@ -140,7 +140,7 @@ const getAllComplaints = async (req, res, next) => {
 
     // Role-specific filtering
     if (req.user.role === 'lgu') {
-      filter.status = status ? status : { $in: ['endorsed_to_lgu', 'action_taken', 'terminated'] };
+      filter.status = status ? status : { $in: ['endorsed_to_lgu', 'action_taken', 'terminated', 'resolved'] };
     } else if (req.user.role === 'poso') {
       if (tab === 'pending') {
         filter.status = { $in: ['pending', 'under_review'] };
@@ -440,32 +440,36 @@ const lguTakeAction = async (req, res, next) => {
 const lguTerminate = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { lguTerminationNotes } = req.body;
+    const { lguTerminationNotes, resolutionNotes } = req.body;
     const complaint = await Complaint.findById(id);
     if (!complaint) return apiResponse.error(res, 'Complaint not found.', 404);
 
-    complaint.status = 'terminated';
+    const notesToSave = resolutionNotes || lguTerminationNotes || '';
+
+    complaint.status = 'resolved';
+    complaint.resolvedAt = new Date();
+    complaint.resolvedBy = req.user._id;
     complaint.lguTerminatedAt = new Date();
-    complaint.lguTerminationNotes = lguTerminationNotes || '';
+    complaint.lguTerminationNotes = notesToSave;
     complaint.lguHandledBy = req.user._id;
     await complaint.save();
 
     await Notification.create({
       userId: complaint.userId,
-      title: '✅ Grievance Terminated & Resolved',
-      message: `Your complaint "${complaint.subject}" has been officially resolved and terminated by Dagupan City authorities.`,
+      title: '✅ Grievance Officially Resolved',
+      message: `Your complaint "${complaint.subject}" has been officially resolved by Dagupan City authorities: ${notesToSave || 'Case successfully concluded and resolved.'}`,
       type: 'complaint_update',
-      metadata: { complaintId: complaint._id, status: 'terminated' },
+      metadata: { complaintId: complaint._id, status: 'resolved' },
     });
 
     await logAuditEvent(req, {
-      action: 'COMPLAINT_LGU_TERMINATED',
+      action: 'COMPLAINT_LGU_RESOLVED',
       resourceType: 'complaint',
       resourceId: complaint._id,
-      details: { subject: complaint.subject, lguTerminationNotes },
+      details: { subject: complaint.subject, resolutionNotes: notesToSave, status: 'resolved' },
     });
 
-    return apiResponse.success(res, complaint, 'Complaint terminated and marked as officially resolved.');
+    return apiResponse.success(res, complaint, 'Complaint marked as officially resolved.');
   } catch (error) { next(error); }
 };
 
@@ -746,6 +750,239 @@ const rejectComplaint = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const CATEGORY_META = {
+  overcharging: {
+    label: 'Overcharging',
+    color: '#F59E0B',
+    focusArea: 'Fare Regulation & Base Tariff Compliance',
+    recommendation: 'Deploy POSO fare monitors at major terminals (Perez Blvd, Lucao, Malimgas) and verify printed LTFRB fare matrix compliance inside PUVs.',
+  },
+  reckless_driving: {
+    label: 'Reckless Driving',
+    color: '#EF4444',
+    focusArea: 'Speed Enforcement & Commuter Safety',
+    recommendation: 'Establish radar speed checks on fast corridors (Bonuan, Bolosan Highway) and mandate safety retraining for flagged operators.',
+  },
+  harassment: {
+    label: 'Harassment',
+    color: '#8B5CF6',
+    focusArea: 'Commuter Protection & Safe Spaces',
+    recommendation: 'Expedite priority field hearings with POSO/GAD desk, display emergency reporting hotlines, and penalize abusive crew members.',
+  },
+  route_deviation: {
+    label: 'Route Deviation',
+    color: '#3B82F6',
+    focusArea: 'Franchise Corridor Integrity',
+    recommendation: 'Conduct random route checkpoint audits to stop cutting-trips (cutting line) and ensure PUVs complete their full franchise routes.',
+  },
+  vehicle_condition: {
+    label: 'Vehicle Condition',
+    color: '#10B981',
+    focusArea: 'Roadworthiness & Emission Standards',
+    recommendation: 'Conduct joint LGU-LTO roadworthiness spot inspections and emission testing on dilapidated public utility jeepneys.',
+  },
+  other: {
+    label: 'Other',
+    color: '#6B7280',
+    focusArea: 'General Commuter Relations',
+    recommendation: 'Review general commuter feedback and coordinate service quality orientations with Dagupan transport federation leaders.',
+  },
+};
+
+const getMonthlyComplaintAnalytics = async (req, res, next) => {
+  try {
+    const monthsCount = Math.min(Math.max(parseInt(req.query.months, 10) || 6, 3), 24);
+    const now = new Date();
+
+    const monthList = [];
+    for (let i = monthsCount - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      const shortLabel = d.toLocaleString('en-US', { month: 'short' });
+      monthList.push({ key, label, shortLabel });
+    }
+
+    const startDate = new Date(now.getFullYear(), now.getMonth() - (monthsCount - 1), 1, 0, 0, 0, 0);
+
+    const aggregateStatus = async (statusVal, dateField) => {
+      const matchStatus = Array.isArray(statusVal) ? { $in: statusVal } : statusVal;
+      const results = await Complaint.aggregate([
+        {
+          $match: {
+            status: matchStatus,
+            $or: [
+              { [dateField]: { $gte: startDate } },
+              { [dateField]: null, updatedAt: { $gte: startDate } },
+              { [dateField]: null, createdAt: { $gte: startDate } },
+            ],
+          },
+        },
+        {
+          $project: {
+            date: { $ifNull: [`$${dateField}`, { $ifNull: ['$updatedAt', '$createdAt'] }] },
+          },
+        },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m', date: '$date' } },
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+      const map = {};
+      results.forEach((r) => {
+        if (r._id) map[r._id] = r.count;
+      });
+      return map;
+    };
+
+    // Aggregate Total Filed Reports per month (by createdAt)
+    const aggregateTotalCreated = async () => {
+      const results = await Complaint.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startDate },
+          },
+        },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+      const map = {};
+      results.forEach((r) => {
+        if (r._id) map[r._id] = r.count;
+      });
+      return map;
+    };
+
+    // Category breakdown aggregation for LGU Pie Chart
+    const aggregateCategories = async () => {
+      const results = await Complaint.aggregate([
+        {
+          $match: {
+            status: { $ne: 'deleted' },
+          },
+        },
+        {
+          $group: {
+            _id: '$category',
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+      const catCountMap = {};
+      results.forEach((r) => {
+        if (r._id) catCountMap[r._id] = r.count;
+      });
+      return catCountMap;
+    };
+
+    const [
+      resolvedMap,
+      deletedMap,
+      actionTakenMap,
+      terminatedMap,
+      rejectedMap,
+      endorsedMap,
+      totalMap,
+      categoryMap,
+      totalResolved,
+      totalDeleted,
+      totalActionTaken,
+      totalTerminated,
+      totalRejected,
+      totalPending,
+      totalEndorsed,
+      totalComplaints,
+    ] = await Promise.all([
+      aggregateStatus(['resolved', 'terminated'], 'resolvedAt'),
+      aggregateStatus('deleted', 'deletedAt'),
+      aggregateStatus('action_taken', 'lguActionTakenAt'),
+      aggregateStatus('terminated', 'lguTerminatedAt'),
+      aggregateStatus(['rejected', 'dismissed'], 'rejectedAt'),
+      aggregateStatus(['endorsed_to_lgu', 'action_taken', 'terminated', 'resolved'], 'posoEndorsedAt'),
+      aggregateTotalCreated(),
+      aggregateCategories(),
+      Complaint.countDocuments({ status: { $in: ['resolved', 'terminated'] } }),
+      Complaint.countDocuments({ status: 'deleted' }),
+      Complaint.countDocuments({ status: 'action_taken' }),
+      Complaint.countDocuments({ status: 'terminated' }),
+      Complaint.countDocuments({ status: { $in: ['rejected', 'dismissed'] } }),
+      Complaint.countDocuments({ status: { $in: ['pending', 'under_review'] } }),
+      Complaint.countDocuments({ status: { $in: ['endorsed_to_lgu', 'action_taken', 'terminated', 'resolved'] } }),
+      Complaint.countDocuments(),
+    ]);
+
+    const monthlyTrends = monthList.map((m) => ({
+      key: m.key,
+      label: m.label,
+      shortLabel: m.shortLabel,
+      // POSO Bar Graph Series
+      rejected: rejectedMap[m.key] || 0,
+      endorsed: endorsedMap[m.key] || 0,
+      total: totalMap[m.key] || 0,
+      // LGU Bar Graph Series
+      resolved: resolvedMap[m.key] || 0,
+      deleted: deletedMap[m.key] || 0,
+      actionTaken: actionTakenMap[m.key] || 0,
+      terminated: terminatedMap[m.key] || 0,
+    }));
+
+    // Format all 6 categories for LGU Pie Chart
+    const totalCategorized = Object.keys(CATEGORY_META).reduce(
+      (sum, key) => sum + (categoryMap[key] || 0),
+      0
+    );
+
+    const categoryBreakdown = Object.entries(CATEGORY_META).map(([key, meta]) => {
+      const count = categoryMap[key] || 0;
+      const percentage = totalCategorized > 0
+        ? parseFloat(((count / totalCategorized) * 100).toFixed(1))
+        : 0;
+      return {
+        key,
+        label: meta.label,
+        count,
+        percentage,
+        color: meta.color,
+        focusArea: meta.focusArea,
+        recommendation: meta.recommendation,
+      };
+    });
+
+    // Identify top violation category to advise LGU
+    const sortedCategories = [...categoryBreakdown].sort((a, b) => b.count - a.count);
+    const topCategory = sortedCategories[0] || categoryBreakdown[0];
+
+    return apiResponse.success(
+      res,
+      {
+        totals: {
+          resolved: totalResolved,
+          deleted: totalDeleted,
+          actionTaken: totalActionTaken,
+          terminated: totalTerminated,
+          rejected: totalRejected,
+          endorsed: totalEndorsed,
+          pending: totalPending,
+          total: totalComplaints,
+        },
+        monthlyTrends,
+        categoryBreakdown,
+        topCategory,
+        totalCategorized,
+      },
+      'Monthly complaint analytics retrieved successfully'
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createComplaint,
   uploadEvidencePhoto,
@@ -768,4 +1005,5 @@ module.exports = {
   restoreComplaint,
   permanentDeleteComplaint,
   rejectComplaint,
+  getMonthlyComplaintAnalytics,
 };

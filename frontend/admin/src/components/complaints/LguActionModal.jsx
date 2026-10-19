@@ -62,12 +62,12 @@ const LguActionModal = ({
             {isAction ? (
               <ShieldCheck size={20} color="#10b981" />
             ) : (
-              <CheckCircle2 size={20} color="#38bdf8" />
+              <CheckCircle2 size={20} color="#10b981" />
             )}
             <h2 style={{ fontSize: "18px", margin: 0, color: "black" }}>
               {isAction
                 ? "Record Official LGU Action"
-                : "Terminate & Resolve Case"}
+                : "Resolve Case & Record Official Outcome"}
             </h2>
           </div>
           <button
@@ -116,7 +116,7 @@ const LguActionModal = ({
               <label className="form-label">
                 {isAction
                   ? "Official Enforcement Findings & Action Taken *"
-                  : "Case Termination Summary & Final Resolution *"}
+                  : "Official Resolution Summary & Final Settlement *"}
               </label>
               <textarea
                 className="form-input"
@@ -125,7 +125,7 @@ const LguActionModal = ({
                 placeholder={
                   isAction
                     ? "e.g. Driver summoned to POSO Dagupan; Traffic Citation Ticket #4821 issued for overcharging; cooperative informed."
-                    : "e.g. Citation penalty settled by driver; operator issued formal warning; commuter informed and case officially closed."
+                    : "e.g. Citation penalty settled by driver; operator issued formal reprimand; fare refunded to commuter and case officially resolved."
                 }
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -174,8 +174,9 @@ const LguActionModal = ({
                     alignItems: "center",
                     gap: "6px",
                     padding: "6px 14px",
-                    backgroundColor: "#ffffff",
-                    border: "1px solid #cbd5e1",
+                    backgroundColor: colors.surfaceElevated,
+                    color: colors.textPrimary,
+                    border: `1px solid ${colors.border}`,
                     borderRadius: "6px",
                     cursor: uploadingPhoto ? "not-allowed" : "pointer",
                     fontSize: "12px",
@@ -240,7 +241,7 @@ const LguActionModal = ({
               className="btn"
               disabled={loading}
               style={{
-                backgroundColor: isAction ? "#10b981" : "#0284c7",
+                backgroundColor: isAction ? "#10b981" : "#10b981",
                 color: "white",
                 border: "none",
                 fontWeight: "600",
@@ -250,7 +251,7 @@ const LguActionModal = ({
                 ? "Saving Record..."
                 : isAction
                   ? "Save Action Record"
-                  : "Confirm Termination"}
+                  : "Resolve Case"}
             </button>
           </div>
         </form>

@@ -491,7 +491,14 @@ const NotificationsPage = () => {
           LGU & ADMIN: PENDING ROAD ALERTS APPROVAL DESK
       ====================================================== */}
       {(isLgu || isAdmin) && (
-        <div className="card" style={{ marginBottom: "28px" }}>
+        <div
+          className="card"
+          style={{
+            backgroundColor: colors.surface,
+            border: `1px solid ${colors.border}`,
+            marginBottom: "28px",
+          }}
+        >
           <div
             style={{
               display: "flex",
@@ -711,7 +718,13 @@ const NotificationsPage = () => {
         }}
       >
         {/* COMPOSER CARD */}
-        <div className="card">
+        <div
+          className="card"
+          style={{
+            backgroundColor: colors.surface,
+            border: `1px solid ${colors.border}`,
+          }}
+        >
           <div
             style={{
               display: "flex",
@@ -980,7 +993,13 @@ const NotificationsPage = () => {
         {/* TEMPLATES & INFO CARDS */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           {/* TEMPLATES */}
-          <div className="card">
+          <div
+            className="card"
+            style={{
+              backgroundColor: colors.surface,
+              border: `1px solid ${colors.border}`,
+            }}
+          >
             <h3
               style={{
                 fontSize: "15px",
@@ -1115,7 +1134,14 @@ const NotificationsPage = () => {
           POSO: MY SUBMITTED ROAD ALERTS HISTORY
       ====================================================== */}
       {isPoso && (
-        <div className="card" style={{ marginTop: "24px" }}>
+        <div
+          className="card"
+          style={{
+            backgroundColor: colors.surface,
+            border: `1px solid ${colors.border}`,
+            marginTop: "24px",
+          }}
+        >
           <h3
             style={{
               fontSize: "16px",

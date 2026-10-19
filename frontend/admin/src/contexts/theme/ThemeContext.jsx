@@ -115,22 +115,6 @@ export const ThemeProvider = ({ children }) => {
     themeMode === "dark" || (themeMode === "system" && systemScheme === "dark");
 
   // ---------------------------------------------------------
-  // Synchronize document attributes for CSS variables
-  // ---------------------------------------------------------
-
-  useEffect(() => {
-    if (typeof document !== "undefined") {
-      const root = document.documentElement;
-      root.setAttribute("data-theme", isDark ? "dark" : "light");
-      if (isDark) {
-        root.classList.add("dark");
-      } else {
-        root.classList.remove("dark");
-      }
-    }
-  }, [isDark]);
-
-  // ---------------------------------------------------------
   // Get selected theme colors
   // ---------------------------------------------------------
 
@@ -220,6 +204,37 @@ export const ThemeProvider = ({ children }) => {
 
     dangerLight: isDark ? themeColors.dark.errorLight : themeColors.errorLight,
   };
+
+  // ---------------------------------------------------------
+  // Synchronize document attributes and CSS variables
+  // ---------------------------------------------------------
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      const root = document.documentElement;
+      root.setAttribute("data-theme", isDark ? "dark" : "light");
+      root.style.colorScheme = isDark ? "dark" : "light";
+      if (isDark) {
+        root.classList.add("dark");
+      } else {
+        root.classList.remove("dark");
+      }
+
+      // Dynamically synchronize CSS custom properties with current theme palette
+      root.style.setProperty("--bg-main", colors.background);
+      root.style.setProperty("--bg-white", colors.surface);
+      root.style.setProperty("--bg-surface", colors.surface);
+      root.style.setProperty("--bg-surface-elevated", colors.surfaceElevated);
+      root.style.setProperty("--bg-sidebar", colors.surface);
+      root.style.setProperty("--text-main", colors.textPrimary);
+      root.style.setProperty("--text-secondary", colors.textSecondary);
+      root.style.setProperty("--text-muted", colors.textMuted);
+      root.style.setProperty("--border", colors.border);
+      root.style.setProperty("--primary", colors.primary);
+      root.style.setProperty("--primary-hover", colors.primaryDark || colors.primary);
+      root.style.setProperty("--primary-light", isDark ? "rgba(255, 255, 255, 0.08)" : colors.primaryLight);
+    }
+  }, [isDark, colors]);
 
   // ---------------------------------------------------------
   // Change light / dark / system mode

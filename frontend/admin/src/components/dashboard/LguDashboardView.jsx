@@ -14,27 +14,62 @@ import {
 } from "lucide-react";
 import api from "../../api/client";
 import { useTheme } from "../../contexts/theme/ThemeContext";
+import AnalyticsChart from "./AnalyticsChart";
+import ReportTypePieChart from "./ReportTypePieChart";
 
 const LguDashboardView = () => {
   const { colors } = useTheme();
 
   const [stats, setStats] = useState(null);
+  const [cityRoutes, setCityRoutes] = useState([]);
   const [pendingAlerts, setPendingAlerts] = useState([]);
   const [endorsedComplaints, setEndorsedComplaints] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
+  const [complaintTrends, setComplaintTrends] = useState([]);
+  const [complaintTotals, setComplaintTotals] = useState({
+    resolved: 0,
+    deleted: 0,
+    actionTaken: 0,
+    terminated: 0,
+    pending: 0,
+    endorsed: 0,
+    total: 0,
+  });
+  const [categoryBreakdown, setCategoryBreakdown] = useState([]);
+  const [topCategory, setTopCategory] = useState(null);
+  const [totalCategorized, setTotalCategorized] = useState(0);
+  const [trendRange, setTrendRange] = useState(6);
   const [loading, setLoading] = useState(true);
+
+  const fetchComplaintAnalytics = async (range) => {
+    try {
+      const res = await api.get(`/complaints/analytics/monthly?months=${range}`);
+      if (res.data?.data) {
+        if (res.data.data.totals) setComplaintTotals(res.data.data.totals);
+        if (res.data.data.monthlyTrends) setComplaintTrends(res.data.data.monthlyTrends);
+        if (res.data.data.categoryBreakdown) setCategoryBreakdown(res.data.data.categoryBreakdown);
+        if (res.data.data.topCategory) setTopCategory(res.data.data.topCategory);
+        if (res.data.data.totalCategorized !== undefined) setTotalCategorized(res.data.data.totalCategorized);
+      }
+    } catch (err) {
+      console.error("Failed to load complaint monthly analytics:", err);
+    }
+  };
 
   useEffect(() => {
     const fetchLguDashboardData = async () => {
       try {
-        const [statsRes, alertsRes, complaintsRes, actRes] = await Promise.all([
+        const [statsRes, routesRes, alertsRes, complaintsRes, actRes] = await Promise.all([
           api.get("/admin/stats").catch(() => ({ data: { data: {} } })),
+          api.get("/routes").catch(() => ({ data: { data: [] } })),
           api.get("/notifications/pending").catch(() => ({ data: { data: [] } })),
           api.get("/complaints?limit=10").catch(() => ({ data: { data: { items: [] } } })),
           api.get("/admin/activity").catch(() => ({ data: { data: {} } })),
+          fetchComplaintAnalytics(trendRange),
         ]);
 
         setStats(statsRes.data?.data || null);
+        setCityRoutes(routesRes.data?.data || []);
 
         // Pending road alerts from POSO needing LGU approval
         const alerts = Array.isArray(alertsRes.data?.data) ? alertsRes.data.data : [];
@@ -489,6 +524,129 @@ const LguDashboardView = () => {
         </div>
       </div>
 
+      {/* Monthly Grievance & Enforcement Analytics */}
+      <div style={{ marginBottom: "28px" }}>
+        {/* KPI Mini-Cards */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: "16px",
+            marginBottom: "16px",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: "14px",
+              padding: "18px",
+              border: `1px solid ${colors.border}`,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.03)",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: "600", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                Resolved Complaints
+              </div>
+              <div style={{ fontSize: "28px", fontWeight: "800", color: "#10B981", marginTop: "2px" }}>
+                {complaintTotals.resolved.toLocaleString()}
+              </div>
+              <div style={{ fontSize: "11px", color: colors.textMuted, marginTop: "2px" }}>
+                Officially resolved & settled
+              </div>
+            </div>
+            <div style={{ width: "40px", height: "40px", borderRadius: "10px", backgroundColor: "#ECFDF5", display: "flex", alignItems: "center", justifyContent: "center", color: "#10B981" }}>
+              <CheckCircle2 size={22} />
+            </div>
+          </div>
+
+          <div
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: "14px",
+              padding: "18px",
+              border: `1px solid ${colors.border}`,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.03)",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: "600", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                Action Taken
+              </div>
+              <div style={{ fontSize: "28px", fontWeight: "800", color: "#2563EB", marginTop: "2px" }}>
+                {complaintTotals.actionTaken.toLocaleString()}
+              </div>
+              <div style={{ fontSize: "11px", color: colors.textMuted, marginTop: "2px" }}>
+                Operator sanctions imposed
+              </div>
+            </div>
+            <div style={{ width: "40px", height: "40px", borderRadius: "10px", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", color: "#2563EB" }}>
+              <ShieldCheck size={22} />
+            </div>
+          </div>
+
+          <div
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: "14px",
+              padding: "18px",
+              border: `1px solid ${colors.border}`,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.03)",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: "600", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                Deleted Complaints
+              </div>
+              <div style={{ fontSize: "28px", fontWeight: "800", color: "#EF4444", marginTop: "2px" }}>
+                {complaintTotals.deleted.toLocaleString()}
+              </div>
+              <div style={{ fontSize: "11px", color: colors.textMuted, marginTop: "2px" }}>
+                Removed with audit reason
+              </div>
+            </div>
+            <div style={{ width: "40px", height: "40px", borderRadius: "10px", backgroundColor: "#FEF2F2", display: "flex", alignItems: "center", justifyContent: "center", color: "#EF4444" }}>
+              <AlertTriangle size={22} />
+            </div>
+          </div>
+        </div>
+
+        <AnalyticsChart
+          title="Monthly Grievance & Enforcement Analytics (Per Month)"
+          subtitle="Monthly breakdown of resolved complaints, official actions/sanctions taken, and screened/deleted complaints"
+          data={complaintTrends}
+          series={[
+            { key: "resolved", label: "Resolved Complaints", color: "#10B981" },
+            { key: "actionTaken", label: "Action Taken", color: "#2563EB" },
+            { key: "deleted", label: "Deleted Complaints", color: "#EF4444" },
+          ]}
+          timeRange={trendRange}
+          onTimeRangeChange={(r) => {
+            setTrendRange(r);
+            fetchComplaintAnalytics(r);
+          }}
+          emptyMessage="No complaint resolution or deletion data recorded for this timeframe."
+        />
+
+        {/* Commuter Grievance Category Distribution Pie Chart & Focus Intelligence */}
+        <div style={{ marginTop: "24px" }}>
+          <ReportTypePieChart
+            categoryBreakdown={categoryBreakdown}
+            topCategory={topCategory}
+            totalReports={totalCategorized || complaintTotals.total}
+          />
+        </div>
+      </div>
+
       {/* Main Operations Desks */}
       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
         {/* POSO Road Alerts Awaiting Review */}
@@ -671,12 +829,37 @@ const LguDashboardView = () => {
                         {complaint.subject}
                       </td>
                       <td style={{ padding: "12px 20px", color: colors.textSecondary }}>
-                        {complaint.vehiclePlateNumber ? (
-                          <span style={{ fontWeight: "700", color: colors.textPrimary }}>
+                        {complaint.vehiclePlateNumber && (
+                          <div style={{ fontWeight: "700", color: colors.textPrimary, marginBottom: complaint.routeId ? "3px" : "0" }}>
                             Plate: {complaint.vehiclePlateNumber}
-                          </span>
+                          </div>
+                        )}
+                        {complaint.routeId ? (
+                          <Link
+                            to={`/routes?routeId=${complaint.routeId._id || complaint.routeId}`}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              fontSize: "11.5px",
+                              fontWeight: "700",
+                              color: "#FFFFFF",
+                              backgroundColor: "#2563EB",
+                              padding: "5px 10px",
+                              borderRadius: "6px",
+                              border: "1px solid #1D4ED8",
+                              textDecoration: "none",
+                              boxShadow: "0 2px 4px rgba(37,99,235,0.25)",
+                              cursor: "pointer",
+                            }}
+                            title="Click to auto-navigate map to this route"
+                          >
+                            <Compass size={12} />
+                            <span>{complaint.routeId.name || complaint.routeId.code || "View Route"}</span>
+                            <ArrowRight size={11} />
+                          </Link>
                         ) : (
-                          complaint.routeId?.name || "Route N/A"
+                          !complaint.vehiclePlateNumber && "Route N/A"
                         )}
                       </td>
                       <td style={{ padding: "12px 20px" }}>

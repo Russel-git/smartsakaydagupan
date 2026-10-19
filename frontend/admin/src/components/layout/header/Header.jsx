@@ -189,7 +189,7 @@ const RoleBadge = () => {
   let backgroundColor = colors.infoLight;
 
   if (isSuperAdmin) {
-    text = "Superadmin (Developer)";
+    text = "Admin (Developer)";
     color = colors.primary;
     backgroundColor = colors.surfaceElevated;
   } else if (isLgu) {

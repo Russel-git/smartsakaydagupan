@@ -463,6 +463,7 @@ const ArchivesPage = () => {
         <div
           className="card"
           style={{
+            backgroundColor: colors.surface,
             padding: 0,
             overflow: "hidden",
             borderRadius: "14px",
@@ -693,6 +694,7 @@ const ArchivesPage = () => {
         <div
           className="card"
           style={{
+            backgroundColor: colors.surface,
             padding: 0,
             overflow: "hidden",
             borderRadius: "14px",

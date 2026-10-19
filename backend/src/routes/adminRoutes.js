@@ -7,6 +7,7 @@ const rbac = require('../middleware/rbac');
 router.use(authMiddleware);
 router.get('/stats', rbac('admin', 'lgu'), adminController.getStats);
 router.get('/metrics', rbac('admin', 'lgu'), adminController.getAccountMetrics);
+router.get('/analytics/users', rbac('admin'), adminController.getUserScalabilityAnalytics);
 router.get('/activity', rbac('admin', 'lgu'), adminController.getActivity);
 router.get('/audit-logs', rbac('admin'), adminController.getAuditLogs);
 

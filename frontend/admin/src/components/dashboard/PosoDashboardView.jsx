@@ -12,10 +12,13 @@ import {
   CheckCircle2,
   XCircle,
   Car,
+  FileX,
+  TrendingDown,
 } from "lucide-react";
 import api from "../../api/client";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/theme/ThemeContext";
+import AnalyticsChart from "./AnalyticsChart";
 
 const PosoDashboardView = () => {
   const { admin } = useAuth();
@@ -25,7 +28,34 @@ const PosoDashboardView = () => {
   const [pendingComplaints, setPendingComplaints] = useState([]);
   const [endorsedCount, setEndorsedCount] = useState(0);
   const [pendingAlerts, setPendingAlerts] = useState([]);
+  const [posoTotals, setPosoTotals] = useState({
+    rejected: 0,
+    endorsed: 0,
+    total: 0,
+  });
+  const [monthlyTrends, setMonthlyTrends] = useState([]);
+  const [monthsRange, setMonthsRange] = useState(6);
   const [loading, setLoading] = useState(true);
+
+  const fetchPosoAnalytics = async (range) => {
+    try {
+      const res = await api.get(`/complaints/analytics/monthly?months=${range}`);
+      if (res.data?.data) {
+        if (res.data.data.totals) {
+          setPosoTotals({
+            rejected: res.data.data.totals.rejected || 0,
+            endorsed: res.data.data.totals.endorsed || 0,
+            total: res.data.data.totals.total || 0,
+          });
+        }
+        if (res.data.data.monthlyTrends) {
+          setMonthlyTrends(res.data.data.monthlyTrends);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load POSO monthly analytics:", err);
+    }
+  };
 
   useEffect(() => {
     const fetchPosoData = async () => {
@@ -33,11 +63,12 @@ const PosoDashboardView = () => {
         const [complaintsRes, alertsRes] = await Promise.all([
           api.get("/complaints?limit=10"),
           api.get("/notifications/feed?limit=5").catch(() => ({ data: { data: [] } })),
+          fetchPosoAnalytics(monthsRange),
         ]);
 
         const items = complaintsRes.data?.data?.items || complaintsRes.data?.data || [];
         const pending = items.filter((c) => c.status === "pending" || c.status === "under_review");
-        const endorsed = items.filter((c) => c.status === "endorsed_to_lgu" || c.status === "action_taken" || c.status === "terminated");
+        const endorsed = items.filter((c) => c.status === "endorsed_to_lgu" || c.status === "action_taken" || c.status === "terminated" || c.status === "resolved");
 
         setPendingComplaints(pending);
         setEndorsedCount(endorsed.length);
@@ -54,12 +85,17 @@ const PosoDashboardView = () => {
     fetchPosoData();
   }, []);
 
+  const handleRangeChange = (newRange) => {
+    setMonthsRange(newRange);
+    fetchPosoAnalytics(newRange);
+  };
+
   if (loading) {
     return (
       <div style={{ padding: "24px" }}>
         <div style={{ height: "40px", width: "260px", backgroundColor: colors.surfaceElevated, borderRadius: "8px", marginBottom: "24px" }} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
-          {[1, 2, 3].map((i) => (
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} style={{ height: "140px", backgroundColor: colors.surfaceElevated, borderRadius: "14px" }} />
           ))}
         </div>
@@ -69,6 +105,36 @@ const PosoDashboardView = () => {
 
   const statCards = [
     {
+      title: "Total Reports",
+      value: posoTotals.total,
+      subtitle: "All filed commuter violation reports",
+      icon: ShieldAlert,
+      color: "#3B82F6",
+      bgColor: "#EFF6FF",
+      borderColor: "#BFDBFE",
+      link: "/complaints",
+    },
+    {
+      title: "Endorsed to LGU",
+      value: posoTotals.endorsed || endorsedCount,
+      subtitle: "Verified grievances forwarded to City Hall",
+      icon: FileCheck2,
+      color: "#10B981",
+      bgColor: "#ECFDF5",
+      borderColor: "#A7F3D0",
+      link: "/complaints?status=endorsed_to_lgu",
+    },
+    {
+      title: "Rejected Reports",
+      value: posoTotals.rejected,
+      subtitle: "Dismissed or invalid on-ground reports",
+      icon: FileX,
+      color: "#EF4444",
+      bgColor: "#FEF2F2",
+      borderColor: "#FECACA",
+      link: "/complaints?status=rejected",
+    },
+    {
       title: "Pending Road Verification",
       value: pendingComplaints.length,
       subtitle: "Commuter reports requiring field inspection",
@@ -76,27 +142,7 @@ const PosoDashboardView = () => {
       color: "#F59E0B",
       bgColor: "#FEF3C7",
       borderColor: "#FDE68A",
-      link: "/complaints?tab=pending",
-    },
-    {
-      title: "Endorsed to LGU",
-      value: endorsedCount,
-      subtitle: "Verified grievances forwarded to City Hall",
-      icon: FileCheck2,
-      color: "#10B981",
-      bgColor: "#ECFDF5",
-      borderColor: "#A7F3D0",
-      link: "/complaints?tab=endorsed",
-    },
-    {
-      title: "Active Road Broadcasts",
-      value: pendingAlerts.length,
-      subtitle: "Traffic, reroute & hazard advisories",
-      icon: Radio,
-      color: "#3B82F6",
-      bgColor: "#EFF6FF",
-      borderColor: "#BFDBFE",
-      link: "/notifications",
+      link: "/complaints?status=pending",
     },
   ];
 
@@ -188,13 +234,13 @@ const PosoDashboardView = () => {
         </div>
       </div>
 
-      {/* 3 Field Metric Cards */}
+      {/* 4 Field Metric Cards */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
           gap: "20px",
-          marginBottom: "32px",
+          marginBottom: "28px",
         }}
       >
         {statCards.map((card, idx) => {
@@ -207,7 +253,7 @@ const PosoDashboardView = () => {
                 textDecoration: "none",
                 backgroundColor: colors.surface,
                 borderRadius: "16px",
-                padding: "24px",
+                padding: "22px",
                 border: `1px solid ${colors.border}`,
                 boxShadow: "0 4px 20px rgba(0, 0, 0, 0.03)",
                 display: "flex",
@@ -218,17 +264,17 @@ const PosoDashboardView = () => {
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
                 <div>
-                  <div style={{ fontSize: "13px", fontWeight: "600", color: colors.textSecondary, textTransform: "uppercase" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                     {card.title}
                   </div>
-                  <div style={{ fontSize: "36px", fontWeight: "800", color: colors.textPrimary, marginTop: "6px" }}>
-                    {card.value}
+                  <div style={{ fontSize: "32px", fontWeight: "800", color: colors.textPrimary, marginTop: "4px" }}>
+                    {card.value.toLocaleString()}
                   </div>
                 </div>
                 <div
                   style={{
-                    width: "48px",
-                    height: "48px",
+                    width: "44px",
+                    height: "44px",
                     borderRadius: "12px",
                     backgroundColor: card.bgColor,
                     display: "flex",
@@ -238,17 +284,34 @@ const PosoDashboardView = () => {
                     border: `1px solid ${card.borderColor}`,
                   }}
                 >
-                  <Icon size={24} />
+                  <Icon size={22} />
                 </div>
               </div>
 
-              <div style={{ fontSize: "12px", color: colors.textMuted, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontSize: "11px", color: colors.textMuted, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span>{card.subtitle}</span>
-                <ArrowRight size={14} style={{ color: card.color }} />
+                <ArrowRight size={13} style={{ color: card.color }} />
               </div>
             </Link>
           );
         })}
+      </div>
+
+      {/* POSO Enforcement Monthly Analytics Bar Graph */}
+      <div style={{ marginBottom: "28px" }}>
+        <AnalyticsChart
+          title="Field Enforcement & Grievance Triage Analytics (Per Month)"
+          subtitle="Monthly breakdown of commuter reports rejected, verified cases endorsed to LGU, and total filed reports"
+          data={monthlyTrends}
+          series={[
+            { key: "rejected", label: "Rejected Reports", color: "#EF4444" },
+            { key: "endorsed", label: "Endorsed to LGU", color: "#10B981" },
+            { key: "total", label: "Total Reports", color: "#3B82F6" },
+          ]}
+          timeRange={monthsRange}
+          onTimeRangeChange={handleRangeChange}
+          emptyMessage="No enforcement reports recorded for this time period."
+        />
       </div>
 
       {/* Priority Complaints for Field Verification */}

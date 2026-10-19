@@ -252,6 +252,8 @@ const AnnouncementsPage = () => {
       <div
         className="card"
         style={{
+          backgroundColor: colors.surface,
+          border: `1px solid ${colors.border}`,
           padding: "16px 20px",
           marginBottom: "20px",
           display: "flex",
@@ -333,6 +335,7 @@ const AnnouncementsPage = () => {
       <div
         className="card"
         style={{
+          backgroundColor: colors.surface,
           padding: 0,
           overflow: "hidden",
           borderRadius: "14px",

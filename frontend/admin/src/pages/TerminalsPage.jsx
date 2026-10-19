@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import {
   Plus,
   Edit2,
@@ -10,6 +11,8 @@ import {
   X,
   Compass,
   Check,
+  ArrowUpRight,
+  Route as RouteIcon,
 } from "lucide-react";
 import api from "../api/client";
 import { useToast } from "../contexts/ToastContext";
@@ -42,6 +45,7 @@ const TerminalsPage = () => {
   const { showSuccess, showError, showInfo } = useToast();
 
   const [terminals, setTerminals] = useState([]);
+  const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -104,9 +108,50 @@ const TerminalsPage = () => {
     }
   };
 
+  const fetchRoutes = async () => {
+    try {
+      const res = await api.get("/routes");
+      setRoutes(res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to load routes in terminals page:", err);
+    }
+  };
+
   useEffect(() => {
     fetchTerminals();
+    fetchRoutes();
   }, []);
+
+  // Connected routes helper
+  const getConnectedRoutes = (t) => {
+    if (!t || !routes || routes.length === 0) return [];
+    const tName = (t.name || "").toLowerCase().trim();
+    const tAddress = (t.address || "").toLowerCase().trim();
+    const destinations = (t.destinations || []).map((d) => d.toLowerCase().trim());
+
+    return routes.filter((r) => {
+      const rName = (r.name || "").toLowerCase();
+      const rCorridor = (r.corridor || "").toLowerCase();
+      const rTermName = (r.terminalLocation?.name || "").toLowerCase();
+      const rTermAddress = (r.terminalLocation?.address || "").toLowerCase();
+      const rStart = (r.startPoint?.name || "").toLowerCase();
+      const rEnd = (r.endPoint?.name || "").toLowerCase();
+
+      if (tName && (rTermName.includes(tName) || tName.includes(rTermName) || rStart.includes(tName) || rEnd.includes(tName))) {
+        return true;
+      }
+      if (tName && (rCorridor.includes(tName) || rName.includes(tName))) {
+        return true;
+      }
+      if (tAddress && rTermAddress && (tAddress.includes(rTermAddress) || rTermAddress.includes(tAddress))) {
+        return true;
+      }
+      if (destinations.length > 0) {
+        return destinations.some((dest) => dest && (rName.includes(dest) || rStart.includes(dest) || rEnd.includes(dest)));
+      }
+      return false;
+    });
+  };
 
   // ============================================================
   // FILTERED TERMINALS
@@ -902,6 +947,8 @@ const TerminalsPage = () => {
         <div
           className="card"
           style={{
+            backgroundColor: colors.surface,
+            border: `1px solid ${colors.border}`,
             padding: "16px 20px",
             borderLeft: `4px solid ${colors.info}`,
           }}
@@ -943,6 +990,8 @@ const TerminalsPage = () => {
         <div
           className="card"
           style={{
+            backgroundColor: colors.surface,
+            border: `1px solid ${colors.border}`,
             padding: "16px 20px",
             borderLeft: `4px solid ${colors.success}`,
           }}
@@ -984,6 +1033,8 @@ const TerminalsPage = () => {
         <div
           className="card"
           style={{
+            backgroundColor: colors.surface,
+            border: `1px solid ${colors.border}`,
             padding: "16px 20px",
             borderLeft: `4px solid ${colors.warning}`,
           }}
@@ -1025,6 +1076,8 @@ const TerminalsPage = () => {
         <div
           className="card"
           style={{
+            backgroundColor: colors.surface,
+            border: `1px solid ${colors.border}`,
             padding: "16px 20px",
             borderLeft: `4px solid ${colors.primary}`,
           }}
@@ -1336,7 +1389,13 @@ const TerminalsPage = () => {
       ====================================================== */}
 
       {(viewMode === "both" || viewMode === "table") && (
-        <div className="card">
+        <div
+          className="card"
+          style={{
+            backgroundColor: colors.surface,
+            border: `1px solid ${colors.border}`,
+          }}
+        >
           {loading ? (
             <div
               style={{
@@ -1364,6 +1423,7 @@ const TerminalsPage = () => {
                   <tr>
                     <th>Terminal & Operator</th>
                     <th>Type</th>
+                    <th>Connected Routes (Click to View Route)</th>
                     <th>GPS Pinpoint Coordinates</th>
                     <th>Schedule / Hours</th>
                     <th>Key Destinations</th>
@@ -1429,6 +1489,67 @@ const TerminalsPage = () => {
                           >
                             {typeObj.icon} {typeObj.label}
                           </span>
+                        </td>
+
+                        {/* Connected Routes (Clickable) */}
+                        <td>
+                          {(() => {
+                            const connected = getConnectedRoutes(t);
+                            if (connected.length === 0) {
+                              return (
+                                <span style={{ fontSize: "12px", color: colors.textMuted, fontStyle: "italic" }}>
+                                  No linked routes
+                                </span>
+                              );
+                            }
+                            return (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: "160px", maxWidth: "260px" }}>
+                                {connected.map((r) => (
+                                  <Link
+                                    key={r._id}
+                                    to={`/routes?routeId=${r._id}`}
+                                    title={`Click to open and auto-navigate map to route: ${r.name} (${r.code})`}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                      gap: "8px",
+                                      padding: "6px 12px",
+                                      borderRadius: "8px",
+                                      backgroundColor: "#2563EB",
+                                      color: "#FFFFFF",
+                                      border: "1.5px solid #1D4ED8",
+                                      boxShadow: "0 2px 6px rgba(37,99,235,0.3)",
+                                      fontSize: "12px",
+                                      fontWeight: "700",
+                                      textDecoration: "none",
+                                      cursor: "pointer",
+                                      transition: "all 0.15s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.backgroundColor = "#1D4ED8";
+                                      e.currentTarget.style.transform = "translateY(-1px)";
+                                      e.currentTarget.style.boxShadow = "0 4px 10px rgba(37,99,235,0.45)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.backgroundColor = "#2563EB";
+                                      e.currentTarget.style.transform = "translateY(0)";
+                                      e.currentTarget.style.boxShadow = "0 2px 6px rgba(37,99,235,0.3)";
+                                    }}
+                                  >
+                                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
+                                      <Compass size={13} style={{ flexShrink: 0 }} />
+                                      <span style={{ fontFamily: "monospace", letterSpacing: "0.5px" }}>{r.code}</span>
+                                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        • {r.name}
+                                      </span>
+                                    </div>
+                                    <ArrowUpRight size={13} style={{ flexShrink: 0 }} />
+                                  </Link>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         <td>
@@ -1603,16 +1724,26 @@ const TerminalsPage = () => {
                             </button>
 
                             <button
+                              type="button"
                               onClick={() => handleDeleteTerminal(t)}
                               className="btn btn-sm"
                               style={{
-                                backgroundColor: colors.errorLight,
-                                color: colors.error,
-                                border: `1px solid ${colors.error}`,
+                                backgroundColor: "#FEE2E2",
+                                color: "#DC2626",
+                                border: "1px solid #FECACA",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "6px 12px",
+                                fontSize: "12px",
+                                fontWeight: "600",
+                                borderRadius: "8px",
+                                cursor: "pointer",
                               }}
                               title="Delete Terminal"
                             >
-                              <Trash2 size={13} />
+                              <Trash2 size={14} />
+                              <span>Delete</span>
                             </button>
                           </div>
                         </td>
@@ -2195,39 +2326,73 @@ const TerminalsPage = () => {
                 style={{
                   borderTop: `1px solid ${colors.border}`,
                   paddingTop: "16px",
+                  display: "flex",
+                  justifyContent: editingTerminal ? "space-between" : "flex-end",
+                  alignItems: "center",
                 }}
               >
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="btn btn-secondary"
-                >
-                  Cancel
-                </button>
+                {editingTerminal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const termToDelete = editingTerminal;
+                      setModalOpen(false);
+                      handleDeleteTerminal(termToDelete);
+                    }}
+                    className="btn btn-sm"
+                    style={{
+                      backgroundColor: "#FEE2E2",
+                      color: "#DC2626",
+                      border: "1px solid #FECACA",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "8px 14px",
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                    }}
+                    title="Delete Terminal"
+                  >
+                    <Trash2 size={15} />
+                    <span>Delete Terminal</span>
+                  </button>
+                )}
 
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="btn"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    backgroundColor: colors.primary,
-                    color: colors.white,
-                    shadow: `0 4px 12px ${colors.primary}50`,
-                  }}
-                >
-                  <Check size={16} />
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(false)}
+                    className="btn btn-secondary"
+                  >
+                    Cancel
+                  </button>
 
-                  <span>
-                    {saving
-                      ? "Saving Terminal..."
-                      : editingTerminal
-                        ? "Save Changes"
-                        : "Create Terminal"}
-                  </span>
-                </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="btn"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      backgroundColor: colors.primary,
+                      color: colors.white,
+                      shadow: `0 4px 12px ${colors.primary}50`,
+                    }}
+                  >
+                    <Check size={16} />
+
+                    <span>
+                      {saving
+                        ? "Saving Terminal..."
+                        : editingTerminal
+                          ? "Save Changes"
+                          : "Create Terminal"}
+                    </span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>

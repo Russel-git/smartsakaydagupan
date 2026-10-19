@@ -266,6 +266,8 @@ const FaresPage = () => {
       <div
         className="card"
         style={{
+          backgroundColor: colors.surface,
+          border: `1px solid ${colors.border}`,
           marginBottom: "28px",
         }}
       >
@@ -407,7 +409,13 @@ const FaresPage = () => {
             Live Fare Calculator
         ==================================================== */}
 
-        <div className="card">
+        <div
+          className="card"
+          style={{
+            backgroundColor: colors.surface,
+            border: `1px solid ${colors.border}`,
+          }}
+        >
           <div
             style={{
               display: "flex",
@@ -538,7 +546,13 @@ const FaresPage = () => {
             Fare History
         ==================================================== */}
 
-        <div className="card">
+        <div
+          className="card"
+          style={{
+            backgroundColor: colors.surface,
+            border: `1px solid ${colors.border}`,
+          }}
+        >
           <div
             style={{
               display: "flex",

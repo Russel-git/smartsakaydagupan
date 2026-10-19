@@ -11,6 +11,7 @@ import {
   Car,
   PlusCircle,
   CheckCircle,
+  CheckCircle2,
   Filter,
   XCircle,
 } from "lucide-react";
@@ -300,11 +301,12 @@ const ComplaintsPage = () => {
       } else {
         const { data } = await complaintsAPI.lguTerminate(complaint._id, {
           lguTerminationNotes: notes,
+          resolutionNotes: notes,
         });
 
         showSuccess(
-          "Case Terminated",
-          `Grievance case ${data.data.lguCaseNumber} officially closed.`,
+          "Case Resolved",
+          `Grievance case ${data.data.lguCaseNumber} officially resolved and recorded.`,
         );
       }
 
@@ -416,6 +418,21 @@ const ComplaintsPage = () => {
           </span>
         );
 
+      case "resolved":
+        return (
+          <span
+            style={{
+              ...baseStyle,
+              backgroundColor: "rgba(16, 185, 129, 0.15)",
+              color: "#059669",
+              border: "1px solid rgba(16, 185, 129, 0.3)",
+            }}
+          >
+            {statusDot("#059669")}
+            Resolved
+          </span>
+        );
+
       case "terminated":
         return (
           <span
@@ -427,7 +444,7 @@ const ComplaintsPage = () => {
             }}
           >
             {statusDot("#475569")}
-            Terminated / Resolved
+            Terminated / Closed
           </span>
         );
 
@@ -487,7 +504,8 @@ const ComplaintsPage = () => {
         if (
           c.status !== "endorsed_to_lgu" &&
           c.status !== "action_taken" &&
-          c.status !== "terminated"
+          c.status !== "terminated" &&
+          c.status !== "resolved"
         ) {
           return false;
         }
@@ -523,7 +541,8 @@ const ComplaintsPage = () => {
     (c) =>
       c.status === "endorsed_to_lgu" ||
       c.status === "action_taken" ||
-      c.status === "terminated",
+      c.status === "terminated" ||
+      c.status === "resolved",
   ).length;
 
   return (
@@ -736,7 +755,8 @@ const ComplaintsPage = () => {
             <option value="under_review">Under Review</option>
             <option value="endorsed_to_lgu">Endorsed to LGU</option>
             <option value="action_taken">Action Taken</option>
-            <option value="terminated">Terminated / Resolved</option>
+            <option value="resolved">Resolved</option>
+            <option value="terminated">Terminated</option>
             {isAdmin && <option value="deleted">Discarded (Deleted)</option>}
           </select>
         )}
@@ -758,7 +778,13 @@ const ComplaintsPage = () => {
       </div>
 
       {/* COMPLAINTS TABLE */}
-      <div className="card">
+      <div
+        className="card"
+        style={{
+          backgroundColor: colors.surface,
+          border: `1px solid ${colors.border}`,
+        }}
+      >
         {loading ? (
           <div
             style={{
@@ -1043,9 +1069,10 @@ const ComplaintsPage = () => {
                               </>
                             )}
 
-                          {/* LGU ACTIONS (Action Taken & Terminate) */}
+                          {/* LGU ACTIONS (Action Taken & Resolve) */}
                           {(isLgu || isAdmin) &&
                             c.status !== "deleted" &&
+                            c.status !== "resolved" &&
                             c.status !== "terminated" && (
                               <>
                                 <button
@@ -1068,19 +1095,25 @@ const ComplaintsPage = () => {
 
                                 <button
                                   onClick={() =>
-                                    handleOpenLguModal(c, "terminate")
+                                    handleOpenLguModal(c, "resolve")
                                   }
                                   className="btn btn-sm"
                                   style={{
-                                    backgroundColor: colors.surfaceElevated,
-                                    color: colors.textSecondary,
-                                    border: `1px solid ${colors.border}`,
+                                    backgroundColor: "#10B981",
+                                    color: "#FFFFFF",
+                                    border: "none",
                                     fontSize: "11px",
-                                    padding: "4px 8px",
+                                    padding: "4px 10px",
+                                    fontWeight: "600",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    borderRadius: "6px",
                                   }}
-                                  title="Terminate and officially close grievance"
+                                  title="Resolve and officially close grievance"
                                 >
-                                  Terminate
+                                  <CheckCircle2 size={13} />
+                                  <span>Resolved</span>
                                 </button>
                               </>
                             )}
@@ -1515,6 +1548,7 @@ const ComplaintsPage = () => {
                 {/* LGU IN-MODAL ACTIONS */}
                 {(isLgu || isAdmin) &&
                   selectedComplaint.status !== "terminated" &&
+                  selectedComplaint.status !== "resolved" &&
                   selectedComplaint.status !== "deleted" && (
                     <>
                       <button
@@ -1529,6 +1563,25 @@ const ComplaintsPage = () => {
                         }}
                       >
                         Take Action
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          handleOpenLguModal(selectedComplaint, "resolve");
+                          setSelectedComplaint(null);
+                        }}
+                        className="btn"
+                        style={{
+                          backgroundColor: "#10B981",
+                          color: "#FFFFFF",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        <CheckCircle2 size={14} />
+                        <span>Resolved</span>
                       </button>
 
                       <button

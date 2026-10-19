@@ -220,7 +220,7 @@ const AdminLayout = () => {
   const getRoleBadge = () => {
     if (isSuperAdmin) {
       return {
-        text: "Superadmin (Developer)",
+        text: "Admin (Developer)",
         color: colors.primary,
         backgroundColor: colors.surfaceElevated,
       };

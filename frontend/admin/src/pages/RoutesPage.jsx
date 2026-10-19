@@ -1,5 +1,18 @@
-import React, { useState, useEffect } from "react";
-import { MapPin, Plus, Eye, Check, AlertCircle, X, Trash2 } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
+import {
+  MapPin,
+  Plus,
+  Eye,
+  Check,
+  AlertCircle,
+  X,
+  Trash2,
+  ArrowUpRight,
+  Navigation,
+  RotateCcw,
+  Compass,
+} from "lucide-react";
 import api from "../api/client";
 import { routesAPI } from "../api/services";
 import LeafletMap from "../components/common/LeafletMap";
@@ -9,12 +22,17 @@ import { useToast } from "../contexts/ToastContext";
 import { useTheme } from "../contexts/theme/ThemeContext";
 
 const RoutesPage = () => {
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { showSuccess, showError } = useToast();
   const { colors } = useTheme();
+
+  const mapSectionRef = useRef(null);
 
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedRoute, setSelectedRoute] = useState(null);
+  const [viewingRouteModal, setViewingRouteModal] = useState(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [routeToDelete, setRouteToDelete] = useState(null);
   const [search, setSearch] = useState("");
@@ -52,6 +70,25 @@ const RoutesPage = () => {
   useEffect(() => {
     fetchRoutes();
   }, []);
+
+  // Automatically navigate & focus specific route on map if routeId or code passed via query / state
+  useEffect(() => {
+    const routeIdParam = searchParams.get("routeId") || location.state?.selectedRouteId;
+    const routeCodeParam = searchParams.get("code") || location.state?.selectedRouteCode;
+    if ((routeIdParam || routeCodeParam) && routes.length > 0) {
+      const target = routes.find(
+        (r) =>
+          (routeIdParam && r._id?.toString() === routeIdParam.toString()) ||
+          (routeCodeParam && r.code?.toUpperCase() === routeCodeParam.toUpperCase())
+      );
+      if (target) {
+        setSelectedRoute(target);
+        setTimeout(() => {
+          mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 150);
+      }
+    }
+  }, [routes, searchParams, location.state]);
 
   const handleToggleStatus = async (route) => {
     try {
@@ -92,6 +129,9 @@ const RoutesPage = () => {
       setRouteToDelete(null);
       if (selectedRoute?._id === id) {
         setSelectedRoute(null);
+      }
+      if (viewingRouteModal?._id === id) {
+        setViewingRouteModal(null);
       }
       fetchRoutes();
     } catch (err) {
@@ -314,10 +354,130 @@ const RoutesPage = () => {
       {/* =====================================================
           Interactive Map
       ====================================================== */}
-      <LeafletMap
-        selectedRoute={selectedRoute}
-        onSelectRoute={setSelectedRoute}
-      />
+      <div ref={mapSectionRef} style={{ marginBottom: "24px" }}>
+        {selectedRoute && (
+          <div
+            style={{
+              background: `${colors.primary}12`,
+              border: `1.5px solid ${colors.primary}`,
+              borderRadius: "12px",
+              padding: "14px 18px",
+              marginBottom: "14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "12px",
+              boxShadow: "0 4px 14px rgba(37,99,235,0.08)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "10px",
+                  backgroundColor: colors.primary,
+                  color: "#FFFFFF",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 2px 8px rgba(37,99,235,0.3)",
+                }}
+              >
+                <Navigation size={20} />
+              </div>
+
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <span
+                    style={{
+                      fontFamily: "monospace",
+                      fontWeight: "800",
+                      backgroundColor: `${colors.primary}25`,
+                      color: colors.primary,
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                    }}
+                  >
+                    {selectedRoute.code}
+                  </span>
+                  <strong style={{ fontSize: "16px", color: colors.textPrimary }}>
+                    {selectedRoute.name}
+                  </strong>
+                  <span
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      fontSize: "11px",
+                      fontWeight: "600",
+                      backgroundColor:
+                        selectedRoute.category === "city" ? "#EFF6FF" : "#FFFBEB",
+                      color:
+                        selectedRoute.category === "city" ? "#2563EB" : "#D97706",
+                      border: `1px solid ${
+                        selectedRoute.category === "city" ? "#BFDBFE" : "#FDE68A"
+                      }`,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {selectedRoute.category === "city" ? "City Loop" : "Intercity"}
+                  </span>
+                </div>
+
+                <div style={{ fontSize: "12px", color: colors.textSecondary, marginTop: "3px" }}>
+                  Corridor: <strong>{selectedRoute.corridor || selectedRoute.description || "Authorized Track"}</strong> • Distance: ~{selectedRoute.distanceKm || 0} km • {selectedRoute.path?.length || 0} GPX track coordinates
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => setViewingRouteModal(selectedRoute)}
+                className="btn btn-secondary btn-sm"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "7px 12px",
+                  fontWeight: "600",
+                }}
+              >
+                <Eye size={14} />
+                <span>View Full Route Specs</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedRoute(null)}
+                className="btn btn-sm"
+                style={{
+                  backgroundColor: colors.surfaceElevated,
+                  color: colors.textSecondary,
+                  border: `1px solid ${colors.border}`,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  padding: "7px 12px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                <RotateCcw size={14} />
+                <span>Show All Routes</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        <LeafletMap
+          routes={routes}
+          selectedRoute={selectedRoute}
+          onSelectRoute={setSelectedRoute}
+        />
+      </div>
 
       {/* =====================================================
           Filter and Search
@@ -353,151 +513,185 @@ const RoutesPage = () => {
       {/* =====================================================
           Routes Table
       ====================================================== */}
-      <div className="card">
+      <div
+        className="card"
+        style={{
+          backgroundColor: colors.surface,
+          border: `1px solid ${colors.border}`,
+        }}
+      >
         <div className="table-container">
           <table>
             <thead>
               <tr>
-                <th>Code</th>
+                <th>Route Code</th>
                 <th>Route Name</th>
                 <th>Category</th>
                 <th>Distance</th>
-                <th>Transit Corridor / Loop</th>
-                <th>GPX Status</th>
-                <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
 
             <tbody>
-              {filteredRoutes.map((r) => (
-                <tr key={r._id}>
-                  {/* Route Code */}
-                  <td>
-                    <span
-                      style={{
-                        fontFamily: "monospace",
-                        background: colors.surfaceElevated,
-                        padding: "3px 8px",
-                        borderRadius: "4px",
-                        color: colors.primary,
-                        fontWeight: "700",
-                      }}
-                    >
-                      {r.code}
-                    </span>
-                  </td>
+              {filteredRoutes.map((r) => {
+                const isSelected = selectedRoute?._id === r._id;
+                const handleFocusMap = () => {
+                  setSelectedRoute(r);
+                  setTimeout(() => {
+                    mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }, 100);
+                };
 
-                  {/* Route Name */}
-                  <td
+                return (
+                  <tr
+                    key={r._id}
                     style={{
-                      fontWeight: "600",
-                      color: colors.textPrimary,
+                      backgroundColor: isSelected ? `${colors.primary}12` : undefined,
+                      transition: "background-color 0.15s ease",
                     }}
                   >
-                    {r.name}
-                  </td>
-
-                  {/* Category */}
-                  <td>
-                    <span
-                      className="badge badge-info"
-                      style={{
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {r.category}
-                    </span>
-                  </td>
-
-                  {/* Distance */}
-                  <td>{r.distanceKm} km</td>
-
-                  {/* Corridor */}
-                  <td
-                    style={{
-                      fontSize: "13px",
-                      color: colors.textMuted,
-                      maxWidth: "280px",
-                    }}
-                  >
-                    {r.corridor || r.description || "Continuous Transit Loop"}
-                  </td>
-
-                  {/* GPX Status */}
-                  <td>
-                    {r.path && r.path.length > 0 ? (
+                    {/* Route Code (Plain Text) */}
+                    <td>
                       <span
-                        className="badge badge-success"
-                        style={{ fontSize: "11px" }}
+                        style={{
+                          fontFamily: "monospace",
+                          fontWeight: "800",
+                          fontSize: "12.5px",
+                          color: colors.primary,
+                          backgroundColor: `${colors.primary}15`,
+                          padding: "4px 8px",
+                          borderRadius: "6px",
+                          display: "inline-block",
+                        }}
                       >
-                        ✓ {r.path.length} GPX Points
+                        {r.code}
                       </span>
-                    ) : (
-                      <span
-                        className="badge badge-warning"
-                        style={{ fontSize: "11px" }}
-                      >
-                        Pending Track
-                      </span>
-                    )}
-                  </td>
+                    </td>
 
-                  {/* Active Status */}
-                  <td>
-                    <button
-                      onClick={() => handleToggleStatus(r)}
-                      style={{
-                        background: "transparent",
-                      }}
-                    >
+                    {/* Route Name (Plain Text) */}
+                    <td>
+                      <span
+                        style={{
+                          fontWeight: "700",
+                          color: colors.textPrimary,
+                          fontSize: "13.5px",
+                        }}
+                      >
+                        {r.name}
+                      </span>
+                    </td>
+
+                    {/* Category */}
+                    <td>
                       <span
                         className={`badge ${
-                          r.isActive ? "badge-success" : "badge-danger"
+                          r.category === "city" ? "badge-info" : "badge-warning"
                         }`}
-                      >
-                        ● {r.isActive ? "Active" : "Disabled"}
-                      </span>
-                    </button>
-                  </td>
-
-                  {/* Actions */}
-                  <td>
-                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                      <button
-                        onClick={() => setSelectedRoute(r)}
-                        className="btn btn-secondary btn-sm"
-                        title="View Route Details"
-                      >
-                        <Eye size={14} />
-                        <span>Details</span>
-                      </button>
-
-                      <button
-                        onClick={() => setRouteToDelete(r)}
-                        className="btn btn-sm"
                         style={{
-                          backgroundColor: "#FEE2E2",
-                          color: "#DC2626",
-                          border: "1px solid #FECACA",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          padding: "6px 10px",
-                          fontSize: "12px",
-                          fontWeight: "600",
-                          borderRadius: "6px",
-                          cursor: "pointer",
+                          textTransform: "capitalize",
                         }}
-                        title="Remove outdated route"
                       >
-                        <Trash2 size={13} />
-                        <span>Remove</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {r.category === "city" ? "City Loop" : "Intercity"}
+                      </span>
+                    </td>
+
+                    {/* Distance */}
+                    <td>
+                      <span style={{ fontWeight: "600", color: colors.textPrimary }}>
+                        ~{r.distanceKm} km
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <button
+                          type="button"
+                          onClick={handleFocusMap}
+                          className="btn btn-sm"
+                          style={{
+                            backgroundColor: isSelected ? "#10B981" : "#2563EB",
+                            color: "#FFFFFF",
+                            border: `1.5px solid ${isSelected ? "#059669" : "#1D4ED8"}`,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "8px 14px",
+                            fontSize: "12.5px",
+                            fontWeight: "700",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            boxShadow: isSelected
+                              ? "0 2px 8px rgba(16,185,129,0.35)"
+                              : "0 2px 8px rgba(37,99,235,0.35)",
+                            transition: "all 0.15s ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = "translateY(-1px)";
+                            e.currentTarget.style.boxShadow = isSelected
+                              ? "0 4px 12px rgba(16,185,129,0.45)"
+                              : "0 4px 12px rgba(37,99,235,0.45)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = "translateY(0)";
+                            e.currentTarget.style.boxShadow = isSelected
+                              ? "0 2px 8px rgba(16,185,129,0.35)"
+                              : "0 2px 8px rgba(37,99,235,0.35)";
+                          }}
+                          title="Click to auto-navigate map to this route"
+                        >
+                          <Compass size={14} />
+                          <span>{isSelected ? "Active on Map" : "View on Map"}</span>
+                        </button>
+
+                        <button
+                          onClick={() => setViewingRouteModal(r)}
+                          className="btn btn-sm"
+                          style={{
+                            backgroundColor: colors.surfaceElevated,
+                            color: colors.textPrimary,
+                            border: `1px solid ${colors.border}`,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            padding: "7px 12px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                          }}
+                          title="View Route Details & Specifications"
+                        >
+                          <Eye size={14} />
+                          <span>Details</span>
+                        </button>
+
+                        <button
+                          onClick={() => setRouteToDelete(r)}
+                          className="btn btn-sm"
+                          style={{
+                            backgroundColor: "#FEE2E2",
+                            color: "#DC2626",
+                            border: "1px solid #FECACA",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            padding: "7px 10px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                          }}
+                          title="Remove outdated route"
+                        >
+                          <Trash2 size={13} />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -506,7 +700,7 @@ const RoutesPage = () => {
       {/* =====================================================
           View Route Details Modal
       ====================================================== */}
-      {selectedRoute && (
+      {viewingRouteModal && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: "620px" }}>
             <div className="modal-header">
@@ -517,7 +711,7 @@ const RoutesPage = () => {
                     fontSize: "18px",
                   }}
                 >
-                  {selectedRoute.name}
+                  {viewingRouteModal.name}
                 </h3>
 
                 <span
@@ -527,13 +721,13 @@ const RoutesPage = () => {
                     fontWeight: "600",
                   }}
                 >
-                  Code: {selectedRoute.code} &bull;{" "}
-                  {selectedRoute.category.toUpperCase()}
+                  Code: {viewingRouteModal.code} &bull;{" "}
+                  {viewingRouteModal.category.toUpperCase()}
                 </span>
               </div>
 
               <button
-                onClick={() => setSelectedRoute(null)}
+                onClick={() => setViewingRouteModal(null)}
                 style={{
                   background: "transparent",
                   color: colors.textMuted,
@@ -580,8 +774,9 @@ const RoutesPage = () => {
                       marginTop: "4px",
                     }}
                   >
-                    {selectedRoute.terminalLocation?.name ||
-                      selectedRoute.startPoint?.name}
+                    {viewingRouteModal.terminalLocation?.name ||
+                      viewingRouteModal.startPoint?.name ||
+                      "Dagupan Terminal Hub"}
                   </div>
 
                   <div
@@ -591,7 +786,7 @@ const RoutesPage = () => {
                       marginTop: "2px",
                     }}
                   >
-                    {selectedRoute.terminalLocation?.address || "Dagupan City"}
+                    {viewingRouteModal.terminalLocation?.address || "Dagupan City"}
                   </div>
                 </div>
 
@@ -622,8 +817,8 @@ const RoutesPage = () => {
                       marginTop: "4px",
                     }}
                   >
-                    {selectedRoute.operatingHours?.start || "05:00"} -{" "}
-                    {selectedRoute.operatingHours?.end || "21:00"}
+                    {viewingRouteModal.operatingHours?.start || "05:00"} -{" "}
+                    {viewingRouteModal.operatingHours?.end || "21:00"}
                   </div>
 
                   <div
@@ -633,7 +828,7 @@ const RoutesPage = () => {
                       marginTop: "2px",
                     }}
                   >
-                    Total Length: {selectedRoute.distanceKm} KM
+                    Total Length: {viewingRouteModal.distanceKm} KM
                   </div>
                 </div>
               </div>
@@ -677,14 +872,14 @@ const RoutesPage = () => {
                     lineHeight: "20px",
                   }}
                 >
-                  {selectedRoute.corridor ||
-                    selectedRoute.description ||
+                  {viewingRouteModal.corridor ||
+                    viewingRouteModal.description ||
                     "Continuous municipal transit corridor"}
                 </div>
               </div>
 
               {/* GPX Mapping Status */}
-              {selectedRoute.path && selectedRoute.path.length > 0 ? (
+              {viewingRouteModal.path && viewingRouteModal.path.length > 0 ? (
                 <div
                   style={{
                     display: "flex",
@@ -702,7 +897,7 @@ const RoutesPage = () => {
 
                   <span>
                     <strong>
-                      {selectedRoute.path.length} GPS Track Points Mapped
+                      {viewingRouteModal.path.length} GPS Track Points Mapped
                     </strong>{" "}
                     via OpenStreetMap Road Network
                   </span>
@@ -721,7 +916,7 @@ const RoutesPage = () => {
 
             <div className="modal-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <button
-                onClick={() => setRouteToDelete(selectedRoute)}
+                onClick={() => setRouteToDelete(viewingRouteModal)}
                 className="btn btn-sm"
                 style={{
                   backgroundColor: "#FEE2E2",
@@ -738,12 +933,31 @@ const RoutesPage = () => {
                 <span>Remove Route</span>
               </button>
 
-              <button
-                onClick={() => setSelectedRoute(null)}
-                className="btn btn-secondary"
-              >
-                Close View
-              </button>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRoute(viewingRouteModal);
+                    setViewingRouteModal(null);
+                    setTimeout(() => {
+                      mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }, 100);
+                  }}
+                  className="btn btn-primary"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  <Compass size={15} />
+                  <span>Display on Map</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setViewingRouteModal(null)}
+                  className="btn btn-secondary"
+                >
+                  Close View
+                </button>
+              </div>
             </div>
           </div>
         </div>

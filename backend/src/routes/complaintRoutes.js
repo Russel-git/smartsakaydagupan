@@ -30,6 +30,10 @@ router.put('/my/:id/unarchive', rbac('commuter'), complaintController.unarchiveM
 router.delete('/my/:id', rbac('commuter'), complaintController.deleteMyComplaint);
 router.delete('/my/:id/permanent', rbac('commuter'), complaintController.permanentDeleteComplaint);
 router.put('/my/:id/undo', rbac('commuter'), complaintController.undoMyComplaint);
+
+// Monthly Analytics for LGU & POSO
+router.get('/analytics/monthly', rbac('admin', 'lgu', 'poso'), complaintController.getMonthlyComplaintAnalytics);
+
 router.get('/:id', rbac('commuter', 'admin', 'lgu', 'poso'), complaintController.getComplaintById);
 
 // Staff / LGU / POSO routes
