@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -10,19 +10,20 @@ import {
   Image,
   useWindowDimensions,
   TextInput,
-} from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import { WebView } from 'react-native-webview';
-import { useTheme } from '../../contexts/ThemeContext';
-import { useAuth } from '../../contexts/AuthContext';
-import { useFeedback } from '../../contexts/FeedbackContext';
-import { Card, LoadingSpinner } from '../../components/common/SharedComponents';
-import { routesAPI, locationSharingAPI } from '../../api/services';
-import { FONTS, SPACING, RADIUS, API_BASE_URL } from '../../utils/constants';
-import LocationSharingModal from './LocationSharingModal';
+} from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import { WebView } from "react-native-webview";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useAuth } from "../../contexts/AuthContext";
+import { useFeedback } from "../../contexts/FeedbackContext";
+import { Card, LoadingSpinner } from "../../components/common/SharedComponents";
+import { routesAPI, locationSharingAPI } from "../../api/services";
+import { FONTS, SPACING, RADIUS, API_BASE_URL } from "../../utils/constants";
+import LocationSharingModal from "./LocationSharingModal";
+import { useSharedLocation } from "../../contexts/LocationContext";
 
-const GPS_ICON = require('../../../assets/gps_access_icon.png');
+const GPS_ICON = require("../../../assets/gps_access_icon.png");
 
 // Haversine distance calculator in km
 const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
@@ -42,7 +43,8 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
 
 // Check if commuter location is near any point on a static route path
 const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.45) => {
-  if (!routePath || !Array.isArray(routePath) || routePath.length === 0) return true;
+  if (!routePath || !Array.isArray(routePath) || routePath.length === 0)
+    return true;
   for (let i = 0; i < routePath.length; i++) {
     const p = routePath[i];
     const rLat = Array.isArray(p) ? p[0] : p.lat;
@@ -56,6 +58,7 @@ const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.45) => {
 };
 
 const RouteMapScreen = ({ navigation }) => {
+  const { setLocation: setSharedLocation } = useSharedLocation();
   const { colors, isDark } = useTheme();
   const { user, isAuthenticated } = useAuth();
   const { showWarning } = useFeedback();
@@ -65,16 +68,17 @@ const RouteMapScreen = ({ navigation }) => {
   const isTablet = Math.min(windowWidth, windowHeight) >= 600;
   const isLandscape = windowWidth > windowHeight;
   const mapHeight = isLandscape
-    ? Math.max(200, windowHeight * 0.40)
+    ? Math.max(180, windowHeight * 0.32)
     : isTablet
-    ? Math.min(420, windowHeight * 0.36)
-    : Math.min(320, Math.max(220, windowHeight * 0.32));
+      ? Math.min(320, Math.max(200, windowHeight * 0.3))
+      : Math.min(250, Math.max(160, windowHeight * 0.24));
+
   const [routes, setRoutes] = useState([]);
   const [busTerminals, setBusTerminals] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('jeepneys'); // 'jeepneys' | 'buses'
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState("jeepneys"); // 'jeepneys' | 'buses'
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isListCollapsed, setIsListCollapsed] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [commuterLocation, setCommuterLocation] = useState({
@@ -83,12 +87,23 @@ const RouteMapScreen = ({ navigation }) => {
     accuracy: 25,
     isReal: false,
   });
-  const [locationStatus, setLocationStatus] = useState('Acquiring GPS...');
+  const [locationStatus, setLocationStatus] = useState("Acquiring GPS...");
   const [recenterCount, setRecenterCount] = useState(0);
 
   // Peer Location Sharing states
-  const [showLocationSharingModal, setShowLocationSharingModal] = useState(false);
+  const [showLocationSharingModal, setShowLocationSharingModal] =
+    useState(false);
   const [peers, setPeers] = useState([]);
+
+  useEffect(() => {
+    if (
+      commuterLocation &&
+      Number.isFinite(commuterLocation.lat) &&
+      Number.isFinite(commuterLocation.lng)
+    ) {
+      setSharedLocation(commuterLocation);
+    }
+  }, [commuterLocation, setSharedLocation]);
 
   // Real-time continuous location tracking
   useEffect(() => {
@@ -98,7 +113,11 @@ const RouteMapScreen = ({ navigation }) => {
 
     const startLocationTracking = async () => {
       try {
-        if (Platform.OS === 'web' && typeof window !== 'undefined' && navigator.geolocation) {
+        if (
+          Platform.OS === "web" &&
+          typeof window !== "undefined" &&
+          navigator.geolocation
+        ) {
           // 1. Initial Immediate Fix on Web
           navigator.geolocation.getCurrentPosition(
             (pos) => {
@@ -109,15 +128,17 @@ const RouteMapScreen = ({ navigation }) => {
                 accuracy: Math.round(pos.coords.accuracy || 20),
                 isReal: true,
               });
-              setLocationStatus(`Live GPS Active (±${Math.round(pos.coords.accuracy || 20)}m)`);
+              setLocationStatus(
+                `Live GPS Active (±${Math.round(pos.coords.accuracy || 20)}m)`,
+              );
             },
             (err) => {
-              console.warn('Web initial GPS warning:', err.message);
+              console.warn("Web initial GPS warning:", err.message);
               if (isMounted) {
-                setLocationStatus('Dagupan City Center (GPS Simulated)');
+                setLocationStatus("Dagupan City Center (GPS Simulated)");
               }
             },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
           );
 
           // 2. Continuous Real-Time Watch on Web
@@ -130,18 +151,20 @@ const RouteMapScreen = ({ navigation }) => {
                 accuracy: Math.round(pos.coords.accuracy || 20),
                 isReal: true,
               });
-              setLocationStatus(`Live GPS Active (±${Math.round(pos.coords.accuracy || 20)}m)`);
+              setLocationStatus(
+                `Live GPS Active (±${Math.round(pos.coords.accuracy || 20)}m)`,
+              );
             },
             (err) => {
-              console.warn('Web continuous GPS watch warning:', err.message);
+              console.warn("Web continuous GPS watch warning:", err.message);
             },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
           );
         } else {
           // Native iOS / Android Tracking
           const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status === 'granted') {
-            setLocationStatus('Acquiring Satellite Lock...');
+          if (status === "granted") {
+            setLocationStatus("Acquiring Satellite Lock...");
             try {
               const initialLoc = await Location.getCurrentPositionAsync({
                 accuracy: Location.Accuracy.High,
@@ -153,9 +176,11 @@ const RouteMapScreen = ({ navigation }) => {
                 accuracy: Math.round(initialLoc.coords.accuracy || 20),
                 isReal: true,
               });
-              setLocationStatus(`Live GPS Active (±${Math.round(initialLoc.coords.accuracy || 20)}m)`);
+              setLocationStatus(
+                `Live GPS Active (±${Math.round(initialLoc.coords.accuracy || 20)}m)`,
+              );
             } catch (posErr) {
-              console.warn('Initial GPS position error, falling back:', posErr);
+              console.warn("Initial GPS position error, falling back:", posErr);
               const fallbackLoc = await Location.getLastKnownPositionAsync();
               if (fallbackLoc && isMounted) {
                 setCommuterLocation({
@@ -164,7 +189,7 @@ const RouteMapScreen = ({ navigation }) => {
                   accuracy: Math.round(fallbackLoc.coords.accuracy || 30),
                   isReal: true,
                 });
-                setLocationStatus('Live GPS (Last Known)');
+                setLocationStatus("Live GPS (Last Known)");
               }
             }
 
@@ -183,16 +208,18 @@ const RouteMapScreen = ({ navigation }) => {
                   accuracy: Math.round(newLoc.coords.accuracy || 15),
                   isReal: true,
                 });
-                setLocationStatus(`Live GPS Active (±${Math.round(newLoc.coords.accuracy || 15)}m)`);
-              }
+                setLocationStatus(
+                  `Live GPS Active (±${Math.round(newLoc.coords.accuracy || 15)}m)`,
+                );
+              },
             );
           } else {
-            setLocationStatus('GPS Permission Denied (Dagupan Center)');
+            setLocationStatus("GPS Permission Denied (Dagupan Center)");
           }
         }
       } catch (e) {
-        console.warn('Location initialization error:', e);
-        if (isMounted) setLocationStatus('Dagupan Center (Simulated)');
+        console.warn("Location initialization error:", e);
+        if (isMounted) setLocationStatus("Dagupan Center (Simulated)");
       }
     };
 
@@ -200,7 +227,11 @@ const RouteMapScreen = ({ navigation }) => {
 
     return () => {
       isMounted = false;
-      if (webWatchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+      if (
+        webWatchId !== null &&
+        typeof navigator !== "undefined" &&
+        navigator.geolocation
+      ) {
         navigator.geolocation.clearWatch(webWatchId);
       }
       if (nativeLocationSubscription) {
@@ -214,13 +245,19 @@ const RouteMapScreen = ({ navigation }) => {
     try {
       const [routesRes, terminalsRes] = await Promise.all([
         routesAPI.getAllRoutes(),
-        routesAPI.getBusTerminals(commuterLocation.isReal ? { lat: commuterLocation.lat, lng: commuterLocation.lng } : {}),
+        routesAPI.getBusTerminals(
+          commuterLocation.isReal
+            ? { lat: commuterLocation.lat, lng: commuterLocation.lng }
+            : {},
+        ),
       ]);
       setRoutes(Array.isArray(routesRes.data?.data) ? routesRes.data.data : []);
-      const rawTerminals = Array.isArray(terminalsRes.data?.data) ? terminalsRes.data.data : [];
+      const rawTerminals = Array.isArray(terminalsRes.data?.data)
+        ? terminalsRes.data.data
+        : [];
       setBusTerminals(rawTerminals);
     } catch (e) {
-      console.error('Data load error:', e);
+      console.error("Data load error:", e);
     } finally {
       setLoading(false);
     }
@@ -274,44 +311,63 @@ const RouteMapScreen = ({ navigation }) => {
     return () => clearInterval(interval);
   }, [commuterLocation.lat, commuterLocation.lng, isAuthenticated, user]);
 
-
   // Compute live distances for terminals based on current commuterLocation
-  const terminalsWithLiveDistance = busTerminals.map((t) => {
-    const dist = calculateDistanceKm(commuterLocation.lat, commuterLocation.lng, t.lat, t.lng);
-    return {
-      ...t,
-      distanceKm: dist !== null ? dist : t.distanceKm,
-    };
-  }).sort((a, b) => {
-    if (a.distanceKm === undefined || a.distanceKm === null) return 1;
-    if (b.distanceKm === undefined || b.distanceKm === null) return -1;
-    return a.distanceKm - b.distanceKm;
-  });
+  const terminalsWithLiveDistance = busTerminals
+    .map((t) => {
+      const dist = calculateDistanceKm(
+        commuterLocation.lat,
+        commuterLocation.lng,
+        t.lat,
+        t.lng,
+      );
+      return {
+        ...t,
+        distanceKm: dist !== null ? dist : t.distanceKm,
+      };
+    })
+    .sort((a, b) => {
+      if (a.distanceKm === undefined || a.distanceKm === null) return 1;
+      if (b.distanceKm === undefined || b.distanceKm === null) return -1;
+      return a.distanceKm - b.distanceKm;
+    });
 
   const safeRoutes = Array.isArray(routes) ? routes : [];
   const filteredRoutes = safeRoutes.filter((r) => {
     const matchesCategory =
-      selectedCategory === 'all' || r.category === selectedCategory;
+      selectedCategory === "all" || r.category === selectedCategory;
     if (!matchesCategory) return false;
     if (!searchQuery.trim()) return true;
 
     const q = searchQuery.toLowerCase().trim();
-    const nameMatch = (r.name || '').toLowerCase().includes(q);
-    const codeMatch = (r.code || '').toLowerCase().includes(q);
-    const corridorMatch = (r.corridor || '').toLowerCase().includes(q);
-    const descMatch = (r.description || '').toLowerCase().includes(q);
-    const startMatch = (r.startPoint?.name || '').toLowerCase().includes(q);
-    const endMatch = (r.endPoint?.name || '').toLowerCase().includes(q);
-    return nameMatch || codeMatch || corridorMatch || descMatch || startMatch || endMatch;
+    const nameMatch = (r.name || "").toLowerCase().includes(q);
+    const codeMatch = (r.code || "").toLowerCase().includes(q);
+    const corridorMatch = (r.corridor || "").toLowerCase().includes(q);
+    const descMatch = (r.description || "").toLowerCase().includes(q);
+    const startMatch = (r.startPoint?.name || "").toLowerCase().includes(q);
+    const endMatch = (r.endPoint?.name || "").toLowerCase().includes(q);
+    return (
+      nameMatch ||
+      codeMatch ||
+      corridorMatch ||
+      descMatch ||
+      startMatch ||
+      endMatch
+    );
   });
 
   // Trigger re-centering on commuter location with fresh GPS fix
   const handleRecenter = async () => {
-    if (webViewRef.current && Platform.OS !== 'web') {
-      webViewRef.current.injectJavaScript(`if (window.centerOnCommuter) { window.centerOnCommuter(); } true;`);
+    if (webViewRef.current && Platform.OS !== "web") {
+      webViewRef.current.injectJavaScript(
+        `if (window.centerOnCommuter) { window.centerOnCommuter(); } true;`,
+      );
     }
     try {
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && navigator.geolocation) {
+      if (
+        Platform.OS === "web" &&
+        typeof window !== "undefined" &&
+        navigator.geolocation
+      ) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             setCommuterLocation({
@@ -320,16 +376,20 @@ const RouteMapScreen = ({ navigation }) => {
               accuracy: Math.round(pos.coords.accuracy || 20),
               isReal: true,
             });
-            setLocationStatus(`Live GPS Active (±${Math.round(pos.coords.accuracy || 20)}m)`);
+            setLocationStatus(
+              `Live GPS Active (±${Math.round(pos.coords.accuracy || 20)}m)`,
+            );
             setRecenterCount((c) => c + 1);
           },
           () => setRecenterCount((c) => c + 1),
-          { enableHighAccuracy: true, timeout: 5000 }
+          { enableHighAccuracy: true, timeout: 5000 },
         );
       } else {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        if (status === "granted") {
+          const cur = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+          });
           if (cur) {
             setCommuterLocation({
               lat: cur.coords.latitude,
@@ -337,10 +397,12 @@ const RouteMapScreen = ({ navigation }) => {
               accuracy: Math.round(cur.coords.accuracy || 20),
               isReal: true,
             });
-            setLocationStatus(`Live GPS Active (±${Math.round(cur.coords.accuracy || 20)}m)`);
+            setLocationStatus(
+              `Live GPS Active (±${Math.round(cur.coords.accuracy || 20)}m)`,
+            );
           }
         } else {
-          setLocationStatus('GPS Permission Denied');
+          setLocationStatus("GPS Permission Denied");
         }
         setRecenterCount((c) => c + 1);
       }
@@ -354,20 +416,36 @@ const RouteMapScreen = ({ navigation }) => {
     if (!routeItem) return;
 
     // Check if commuter location is along the static route corridor
-    if (routeItem.path && Array.isArray(routeItem.path) && routeItem.path.length > 0) {
-      const near = isPointNearRoute(commuterLocation.lat, commuterLocation.lng, routeItem.path, 0.45);
+    if (
+      routeItem.path &&
+      Array.isArray(routeItem.path) &&
+      routeItem.path.length > 0
+    ) {
+      const near = isPointNearRoute(
+        commuterLocation.lat,
+        commuterLocation.lng,
+        routeItem.path,
+        0.45,
+      );
       if (!near) {
         showWarning(
-          'Outside Route Corridor',
-          `You cannot use the live tracker for "${routeItem.name}" because your current location is not along this jeepney route corridor. Live tracking is strictly restricted to passengers along the route. For door-to-door trips, please use Solo Ride / Visitor Pinpoint.`
+          "Outside Route Corridor",
+          `You cannot use the live tracker for "${routeItem.name}" because your current location is not along this jeepney route corridor. Live tracking is strictly restricted to passengers along the route. For door-to-door trips, please use Solo Ride / Visitor Pinpoint.`,
         );
         return;
       }
     }
 
-    navigation.navigate('RideTracker', {
+    navigation.navigate("RideTracker", {
       selectedRoute: routeItem,
-      initialTab: 'tracker',
+      initialTab: "tracker",
+      initialLocation: {
+        latitude: commuterLocation.lat,
+        longitude: commuterLocation.lng,
+        accuracy: commuterLocation.accuracy,
+        isReal: commuterLocation.isReal,
+        timestamp: Date.now(),
+      },
     });
   };
 
@@ -379,26 +457,26 @@ const RouteMapScreen = ({ navigation }) => {
     const isRealGPS = commuterLocation.isReal;
 
     const routesJson = JSON.stringify(
-      routes.map(r => ({
+      routes.map((r) => ({
         id: r._id,
         name: r.name,
         code: r.code,
         category: r.category,
         distanceKm: r.distanceKm,
-        corridor: r.corridor || r.description || '',
+        corridor: r.corridor || r.description || "",
         isLoop: r.isLoop !== false,
         path: r.path || [],
         startPoint: r.startPoint,
         endPoint: r.endPoint,
         waypoints: r.waypoints || [],
         terminalLocation: r.terminalLocation || null,
-      }))
+      })),
     );
 
     const terminalsJson = JSON.stringify(terminalsWithLiveDistance);
-    const selectedRouteId = selectedItem?._id || '';
+    const selectedRouteId = selectedItem?._id || "";
     const peersJson = JSON.stringify(peers || []);
-    const apiHost = API_BASE_URL.replace(/\/api$/, '');
+    const apiHost = API_BASE_URL.replace(/\/api$/, "");
 
     return `
       <!DOCTYPE html>
@@ -751,14 +829,29 @@ const RouteMapScreen = ({ navigation }) => {
     `;
   };
 
-  if (loading) return <LoadingSpinner text="Connecting to Dagupan Transit Grid..." />;
+  if (loading)
+    return <LoadingSpinner text="Connecting to Dagupan Transit Grid..." />;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Top Header: Real-time commuter GPS status with Re-center action */}
-      <View style={[styles.gpsStatusBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.gpsStatusBar,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
         <View style={styles.gpsRow}>
-          <View style={[styles.gpsDot, { backgroundColor: commuterLocation.isReal ? '#10B981' : '#F59E0B' }]} />
+          <View
+            style={[
+              styles.gpsDot,
+              {
+                backgroundColor: commuterLocation.isReal
+                  ? "#10B981"
+                  : "#F59E0B",
+              },
+            ]}
+          />
           <Text style={[styles.gpsStatusText, { color: colors.textPrimary }]}>
             {locationStatus}
           </Text>
@@ -769,37 +862,53 @@ const RouteMapScreen = ({ navigation }) => {
           activeOpacity={0.7}
           style={styles.recenterHeaderBtn}
         >
-          <Image source={GPS_ICON} style={{ width: 14, height: 14, marginRight: 2 }} resizeMode="contain" />
+          <Image
+            source={GPS_ICON}
+            style={{ width: 14, height: 14, marginRight: 2 }}
+            resizeMode="contain"
+          />
           <Text style={styles.recenterHeaderText}>
-            {commuterLocation.lat.toFixed(4)}°N, {commuterLocation.lng.toFixed(4)}°E
+            {commuterLocation.lat.toFixed(4)}°N,{" "}
+            {commuterLocation.lng.toFixed(4)}°E
           </Text>
         </TouchableOpacity>
       </View>
 
       {/* Sub-Header Bar: Terminals visible notice + Solo Ride + Full Map Arrow Toggle */}
-      <View style={[styles.subBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.subBar,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
         <View style={styles.hubIndicator}>
-          <MaterialCommunityIcons name="domain" size={15} color={colors.primary} />
-          <Text style={[styles.hubIndicatorText, { color: colors.textSecondary }]}>
+          <MaterialCommunityIcons
+            name="domain"
+            size={15}
+            color={colors.primary}
+          />
+          <Text
+            style={[styles.hubIndicatorText, { color: colors.textSecondary }]}
+          >
             Terminals & Hubs visible
           </Text>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           {/* Peer Sharing Button */}
           <TouchableOpacity
             style={[
               styles.peerShareBtn,
               {
-                backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : '#EDE9FE',
-                borderColor: '#C4B5FD',
+                backgroundColor: isDark ? "rgba(139, 92, 246, 0.2)" : "#EDE9FE",
+                borderColor: "#C4B5FD",
               },
             ]}
             onPress={() => {
               if (!isAuthenticated || !user) {
                 showWarning(
-                  'Sign In Required',
-                  'Please sign in to your commuter account to request or share live locations with peers.'
+                  "Sign In Required",
+                  "Please sign in to your commuter account to request or share live locations with peers.",
                 );
                 return;
               }
@@ -808,9 +917,13 @@ const RouteMapScreen = ({ navigation }) => {
             activeOpacity={0.8}
             accessibilityLabel="Peer Location Sharing"
           >
-            <MaterialCommunityIcons name="account-group" size={15} color="#8B5CF6" />
+            <MaterialCommunityIcons
+              name="account-group"
+              size={15}
+              color="#8B5CF6"
+            />
             <Text style={styles.peerShareBtnText}>
-              Peers {peers.length > 0 ? `(${peers.length})` : ''}
+              Peers {peers.length > 0 ? `(${peers.length})` : ""}
             </Text>
           </TouchableOpacity>
 
@@ -822,27 +935,29 @@ const RouteMapScreen = ({ navigation }) => {
                 backgroundColor: isListCollapsed
                   ? colors.primary
                   : isDark
-                  ? 'rgba(37, 99, 235, 0.18)'
-                  : '#EFF6FF',
-                borderColor: isListCollapsed ? colors.primary : '#93C5FD',
+                    ? "rgba(37, 99, 235, 0.18)"
+                    : "#EFF6FF",
+                borderColor: isListCollapsed ? colors.primary : "#93C5FD",
               },
             ]}
             onPress={() => setIsListCollapsed(!isListCollapsed)}
             activeOpacity={0.8}
-            accessibilityLabel={isListCollapsed ? 'Show Routes List' : 'Toggle Down to Full Map'}
+            accessibilityLabel={
+              isListCollapsed ? "Show Routes List" : "Toggle Down to Full Map"
+            }
           >
             <MaterialCommunityIcons
-              name={isListCollapsed ? 'chevron-up' : 'chevron-down'}
+              name={isListCollapsed ? "chevron-up" : "chevron-down"}
               size={18}
-              color={isListCollapsed ? '#FFFFFF' : colors.primary}
+              color={isListCollapsed ? "#FFFFFF" : colors.primary}
             />
             <Text
               style={[
                 styles.mapToggleBtnText,
-                { color: isListCollapsed ? '#FFFFFF' : colors.primary },
+                { color: isListCollapsed ? "#FFFFFF" : colors.primary },
               ]}
             >
-              {isListCollapsed ? 'Show Routes' : 'Full Map'}
+              {isListCollapsed ? "Show Routes" : "Full Map"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -853,16 +968,26 @@ const RouteMapScreen = ({ navigation }) => {
         style={[
           styles.mapContainer,
           isListCollapsed
-            ? { flex: 1, width: '100%', height: '100%' }
-            : { height: mapHeight, width: '100%' },
+            ? { flex: 1, width: "100%", height: "100%" }
+            : { height: mapHeight, width: "100%" },
         ]}
       >
         {selectedItem && (
           <View style={styles.selectedRouteOverlay}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                flex: 1,
+              }}
+            >
               <MaterialCommunityIcons name="target" size={16} color="#F59E0B" />
               <Text style={styles.selectedRouteOverlayText} numberOfLines={1}>
-                Solo Route: <Text style={{ fontWeight: '800', color: '#FFFFFF' }}>{selectedItem.name}</Text>
+                Solo Route:{" "}
+                <Text style={{ fontWeight: "800", color: "#FFFFFF" }}>
+                  {selectedItem.name}
+                </Text>
               </Text>
             </View>
             <TouchableOpacity
@@ -875,20 +1000,24 @@ const RouteMapScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         )}
-        {Platform.OS === 'web' ? (
+        {Platform.OS === "web" ? (
           <iframe
-            key={`leaflet-map-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || 'all'}-${isListCollapsed ? 'full' : 'norm'}-${peers.length}`}
+            key={`leaflet-map-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || "all"}-${isListCollapsed ? "full" : "norm"}-${peers.length}`}
             title="Dagupan Transit Leaflet Map"
             srcDoc={generateLeafletHtml()}
-            style={{ width: '100%', height: '100%', border: 'none' }}
+            style={{ width: "100%", height: "100%", border: "none" }}
           />
         ) : (
           <WebView
             ref={webViewRef}
-            key={`leaflet-webview-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || 'all'}-${isListCollapsed ? 'full' : 'norm'}-${peers.length}`}
-            originWhitelist={['*']}
+            key={`leaflet-webview-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || "all"}-${isListCollapsed ? "full" : "norm"}-${peers.length}`}
+            originWhitelist={["*"]}
             source={{ html: generateLeafletHtml() }}
-            style={{ width: '100%', height: '100%', backgroundColor: '#0f172a' }}
+            style={{
+              width: "100%",
+              height: "100%",
+              backgroundColor: "#0f172a",
+            }}
             javaScriptEnabled={true}
             domStorageEnabled={true}
             geolocationEnabled={true}
@@ -903,7 +1032,11 @@ const RouteMapScreen = ({ navigation }) => {
           activeOpacity={0.85}
           accessibilityLabel="Access Current Location"
         >
-          <Image source={GPS_ICON} style={styles.gpsIconImg} resizeMode="contain" />
+          <Image
+            source={GPS_ICON}
+            style={styles.gpsIconImg}
+            resizeMode="contain"
+          />
         </TouchableOpacity>
       </View>
 
@@ -918,32 +1051,81 @@ const RouteMapScreen = ({ navigation }) => {
           activeOpacity={0.85}
         >
           <View style={styles.collapsedDockInner}>
-            <View style={[styles.collapsedDockIconWrap, { backgroundColor: colors.primary }]}>
-              <MaterialCommunityIcons name="chevron-up" size={20} color="#FFFFFF" />
+            <View
+              style={[
+                styles.collapsedDockIconWrap,
+                { backgroundColor: colors.primary },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="chevron-up"
+                size={20}
+                color="#FFFFFF"
+              />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.collapsedDockTitle, { color: colors.textPrimary }]}>
+              <Text
+                style={[
+                  styles.collapsedDockTitle,
+                  { color: colors.textPrimary },
+                ]}
+              >
                 Toggle Up: Show Routes ({filteredRoutes.length}) & Search
               </Text>
-              <Text style={[styles.collapsedDockSub, { color: colors.textMuted }]}>
+              <Text
+                style={[styles.collapsedDockSub, { color: colors.textMuted }]}
+              >
                 Tap to search corridors or view live tracking details
               </Text>
             </View>
-            <MaterialCommunityIcons name="magnify" size={20} color={colors.primary} />
+            <MaterialCommunityIcons
+              name="magnify"
+              size={20}
+              color={colors.primary}
+            />
           </View>
         </TouchableOpacity>
       ) : (
         <>
           {/* Drawer Bar with Arrow Button at top of routes list */}
-          <View style={[styles.drawerToggleBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-              <MaterialCommunityIcons name="bus-side" size={18} color={colors.primary} />
-              <Text style={[styles.drawerTitleText, { color: colors.textPrimary }]}>
+          <View
+            style={[
+              styles.drawerToggleBar,
+              {
+                backgroundColor: colors.surface,
+                borderBottomColor: colors.border,
+              },
+            ]}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                flex: 1,
+              }}
+            >
+              <MaterialCommunityIcons
+                name="bus-side"
+                size={18}
+                color={colors.primary}
+              />
+              <Text
+                style={[styles.drawerTitleText, { color: colors.textPrimary }]}
+              >
                 Jeepney Routes
               </Text>
-              <View style={[styles.routeCountBadge, { backgroundColor: colors.primary + '18' }]}>
-                <Text style={[styles.routeCountText, { color: colors.primary }]}>
-                  {filteredRoutes.length} {filteredRoutes.length === 1 ? 'route' : 'routes'}
+              <View
+                style={[
+                  styles.routeCountBadge,
+                  { backgroundColor: colors.primary + "18" },
+                ]}
+              >
+                <Text
+                  style={[styles.routeCountText, { color: colors.primary }]}
+                >
+                  {filteredRoutes.length}{" "}
+                  {filteredRoutes.length === 1 ? "route" : "routes"}
                 </Text>
               </View>
             </View>
@@ -951,29 +1133,52 @@ const RouteMapScreen = ({ navigation }) => {
             <TouchableOpacity
               style={[
                 styles.toggleDownBtn,
-                { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9' },
+                {
+                  backgroundColor: isDark
+                    ? "rgba(255, 255, 255, 0.08)"
+                    : "#F1F5F9",
+                },
               ]}
               onPress={() => setIsListCollapsed(true)}
               activeOpacity={0.7}
               accessibilityLabel="Toggle down to view full map"
             >
-              <Text style={[styles.toggleDownText, { color: colors.textSecondary }]}>Full Map</Text>
-              <MaterialCommunityIcons name="chevron-down" size={18} color={colors.primary} />
+              <Text
+                style={[styles.toggleDownText, { color: colors.textSecondary }]}
+              >
+                Full Map
+              </Text>
+              <MaterialCommunityIcons
+                name="chevron-down"
+                size={18}
+                color={colors.primary}
+              />
             </TouchableOpacity>
           </View>
 
           {/* Searchbar in the Router (Jeepney) */}
-          <View style={[styles.searchBarContainer, { backgroundColor: colors.surface }]}>
+          <View
+            style={[
+              styles.searchBarContainer,
+              { backgroundColor: colors.surface },
+            ]}
+          >
             <View
               style={[
                 styles.searchInputWrap,
                 {
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#F8FAFC',
+                  backgroundColor: isDark
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "#F8FAFC",
                   borderColor: colors.border,
                 },
               ]}
             >
-              <MaterialCommunityIcons name="magnify" size={18} color={colors.textMuted} />
+              <MaterialCommunityIcons
+                name="magnify"
+                size={18}
+                color={colors.textMuted}
+              />
               <TextInput
                 style={[styles.searchInput, { color: colors.textPrimary }]}
                 placeholder="Search route name, code (e.g. DAG-CAL), corridor..."
@@ -984,8 +1189,15 @@ const RouteMapScreen = ({ navigation }) => {
                 clearButtonMode="while-editing"
               />
               {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <MaterialCommunityIcons name="close-circle" size={16} color={colors.textMuted} />
+                <TouchableOpacity
+                  onPress={() => setSearchQuery("")}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialCommunityIcons
+                    name="close-circle"
+                    size={16}
+                    color={colors.textMuted}
+                  />
                 </TouchableOpacity>
               )}
             </View>
@@ -993,27 +1205,32 @@ const RouteMapScreen = ({ navigation }) => {
 
           {/* Category Filter for Jeepney Routes */}
           <View style={styles.filterRow}>
-            {['all', 'city', 'intercity'].map((cat) => (
+            {["all", "city", "intercity"].map((cat) => (
               <TouchableOpacity
                 key={cat}
                 style={[
                   styles.filterChip,
                   {
-                    backgroundColor: selectedCategory === cat ? colors.primary : colors.surface,
-                    borderColor: selectedCategory === cat ? colors.primary : colors.border,
+                    backgroundColor:
+                      selectedCategory === cat
+                        ? colors.primary
+                        : colors.surface,
+                    borderColor:
+                      selectedCategory === cat ? colors.primary : colors.border,
                   },
                 ]}
                 onPress={() => setSelectedCategory(cat)}
               >
                 <Text
                   style={{
-                    color: selectedCategory === cat ? '#FFFFFF' : colors.textPrimary,
-                    fontWeight: '600',
+                    color:
+                      selectedCategory === cat ? "#FFFFFF" : colors.textPrimary,
+                    fontWeight: "600",
                     fontSize: FONTS.sizes.xs,
-                    textTransform: 'capitalize',
+                    textTransform: "capitalize",
                   }}
                 >
-                  {cat === 'all' ? 'All Static Routes' : `${cat} Corridors`}
+                  {cat === "all" ? "All Static Routes" : `${cat} Corridors`}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1036,43 +1253,113 @@ const RouteMapScreen = ({ navigation }) => {
                   <Card
                     style={[
                       styles.itemCard,
-                      isSelected && { borderColor: colors.primary, borderWidth: 2 },
+                      isSelected && {
+                        borderColor: colors.primary,
+                        borderWidth: 2,
+                      },
                     ]}
                   >
                     <View style={styles.cardHeader}>
-                      <View style={[styles.categoryBadge, { backgroundColor: (item.category || 'city') === 'city' ? '#DBEAFE' : '#FEF3C7' }]}>
-                        <Text style={{ color: (item.category || 'city') === 'city' ? '#2563EB' : '#D97706', fontSize: FONTS.sizes.xs, fontWeight: '700' }}>
-                          {(item.category || 'city').toUpperCase()} JEEPNEY • {item.isLoop !== false ? 'LOOP' : 'CORRIDOR'}
+                      <View
+                        style={[
+                          styles.categoryBadge,
+                          {
+                            backgroundColor:
+                              (item.category || "city") === "city"
+                                ? "#DBEAFE"
+                                : "#FEF3C7",
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            color:
+                              (item.category || "city") === "city"
+                                ? "#2563EB"
+                                : "#D97706",
+                            fontSize: FONTS.sizes.xs,
+                            fontWeight: "700",
+                          }}
+                        >
+                          {(item.category || "city").toUpperCase()} JEEPNEY •{" "}
+                          {item.isLoop !== false ? "LOOP" : "CORRIDOR"}
                         </Text>
                       </View>
                       {item.distanceKm ? (
-                        <Text style={[styles.distanceBadge, { color: colors.textMuted }]}>~{item.distanceKm} km</Text>
+                        <Text
+                          style={[
+                            styles.distanceBadge,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          ~{item.distanceKm} km
+                        </Text>
                       ) : null}
                     </View>
 
-                    <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{item.name || 'Unnamed Route'}</Text>
+                    <Text
+                      style={[styles.itemTitle, { color: colors.textPrimary }]}
+                    >
+                      {item.name || "Unnamed Route"}
+                    </Text>
 
                     {/* Static Route Corridor */}
                     <View style={styles.corridorContainer}>
-                      <MaterialCommunityIcons name="transit-connection-variant" size={16} color={colors.primary} />
-                      <Text style={[styles.corridorText, { color: colors.textSecondary }]} numberOfLines={2}>
-                        {item.corridor || item.description || 'Static Dagupan transit corridor'}
+                      <MaterialCommunityIcons
+                        name="transit-connection-variant"
+                        size={16}
+                        color={colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.corridorText,
+                          { color: colors.textSecondary },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {item.corridor ||
+                          item.description ||
+                          "Static Dagupan transit corridor"}
                       </Text>
                     </View>
 
                     {/* Badges Row */}
                     <View style={styles.metaRow}>
                       <View style={styles.metaBadge}>
-                        <MaterialCommunityIcons name="clock-outline" size={13} color={colors.textMuted} />
-                        <Text style={[styles.metaBadgeText, { color: colors.textMuted }]}>
-                          {item.operatingHours?.start || '04:00'} - {item.operatingHours?.end || '21:00'}
+                        <MaterialCommunityIcons
+                          name="clock-outline"
+                          size={13}
+                          color={colors.textMuted}
+                        />
+                        <Text
+                          style={[
+                            styles.metaBadgeText,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          {item.operatingHours?.start || "04:00"} -{" "}
+                          {item.operatingHours?.end || "21:00"}
                         </Text>
                       </View>
 
                       {hasGpxPath && (
-                        <View style={[styles.metaBadge, { backgroundColor: '#ECFDF5' }]}>
-                          <MaterialCommunityIcons name="routes" size={13} color="#10B981" />
-                          <Text style={[styles.metaBadgeText, { color: '#059669', fontWeight: '700' }]}>
+                        <View
+                          style={[
+                            styles.metaBadge,
+                            { backgroundColor: "#ECFDF5" },
+                          ]}
+                        >
+                          <MaterialCommunityIcons
+                            name="routes"
+                            size={13}
+                            color="#10B981"
+                          />
+                          <Text
+                            style={[
+                              styles.metaBadgeText,
+                              { color: "#059669", fontWeight: "700" },
+                            ]}
+                          >
                             GPX Track Active
                           </Text>
                         </View>
@@ -1082,21 +1369,44 @@ const RouteMapScreen = ({ navigation }) => {
                     {/* Card Actions: Track Jeepney (with geofence check) & View Details */}
                     <View style={styles.cardActionsRow}>
                       <TouchableOpacity
-                        style={[styles.trackBtn, { backgroundColor: colors.primary }]}
+                        style={[
+                          styles.trackBtn,
+                          { backgroundColor: colors.primary },
+                        ]}
                         onPress={() => handleTrackJeepney(item)}
                         activeOpacity={0.85}
                       >
-                        <MaterialCommunityIcons name="crosshairs-gps" size={15} color="#FFFFFF" />
-                        <Text style={styles.trackBtnText}>Track Jeepney</Text>
+                        <MaterialCommunityIcons
+                          name="crosshairs-gps"
+                          size={15}
+                          color="#FFFFFF"
+                        />
+                        <Text style={styles.trackBtnText}>Ride Jeepney</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[styles.detailBtn, { borderColor: colors.border }]}
-                        onPress={() => navigation.navigate('RouteDetail', { route: item })}
+                        style={[
+                          styles.detailBtn,
+                          { borderColor: colors.border },
+                        ]}
+                        onPress={() =>
+                          navigation.navigate("RouteDetail", { route: item })
+                        }
                         activeOpacity={0.8}
                       >
-                        <Text style={[styles.detailBtnText, { color: colors.primary }]}>Details</Text>
-                        <MaterialCommunityIcons name="chevron-right" size={15} color={colors.primary} />
+                        <Text
+                          style={[
+                            styles.detailBtnText,
+                            { color: colors.primary },
+                          ]}
+                        >
+                          Details
+                        </Text>
+                        <MaterialCommunityIcons
+                          name="chevron-right"
+                          size={15}
+                          color={colors.primary}
+                        />
                       </TouchableOpacity>
                     </View>
                   </Card>
@@ -1104,15 +1414,43 @@ const RouteMapScreen = ({ navigation }) => {
               );
             }}
             ListEmptyComponent={
-              <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 44, paddingHorizontal: 24 }}>
-                <MaterialCommunityIcons name="van-passenger" size={48} color={colors.textMuted} style={{ marginBottom: 12, opacity: 0.6 }} />
-                <Text style={{ fontSize: FONTS.sizes.md, fontWeight: '700', color: colors.textPrimary, textAlign: 'center', marginBottom: 6 }}>
+              <View
+                style={{
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 44,
+                  paddingHorizontal: 24,
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="van-passenger"
+                  size={48}
+                  color={colors.textMuted}
+                  style={{ marginBottom: 12, opacity: 0.6 }}
+                />
+                <Text
+                  style={{
+                    fontSize: FONTS.sizes.md,
+                    fontWeight: "700",
+                    color: colors.textPrimary,
+                    textAlign: "center",
+                    marginBottom: 6,
+                  }}
+                >
                   No Routes Found
                 </Text>
-                <Text style={{ fontSize: FONTS.sizes.xs, color: colors.textMuted, textAlign: 'center', lineHeight: 18, maxWidth: 300 }}>
+                <Text
+                  style={{
+                    fontSize: FONTS.sizes.xs,
+                    color: colors.textMuted,
+                    textAlign: "center",
+                    lineHeight: 18,
+                    maxWidth: 300,
+                  }}
+                >
                   {searchQuery
                     ? `No jeepney routes match "${searchQuery}". Try searching for Lucao, Bonuan, Calasiao, or a route code.`
-                    : 'No jeepney routes match this filter category in Dagupan City.'}
+                    : "No jeepney routes match this filter category in Dagupan City."}
                 </Text>
               </View>
             }
@@ -1133,48 +1471,53 @@ const RouteMapScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   gpsStatusBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
   },
-  gpsRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  gpsRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   gpsDot: { width: 9, height: 9, borderRadius: 5 },
-  gpsStatusText: { fontSize: FONTS.sizes.xs, fontWeight: '700' },
+  gpsStatusText: { fontSize: FONTS.sizes.xs, fontWeight: "700" },
   recenterHeaderBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
-    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    backgroundColor: "rgba(56, 189, 248, 0.1)",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.25)',
+    borderColor: "rgba(56, 189, 248, 0.25)",
   },
-  recenterHeaderText: { fontSize: FONTS.sizes.xs, fontFamily: 'monospace', color: '#38BDF8', fontWeight: '600' },
+  recenterHeaderText: {
+    fontSize: FONTS.sizes.xs,
+    fontFamily: "monospace",
+    color: "#38BDF8",
+    fontWeight: "600",
+  },
   subBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: SPACING.lg,
     paddingVertical: 7,
     borderBottomWidth: 1,
   },
   hubIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   hubIndicatorText: {
     fontSize: FONTS.sizes.xs,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   tricycleQuickBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -1183,31 +1526,31 @@ const styles = StyleSheet.create({
   },
   tricycleQuickBtnText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#D97706',
+    fontWeight: "700",
+    color: "#D97706",
   },
   mapContainer: {
-    width: '100%',
-    position: 'relative',
-    backgroundColor: '#0f172a',
-    overflow: 'hidden',
+    width: "100%",
+    position: "relative",
+    backgroundColor: "#0f172a",
+    overflow: "hidden",
   },
   floatingGpsBtn: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 12,
     right: 12,
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000000",
     shadowOpacity: 0.35,
     shadowRadius: 5,
     elevation: 6,
     borderWidth: 2,
-    borderColor: '#EA580C',
+    borderColor: "#EA580C",
     zIndex: 1100,
   },
   gpsIconImg: {
@@ -1215,7 +1558,7 @@ const styles = StyleSheet.create({
     height: 32,
   },
   filterRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
@@ -1228,13 +1571,22 @@ const styles = StyleSheet.create({
   },
   listContent: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl },
   itemCard: { marginBottom: SPACING.sm, padding: SPACING.md },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  categoryBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: RADIUS.sm },
-  distanceBadge: { fontSize: FONTS.sizes.xs, fontWeight: '600' },
-  itemTitle: { fontSize: FONTS.sizes.md, fontWeight: '800', marginBottom: 6 },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  categoryBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  distanceBadge: { fontSize: FONTS.sizes.xs, fontWeight: "600" },
+  itemTitle: { fontSize: FONTS.sizes.md, fontWeight: "800", marginBottom: 6 },
   corridorContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 6,
     marginVertical: 4,
   },
@@ -1242,27 +1594,27 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.xs + 1,
     lineHeight: 18,
     flex: 1,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginVertical: 4,
   },
   cardActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     gap: 8,
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.06)',
+    borderTopColor: "rgba(0,0,0,0.06)",
   },
   trackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -1270,23 +1622,23 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
   },
   trackBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: FONTS.sizes.xs,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   metaBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.04)',
+    backgroundColor: "rgba(0,0,0,0.04)",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   metaBadgeText: { fontSize: 11 },
   detailBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 3,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -1296,65 +1648,82 @@ const styles = StyleSheet.create({
   },
   detailBtnText: {
     fontSize: FONTS.sizes.xs,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   terminalAddress: { fontSize: FONTS.sizes.xs, marginBottom: 6 },
-  terminalMetaRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  terminalMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
   terminalMetaText: { fontSize: FONTS.sizes.xs },
   destinationsBox: {
-    backgroundColor: 'rgba(0,0,0,0.03)',
+    backgroundColor: "rgba(0,0,0,0.03)",
     padding: 8,
     borderRadius: RADIUS.sm,
     marginBottom: 8,
   },
-  destinationsLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  destinationsText: { fontSize: FONTS.sizes.xs, fontWeight: '600', marginTop: 2 },
-  amenitiesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-  amenityChip: { borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: RADIUS.sm },
+  destinationsLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  destinationsText: {
+    fontSize: FONTS.sizes.xs,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  amenitiesRow: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
+  amenityChip: {
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
   amenityText: { fontSize: 10 },
   selectedRouteOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 10,
     left: 12,
     right: 12,
     zIndex: 1000,
-    backgroundColor: 'rgba(15, 23, 42, 0.94)',
+    backgroundColor: "rgba(15, 23, 42, 0.94)",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: RADIUS.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.45)',
-    shadowColor: '#000',
+    borderColor: "rgba(245, 158, 11, 0.45)",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 6,
     elevation: 10,
   },
   selectedRouteOverlayText: {
-    color: '#F59E0B',
+    color: "#F59E0B",
     fontSize: FONTS.sizes.xs,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   showAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
-    backgroundColor: '#2563EB',
+    backgroundColor: "#2563EB",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: RADIUS.sm,
   },
   showAllBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   mapToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     paddingHorizontal: 9,
     paddingVertical: 4,
@@ -1363,19 +1732,19 @@ const styles = StyleSheet.create({
   },
   mapToggleBtnText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   drawerToggleBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: SPACING.lg,
     paddingVertical: 8,
     borderBottomWidth: 1,
   },
   drawerTitleText: {
     fontSize: FONTS.sizes.sm,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   routeCountBadge: {
     paddingHorizontal: 6,
@@ -1384,11 +1753,11 @@ const styles = StyleSheet.create({
   },
   routeCountText: {
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   toggleDownBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 3,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -1396,7 +1765,7 @@ const styles = StyleSheet.create({
   },
   toggleDownText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   searchBarContainer: {
     paddingHorizontal: SPACING.lg,
@@ -1404,8 +1773,8 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   searchInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderRadius: RADIUS.md,
     paddingHorizontal: 10,
@@ -1415,7 +1784,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: FONTS.sizes.xs + 1,
-    height: '100%',
+    height: "100%",
     padding: 0,
   },
   collapsedBottomDock: {
@@ -1424,28 +1793,28 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   collapsedDockInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   collapsedDockIconWrap: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   collapsedDockTitle: {
     fontSize: FONTS.sizes.sm,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   collapsedDockSub: {
     fontSize: FONTS.sizes.xs,
     marginTop: 1,
   },
   peerShareBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 5,
@@ -1454,10 +1823,9 @@ const styles = StyleSheet.create({
   },
   peerShareBtnText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#8B5CF6',
+    fontWeight: "700",
+    color: "#8B5CF6",
   },
-
 });
 
 export default RouteMapScreen;

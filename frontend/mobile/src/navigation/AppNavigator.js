@@ -9,6 +9,7 @@ import { useNotifications } from "../contexts/NotificationContext";
 import { LoadingSpinner, Badge } from "../components/common/SharedComponents";
 import { View, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LocationProvider } from "../contexts/LocationContext";
 
 // Splash Screen
 import AnimatedIntroScreen from "../screens/splash_screen/AnimatedIntroScreen";
@@ -149,7 +150,7 @@ const RoutesAndFaresStack = () => (
     <Stack.Screen
       name="RideTracker"
       component={RideTrackerScreen}
-      options={{ headerShown: true, title: "Jeepney Live Tracker" }}
+      options={{ headerShown: true, title: "Jeepney Ride Tracker" }}
     />
     <Stack.Screen
       name="PinpointFare"
@@ -392,17 +393,19 @@ const AppNavigator = () => {
   };
 
   return (
-    <NavigationContainer theme={customTheme}>
-      {user ? (
-        <MainTabs />
-      ) : isGuest ? (
-        <GuestTabs />
-      ) : (
-        <AuthStack
-          initialRouteName={initialAuthScreen || "Welcome - SmartSakay"}
-        />
-      )}
-    </NavigationContainer>
+    <LocationProvider>
+      <NavigationContainer theme={customTheme}>
+        {user ? (
+          <MainTabs />
+        ) : isGuest ? (
+          <GuestTabs />
+        ) : (
+          <AuthStack
+            initialRouteName={initialAuthScreen || "Welcome - SmartSakay"}
+          />
+        )}
+      </NavigationContainer>
+    </LocationProvider>
   );
 };
 
