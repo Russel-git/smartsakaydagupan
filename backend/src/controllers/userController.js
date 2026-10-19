@@ -63,12 +63,13 @@ const getAllUsers = async (req, res, next) => {
     if (status === 'suspended') filter.isActive = false;
 
     if (search && search.trim()) {
+      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { firstName: { $regex: search.trim(), $options: 'i' } },
-        { lastName: { $regex: search.trim(), $options: 'i' } },
-        { email: { $regex: search.trim(), $options: 'i' } },
-        { badgeNumber: { $regex: search.trim(), $options: 'i' } },
-        { department: { $regex: search.trim(), $options: 'i' } },
+        { firstName: { $regex: escaped, $options: 'i' } },
+        { lastName: { $regex: escaped, $options: 'i' } },
+        { email: { $regex: escaped, $options: 'i' } },
+        { badgeNumber: { $regex: escaped, $options: 'i' } },
+        { department: { $regex: escaped, $options: 'i' } },
       ];
     }
 

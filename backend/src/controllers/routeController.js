@@ -113,7 +113,10 @@ const getAllRoutes = async (req, res, next) => {
     const { category, search } = req.query;
     const filter = { isActive: true };
     if (category) filter.category = category;
-    if (search) filter.name = { $regex: search, $options: 'i' };
+    if (search && search.trim()) {
+      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.name = { $regex: escaped, $options: 'i' };
+    }
 
     const routes = await Route.find(filter).sort({ category: 1, name: 1 });
     const routesWithFares = await Promise.all(

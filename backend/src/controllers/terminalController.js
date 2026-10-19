@@ -37,11 +37,12 @@ const getAllTerminals = async (req, res, next) => {
     }
 
     if (search && search.trim()) {
+      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { name: { $regex: search.trim(), $options: 'i' } },
-        { company: { $regex: search.trim(), $options: 'i' } },
-        { address: { $regex: search.trim(), $options: 'i' } },
-        { destinations: { $elemMatch: { $regex: search.trim(), $options: 'i' } } },
+        { name: { $regex: escaped, $options: 'i' } },
+        { company: { $regex: escaped, $options: 'i' } },
+        { address: { $regex: escaped, $options: 'i' } },
+        { destinations: { $elemMatch: { $regex: escaped, $options: 'i' } } },
       ];
     }
 

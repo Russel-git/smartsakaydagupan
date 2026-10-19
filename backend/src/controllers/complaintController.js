@@ -23,7 +23,28 @@ const createComplaint = async (req, res, next) => {
       );
     }
 
-    const complaint = await Complaint.create({ ...req.body, userId: req.user._id });
+    const {
+      category,
+      subject,
+      description,
+      routeId,
+      vehiclePlateNumber,
+      location,
+      attachments,
+    } = req.body;
+
+    const complaint = await Complaint.create({
+      userId: req.user._id,
+      category,
+      subject: subject ? subject.trim() : '',
+      description: description ? description.trim() : '',
+      routeId: routeId || null,
+      vehiclePlateNumber: vehiclePlateNumber ? vehiclePlateNumber.trim().toUpperCase() : '',
+      location: location || {},
+      attachments: Array.isArray(attachments) ? attachments : [],
+      status: 'pending',
+      source: req.user.role === 'poso' ? 'poso_field_report' : 'commuter',
+    });
     return apiResponse.success(res, complaint, 'Complaint submitted successfully', 201);
   } catch (error) { next(error); }
 };
@@ -62,7 +83,8 @@ const getMyComplaints = async (req, res, next) => {
     }
 
     if (search && search.trim()) {
-      const regex = new RegExp(search.trim(), 'i');
+      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
       filter.$or = [
         { subject: regex },
         { lguCaseNumber: regex },
