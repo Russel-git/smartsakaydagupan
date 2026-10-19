@@ -1,8 +1,8 @@
 {
-  "name": "smartsakay-dagupan",
+  "name": "SmartSakay",
   "version": "1.0.0",
   "private": true,
-  "description": "SmartSakay Dagupan - Commuter Application for Dagupan City",
+  "description": "SmartSakay - A Commuter Application for Routing and Fare Matrix",
   "workspaces": [
     "backend",
     "frontend/admin",

@@ -9,6 +9,7 @@ import { useNotifications } from "../contexts/NotificationContext";
 import { LoadingSpinner, Badge } from "../components/common/SharedComponents";
 import { View, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LocationProvider } from "../contexts/LocationContext";
 
 // Splash Screen
 import AnimatedIntroScreen from "../screens/splash_screen/AnimatedIntroScreen";
@@ -51,17 +52,23 @@ const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // Auth Stack
-const AuthStack = ({ initialRouteName = "Welcome" }) => (
+const AuthStack = () => (
   <Stack.Navigator
-    initialRouteName={initialRouteName}
+    initialRouteName={"Welcome - SmartSakay"}
     screenOptions={{ headerShown: false }}
   >
-    <Stack.Screen name="Welcome" component={WelcomeScreen} />
-    <Stack.Screen name="GetStarted" component={GetStartedScreen} />
-    <Stack.Screen name="Login" component={LoginScreen} />
-    <Stack.Screen name="Register" component={RegisterScreen} />
-    <Stack.Screen name="Otp" component={OtpScreen} />
-    <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    <Stack.Screen name="Welcome - SmartSakay" component={WelcomeScreen} />
+    <Stack.Screen
+      name="Get Started - SmartSakay"
+      component={GetStartedScreen}
+    />
+    <Stack.Screen name="Login - SmartSakay" component={LoginScreen} />
+    <Stack.Screen name="Register - SmartSakay" component={RegisterScreen} />
+    <Stack.Screen name="OTP - SmartSakay" component={OtpScreen} />
+    <Stack.Screen
+      name="Forgot Password - SmartSakay"
+      component={ForgotPasswordScreen}
+    />
     <Stack.Screen name="Terms" component={TermsScreen} />
   </Stack.Navigator>
 );
@@ -69,11 +76,11 @@ const AuthStack = ({ initialRouteName = "Welcome" }) => (
 // Home Stack
 const HomeStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="HomeMain" component={HomeScreen} />
+    <Stack.Screen name="Home - SmartSakay" component={HomeScreen} />
     <Stack.Screen
       name="Weather"
       component={WeatherScreen}
-      options={{ headerShown: true, title: "Dagupan Weather & Flood Advisory" }}
+      options={{ headerShown: true, title: "Weather" }}
     />
     <Stack.Screen
       name="Notifications"
@@ -121,7 +128,10 @@ const HomeStack = () => (
 // Combined Routes & Fares Stack
 const RoutesAndFaresStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="RoutesAndFaresMain" component={RoutesAndFaresScreen} />
+    <Stack.Screen
+      name="Routes & Fares - SmartSakay"
+      component={RoutesAndFaresScreen}
+    />
     <Stack.Screen
       name="RouteDetail"
       component={RouteDetailScreen}
@@ -140,7 +150,7 @@ const RoutesAndFaresStack = () => (
     <Stack.Screen
       name="RideTracker"
       component={RideTrackerScreen}
-      options={{ headerShown: true, title: "Jeepney Live Tracker" }}
+      options={{ headerShown: true, title: "Jeepney Ride Tracker" }}
     />
     <Stack.Screen
       name="PinpointFare"
@@ -150,10 +160,16 @@ const RoutesAndFaresStack = () => (
   </Stack.Navigator>
 );
 
+const Assistant = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="Assistant - SmartSakay" component={AssistantScreen} />
+  </Stack.Navigator>
+);
+
 // More Stack (Commuter features)
 const MoreStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="Profile" component={ProfileScreen} />
+    <Stack.Screen name="Profile - SmartSakay" component={ProfileScreen} />
     <Stack.Screen
       name="RideHistory"
       component={RideHistoryScreen}
@@ -204,6 +220,12 @@ const MoreStack = () => (
       component={TermsScreen}
       options={{ headerShown: false }}
     />
+  </Stack.Navigator>
+);
+
+const Guest = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="Account - SmartSakay" component={GuestProfileScreen} />
   </Stack.Navigator>
 );
 
@@ -263,8 +285,8 @@ const GuestTabs = () => {
         component={RoutesAndFaresStack}
         options={{ title: "Routes & Fares" }}
       />
-      <Tab.Screen name="Assistant" component={AssistantScreen} />
-      <Tab.Screen name="Account" component={GuestProfileScreen} />
+      <Tab.Screen name="Assistant" component={Assistant} />
+      <Tab.Screen name="Account" component={Guest} />
     </Tab.Navigator>
   );
 };
@@ -308,7 +330,7 @@ const MainTabs = () => {
             Home: "home",
             RoutesAndFares: "routes",
             Assistant: "robot",
-            More: "menu",
+            Profile: "account",
           };
           return (
             <View>
@@ -317,7 +339,7 @@ const MainTabs = () => {
                 size={size}
                 color={color}
               />
-              {route.name === "More" && <Badge count={unreadCount} />}
+              {route.name === "Profile" && <Badge count={unreadCount} />}
             </View>
           );
         },
@@ -329,8 +351,8 @@ const MainTabs = () => {
         component={RoutesAndFaresStack}
         options={{ title: "Routes & Fares" }}
       />
-      <Tab.Screen name="Assistant" component={AssistantScreen} />
-      <Tab.Screen name="More" component={MoreStack} />
+      <Tab.Screen name="Assistant" component={Assistant} />
+      <Tab.Screen name="Profile" component={MoreStack} />
     </Tab.Navigator>
   );
 };
@@ -371,15 +393,19 @@ const AppNavigator = () => {
   };
 
   return (
-    <NavigationContainer theme={customTheme}>
-      {user ? (
-        <MainTabs />
-      ) : isGuest ? (
-        <GuestTabs />
-      ) : (
-        <AuthStack initialRouteName={initialAuthScreen || "Welcome"} />
-      )}
-    </NavigationContainer>
+    <LocationProvider>
+      <NavigationContainer theme={customTheme}>
+        {user ? (
+          <MainTabs />
+        ) : isGuest ? (
+          <GuestTabs />
+        ) : (
+          <AuthStack
+            initialRouteName={initialAuthScreen || "Welcome - SmartSakay"}
+          />
+        )}
+      </NavigationContainer>
+    </LocationProvider>
   );
 };
 

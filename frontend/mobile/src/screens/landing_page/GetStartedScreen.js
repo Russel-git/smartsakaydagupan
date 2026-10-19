@@ -89,7 +89,7 @@ const GetStartedScreen = ({ navigation }) => {
   };
 
   const handleBackToLanding = () => {
-    navigation.navigate("Welcome");
+    navigation.navigate("Welcome - SmartSakay");
   };
 
   const handleSkip = () => {
@@ -608,7 +608,7 @@ const GetStartedScreen = ({ navigation }) => {
                     backgroundColor: colors.primary,
                   },
                 ]}
-                onPress={() => navigation.navigate("Register")}
+                onPress={() => navigation.navigate("Register - SmartSakay")}
                 activeOpacity={0.85}
                 accessibilityRole="button"
               >
