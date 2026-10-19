@@ -847,7 +847,7 @@ const styles = StyleSheet.create({
     */
     left: "50%",
     marginLeft: -60,
-    top: -10,
+    top: -13,
   },
 
   logoCircle: {
