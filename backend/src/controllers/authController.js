@@ -43,16 +43,19 @@ const register = async (req, res, next) => {
       console.warn(`⚠️ [REGISTRATION] Email dispatch issue (${mailErr.message}).`);
     }
 
+    const isDev = config.nodeEnv !== 'production';
     return apiResponse.success(
       res,
       {
         email: email.toLowerCase(),
         requiresVerification: true,
-        demoOtp: emailSent ? undefined : otpCode,
+        demoOtp: (!emailSent && isDev) ? otpCode : undefined,
       },
       emailSent
         ? 'Verification code sent to your email. Please check your inbox to complete account creation.'
-        : `Verification code generated (${otpCode}). Please enter it to complete account creation.`,
+        : (isDev
+            ? `Verification code generated (${otpCode}). Please enter it to complete account creation.`
+            : 'Verification code sent. Please check your email to complete account creation.'),
       201
     );
   } catch (error) {
@@ -166,15 +169,18 @@ const resendOtp = async (req, res, next) => {
       console.warn(`⚠️ [RESEND OTP] Email dispatch issue (${mailErr.message}).`);
     }
 
+    const isDev = config.nodeEnv !== 'production';
     return apiResponse.success(
       res,
       {
         email: email.toLowerCase(),
-        demoOtp: emailSent ? undefined : otpCode,
+        demoOtp: (!emailSent && isDev) ? otpCode : undefined,
       },
       emailSent
         ? 'OTP sent successfully to your email.'
-        : `Verification code generated (${otpCode}). Please enter it to continue.`
+        : (isDev
+            ? `Verification code generated (${otpCode}). Please enter it to continue.`
+            : 'OTP sent. Please check your email to continue.')
     );
   } catch (error) {
     next(error);

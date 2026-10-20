@@ -30,15 +30,15 @@ const config = {
   jwtAccessExpiry: "15m",
   jwtRefreshExpiry: "7d",
   gmail: {
-    user: process.env.GMAIL_USER || "flamease.config@gmail.com",
-    appPassword: process.env.GMAIL_APP_PASSWORD || "oeadbyahwffquxou",
+    user: process.env.GMAIL_USER || "",
+    appPassword: process.env.GMAIL_APP_PASSWORD || "",
   },
   smtp: {
     host: process.env.GMAIL_HOST || "smtp.gmail.com",
-    port: process.env.GMAIL_PORT || 465,
-    secure: process.env.SMTP_SECURE === "true" || true,
-    user: process.env.GMAIL_USER || "flamease.config@gmail.com",
-    pass: process.env.GMAIL_APP_PASSWORD || "oeadbyahwffquxou",
+    port: parseInt(process.env.GMAIL_PORT, 10) || 587,
+    secure: process.env.SMTP_SECURE === "true",
+    user: process.env.GMAIL_USER || "",
+    pass: process.env.GMAIL_APP_PASSWORD || "",
   },
 
   gemini: {

@@ -78,6 +78,9 @@ app.use((req, res, next) => {
     mongoSanitize.sanitize(req.params);
     req.params = cleanXss(req.params);
   }
+  if (req.query) {
+    mongoSanitize.sanitize(req.query);
+  }
   next();
 });
 
