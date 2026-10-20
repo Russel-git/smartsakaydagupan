@@ -11,6 +11,8 @@ import {
   Modal,
   Image,
   useWindowDimensions,
+  TextInput,
+  Keyboard,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -171,28 +173,20 @@ const PinpointFareScreen = ({ navigation }) => {
     isGPS: false,
   });
 
-  const [destination, setDestination] = useState({
-    lat: 16.023527558411267,
-    lng: 120.32342891959715,
-    name: "CSI Lucao",
-  });
+  const [destination, setDestination] = useState(null);
 
   // Pending Pinpoint state waiting for commuter to tap "Set"
   const [pendingPinpoint, setPendingPinpoint] = useState(null);
-  const [isDestinationSet, setIsDestinationSet] = useState(true);
+  const [isDestinationSet, setIsDestinationSet] = useState(false);
 
   // Location Permission State: 'checking' | 'granted' | 'denied'
   const [permissionStatus, setPermissionStatus] = useState("checking");
   const [gpsLoading, setGpsLoading] = useState(false);
 
   // Road Routing State (OSRM road-aligned data)
-  const [roadDistanceKm, setRoadDistanceKm] = useState(2.4);
-  const [roadDurationMins, setRoadDurationMins] = useState(
-    calculateEstMinutes(2.4),
-  );
-  const [roadSummary, setRoadSummary] = useState(
-    "Aligning to Dagupan road network...",
-  );
+  const [roadDistanceKm, setRoadDistanceKm] = useState(0);
+  const [roadDurationMins, setRoadDurationMins] = useState(0);
+  const [roadSummary, setRoadSummary] = useState("");
   const [isRouting, setIsRouting] = useState(false);
 
   // Live Tracking Mode State: 'idle' | 'tracking' | 'arrived'
@@ -209,9 +203,18 @@ const PinpointFareScreen = ({ navigation }) => {
   const lastLocationRef = useRef(null);
   const watchSubscriptionRef = useRef(null);
   const headingSubRef = useRef(null);
+  const destinationRef = useRef(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    destinationRef.current = destination;
+  }, [destination]);
 
   // Calculate Distance (km)
   const effectiveDistanceKm = useMemo(() => {
+    if (!destination) return 0;
     if (roadDistanceKm && roadDistanceKm > 0) return roadDistanceKm;
     const direct = calculateDistanceKm(
       origin.lat,
@@ -225,17 +228,16 @@ const PinpointFareScreen = ({ navigation }) => {
   // Live remaining distance to destination (updates as user moves)
   const remainingDistToDestKm = useMemo(() => {
     const loc = currentGpsPos || origin;
-    if (!loc || !destination) return effectiveDistanceKm;
+    if (!loc || !destination) return 0;
     return calculateDistanceKm(
       loc.lat,
       loc.lng,
       destination.lat,
       destination.lng,
     );
-  }, [currentGpsPos, origin, destination, effectiveDistanceKm]);
+  }, [currentGpsPos, origin, destination]);
 
-  // Destination arrival lock check: within 150 meters (0.15 km)
-  const isNearDestination = remainingDistToDestKm <= 0.15;
+  const isNearDestination = !!destination && remainingDistToDestKm <= 0.15;
 
   // Forward live compass heading to Leaflet Map without triggering React component re-renders
   const sendHeadingToMap = (deg) => {
@@ -442,19 +444,23 @@ const PinpointFareScreen = ({ navigation }) => {
   const handleConfirmSet = (target) => {
     const toSet = target || pendingPinpoint;
     if (toSet) {
-      setDestination((prev) => ({
-        ...prev,
+      setDestination({
         lat: toSet.lat,
         lng: toSet.lng,
-        name: toSet.name || prev.name,
-      }));
+        name: toSet.name || destination?.name || "Pinpointed Location",
+      });
+      destinationRef.current = {
+        lat: toSet.lat,
+        lng: toSet.lng,
+        name: toSet.name || "Pinpointed Location",
+      };
       if (toSet.distanceKm) {
         setRoadDistanceKm(toSet.distanceKm);
         setRoadDurationMins(calculateEstMinutes(toSet.distanceKm));
       }
       if (toSet.summary) setRoadSummary(toSet.summary);
     }
-    const destName = toSet?.name || destination.name;
+    const destName = toSet?.name || destination?.name || "Pinpointed Location";
     setIsDestinationSet(true);
     setPendingPinpoint(null);
     showSuccess(
@@ -490,7 +496,7 @@ const PinpointFareScreen = ({ navigation }) => {
         data.name ||
         (data.summary
           ? `Near ${data.summary.split("➔")[0].trim()}`
-          : destination.name);
+          : destination?.name || "Pinpointed Location");
       const dist = data.distanceKm || roadDistanceKm;
       const mins = calculateEstMinutes(dist);
       setPendingPinpoint({
@@ -576,8 +582,47 @@ const PinpointFareScreen = ({ navigation }) => {
     }
   };
 
+  const handleSearch = async () => {
+    const q = searchQuery.trim();
+    if (q.length < 2) return;
+    Keyboard.dismiss();
+    setSearching(true);
+    try {
+      const url =
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=ph` +
+        `&viewbox=120.28,16.09,120.40,15.99&bounded=0&q=${encodeURIComponent(q)}`;
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      const data = await res.json();
+      const results = (Array.isArray(data) ? data : []).map((r) => ({
+        id: String(r.place_id),
+        name: r.name || r.display_name.split(",")[0],
+        address: r.display_name,
+        lat: parseFloat(r.lat),
+        lng: parseFloat(r.lon),
+      }));
+      setSearchResults(results);
+      if (results.length === 0) {
+        showInfo("No results", "Try a different name or landmark in Dagupan.");
+      }
+    } catch (err) {
+      showError("Search failed", "Check your connection and try again.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSelectSearchResult = (r) => {
+    setSearchResults([]);
+    setSearchQuery(r.name);
+    selectLandmark({ name: r.name, lat: r.lat, lng: r.lng });
+  };
+
   // Start Live Solo Ride / Visitor Tracking
   const handleStartTracking = () => {
+    if (!destination && !pendingPinpoint) {
+      showWarning("No Destination", "Tap the map or pick a place first.");
+      return;
+    }
     if (!isDestinationSet && pendingPinpoint) {
       handleConfirmSet();
     }
@@ -587,7 +632,7 @@ const PinpointFareScreen = ({ navigation }) => {
     lastLocationRef.current = origin;
     showSuccess(
       "Live Tracker Started",
-      `Tracking your solo ride to ${destination.name}`,
+      `Tracking your solo ride to ${pendingPinpoint?.name || destination?.name || "your destination"}`,
     );
 
     // Elapsed timer
@@ -654,7 +699,6 @@ const PinpointFareScreen = ({ navigation }) => {
 
   const handleNextPosition = (nextPos, heading) => {
     setCurrentGpsPos(nextPos);
-
     let effectiveHeading = heading;
     if (lastLocationRef.current) {
       const step = calculateDistanceKm(
@@ -685,19 +729,21 @@ const PinpointFareScreen = ({ navigation }) => {
     sendUserLocationToMap(nextPos.lat, nextPos.lng, effectiveHeading);
 
     // Check if reached destination (< 80 meters)
-    const distToDest = calculateDistanceKm(
-      nextPos.lat,
-      nextPos.lng,
-      destination.lat,
-      destination.lng,
-    );
-    if (distToDest <= 0.08) {
-      handleArrival();
+    const dest = destinationRef.current;
+    if (dest) {
+      const distToDest = calculateDistanceKm(
+        nextPos.lat,
+        nextPos.lng,
+        dest.lat,
+        dest.lng,
+      );
+      if (distToDest <= 0.08) handleArrival();
     }
   };
 
   // Stop ride early & drop off before original pinpoint destination
   const handleStopRideEarly = async () => {
+    const dest = destinationRef.current;
     setStopConfirmVisible(false);
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     if (
@@ -714,7 +760,7 @@ const PinpointFareScreen = ({ navigation }) => {
     const completedRide = {
       id: `ride_solo_${Date.now()}`,
       timestamp: new Date().toISOString(),
-      routeName: `Solo Ride / Visitor to ${destination.name} (Early Drop-Off)`,
+      routeName: `Solo Ride / Visitor to ${dest?.name || "your destination"} (Early Drop-Off)`,
       destination: `Early Drop-off near ${currentGpsPos?.name || "Current Stop"}`,
       vehicleType: "solo_ride",
       mode: "Private / Solo Ride",
@@ -731,6 +777,7 @@ const PinpointFareScreen = ({ navigation }) => {
 
   // Arrived at destination
   const handleArrival = async () => {
+    const dest = destinationRef.current;
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     if (
       watchSubscriptionRef.current &&
@@ -744,8 +791,8 @@ const PinpointFareScreen = ({ navigation }) => {
     const completedRide = {
       id: `ride_solo_${Date.now()}`,
       timestamp: new Date().toISOString(),
-      routeName: `Solo Ride / Visitor to ${destination.name}`,
-      destination: destination.name,
+      routeName: `Solo Ride / Visitor to ${dest?.name || "your destination"}`,
+      destination: dest?.name || "your destination",
       vehicleType: "solo_ride",
       mode: "Private / Solo Ride",
       distanceKm: parseFloat(finalDist.toFixed(2)),
@@ -758,7 +805,7 @@ const PinpointFareScreen = ({ navigation }) => {
     setArrivalModalVisible(true);
     showSuccess(
       "You've arrived!",
-      `You successfully arrived at ${destination.name}!`,
+      `You successfully arrived at ${dest?.name || "your destination"}!`,
     );
   };
 
@@ -786,8 +833,10 @@ const PinpointFareScreen = ({ navigation }) => {
   const generateLeafletHtml = () => {
     const oLat = origin.lat;
     const oLng = origin.lng;
-    const dLat = destination.lat;
-    const dLng = destination.lng;
+    const hasDest = !!destination;
+    const dLat = hasDest ? destination.lat : null;
+    const dLng = hasDest ? destination.lng : null;
+    const destNameSafe = hasDest ? destination.name.replace(/'/g, "\\'") : "";
 
     return `
       <!DOCTYPE html>
@@ -958,10 +1007,21 @@ const PinpointFareScreen = ({ navigation }) => {
       </head>
       <body>
         <div id="map"></div>
-        <div class="map-tap-hint" id="status-hint">📍 Tap anywhere or drag red pin, then tap Set</div>
-        <div class="route-status-pill" id="route-meta">Finding fastest road corridor...</div>
+        <div class="map-tap-hint" id="status-hint">📍 Tap the map to pick a destination.</div>
+        <div class="route-status-pill" id="route-meta">Pick a destination to see the route</div>
 
         <script>
+
+          function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+            var R = 6371;
+            var dLat = (lat2 - lat1) * Math.PI / 180;
+            var dLon = (lon2 - lon1) * Math.PI / 180;
+            var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          }
+
           function postToApp(data) {
             var str = JSON.stringify(data);
             if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -985,10 +1045,10 @@ const PinpointFareScreen = ({ navigation }) => {
           var oLng = ${oLng};
           var dLat = ${dLat};
           var dLng = ${dLng};
-          var currentDestName = '${destination.name.replace(/'/g, "\\'")}';
+          var currentDestName = '${destNameSafe}';
+          var hasDest = ${hasDest};
+          var map = L.map('map', { zoomControl: false }).setView([oLat, oLng], 15);
 
-          // Zoom control moved to top-right to prevent overlap with floating GPS button
-          var map = L.map('map', { zoomControl: false }).setView([(oLat + dLat)/2, (oLng + dLng)/2], 14);
           L.control.zoom({ position: 'topright' }).addTo(map);
 
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1064,7 +1124,15 @@ const PinpointFareScreen = ({ navigation }) => {
             iconSize: [24, 24],
             iconAnchor: [12, 12]
           });
-          var destMarker = L.marker([dLat, dLng], { icon: destIcon, draggable: true }).addTo(map);
+          var destMarker = L.marker([oLat, oLng], { icon: destIcon, draggable: true });
+          var destOnMap = false;
+
+          function ensureDestMarker() {
+            if (!destOnMap) {
+              destMarker.addTo(map);
+              destOnMap = true;
+            }
+          }
 
           function buildPopupHtml(title, distKm, durMins, isConfirmed) {
             return '<div style="text-align:center; padding:3px; min-width:140px; font-family:system-ui,-apple-system,sans-serif;">' +
@@ -1076,7 +1144,12 @@ const PinpointFareScreen = ({ navigation }) => {
               ) +
             '</div>';
           }
-          destMarker.bindPopup(buildPopupHtml(currentDestName, null, null, true));
+          destMarker.bindPopup(buildPopupHtml('', null, null, true));
+
+          if (hasDest) {
+            ensureDestMarker();
+            updateRoadRoute(dLat, dLng, false);
+          }
 
           window.confirmFromMap = function() {
             destMarker.closePopup();
@@ -1095,6 +1168,7 @@ const PinpointFareScreen = ({ navigation }) => {
           var currentRouteLayer = null;
 
           async function updateRoadRoute(destLatitude, destLongitude, isUserInteraction) {
+            ensureDestMarker();
             dLat = destLatitude;
             dLng = destLongitude;
             destMarker.setLatLng([dLat, dLng]);
@@ -1180,8 +1254,6 @@ const PinpointFareScreen = ({ navigation }) => {
             postToApp({ type: 'PINPOINT_DESTINATION', lat: dLat, lng: dLng, name: currentDestName });
           }
 
-          updateRoadRoute(dLat, dLng, false);
-
           destMarker.on('dragend', function() {
             var pos = destMarker.getLatLng();
             currentDestName = '';
@@ -1221,10 +1293,11 @@ const PinpointFareScreen = ({ navigation }) => {
 
   const leafletHtml = useMemo(() => {
     return generateLeafletHtml();
-  }, [origin.lat, origin.lng, destination.lat, destination.lng]);
+  }, [origin.lat, origin.lng]);
 
   return (
     <ScrollView
+      keyboardShouldPersistTaps="handled"
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{ paddingBottom: SPACING.xxl }}
     >
@@ -1253,7 +1326,7 @@ const PinpointFareScreen = ({ navigation }) => {
             >
               {lastCompletedRide?.destination
                 ? `You reached your destination at ${lastCompletedRide.destination}.`
-                : `You reached your destination at ${destination.name}.`}
+                : `You reached your destination at ${destination?.name || "Not set"}.`}
             </Text>
 
             <View
@@ -1397,7 +1470,7 @@ const PinpointFareScreen = ({ navigation }) => {
         onClose={() => setStopConfirmVisible(false)}
         onConfirm={handleStopRideEarly}
         title="End Navigation & Stop Here?"
-        message={`Are you ending your solo ride before reaching ${destination.name}? This will complete your route navigation for the ${distanceTraveledKm > 0 ? distanceTraveledKm.toFixed(2) : "actual"} km traveled.`}
+        message={`Are you ending your solo ride before reaching ${destination?.name || "your destination"}? This will complete your route navigation for the ${distanceTraveledKm > 0 ? distanceTraveledKm.toFixed(2) : "actual"} km traveled.`}
         confirmText="Yes, End Trip Here"
         cancelText="Continue Riding"
         type="warning"
@@ -1431,7 +1504,7 @@ const PinpointFareScreen = ({ navigation }) => {
           {POPULAR_DESTINATIONS.map((dest, idx) => {
             const isSelected = pendingPinpoint
               ? pendingPinpoint.name === dest.name
-              : destination.name === dest.name;
+              : destination?.name === dest.name;
             return (
               <TouchableOpacity
                 key={`dest-${idx}`}
@@ -1475,8 +1548,111 @@ const PinpointFareScreen = ({ navigation }) => {
         />
       )}
 
+      {/* Search Bar */}
+      <View
+        style={[
+          styles.searchRow,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
+        <View
+          style={[
+            styles.searchInputWrap,
+            { backgroundColor: colors.background, borderColor: colors.border },
+          ]}
+        >
+          <MaterialCommunityIcons
+            name="magnify"
+            size={18}
+            color={colors.textMuted}
+          />
+          <TextInput
+            style={[styles.searchInput, { color: colors.textPrimary }]}
+            placeholder="Search a place in ..."
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => {
+                setSearchQuery("");
+                setSearchResults([]);
+              }}
+            >
+              <MaterialCommunityIcons
+                name="close-circle"
+                size={18}
+                color={colors.textMuted}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity
+          style={styles.searchBtn}
+          onPress={handleSearch}
+          disabled={searching}
+          activeOpacity={0.85}
+        >
+          {searching ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <MaterialCommunityIcons name="magnify" size={20} color="#FFFFFF" />
+          )}
+        </TouchableOpacity>
+      </View>
+
       {/* Interactive Map with Directional Light Beam, Set Button, and Non-overlapping GPS Access Button */}
       <View style={[styles.mapContainer, { height: mapHeight }]}>
+        {searchResults.length > 0 && (
+          <View
+            style={[
+              styles.searchResults,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+              {searchResults.map((r) => (
+                <TouchableOpacity
+                  key={r.id}
+                  style={[
+                    styles.searchResultItem,
+                    { borderBottomColor: colors.border },
+                  ]}
+                  onPress={() => handleSelectSearchResult(r)}
+                >
+                  <MaterialCommunityIcons
+                    name="map-marker-outline"
+                    size={18}
+                    color="#0284C7"
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.searchResultName,
+                        { color: colors.textPrimary },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {r.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.searchResultAddr,
+                        { color: colors.textMuted },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {r.address}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
         {Platform.OS === "web" ? (
           <iframe
             id="solo-ride-pinpoint-map"
@@ -1576,7 +1752,7 @@ const PinpointFareScreen = ({ navigation }) => {
             >
               Destination Set:{" "}
               <Text style={{ fontWeight: "800", color: "#16A34A" }}>
-                {destination.name}
+                {destination?.name || "Not set"}
               </Text>
             </Text>
           </View>
@@ -1687,7 +1863,7 @@ const PinpointFareScreen = ({ navigation }) => {
                 Road Distance
               </Text>
               <Text style={[styles.metricValue, { color: "#0284C7" }]}>
-                {effectiveDistanceKm} km
+                {destination ? `${effectiveDistanceKm} km` : "—"}
               </Text>
             </View>
             <View
@@ -1698,7 +1874,7 @@ const PinpointFareScreen = ({ navigation }) => {
                 Est. Time (30-35 km/h)
               </Text>
               <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
-                ~{roadDurationMins} mins
+                {destination ? `~${roadDurationMins} mins` : "—"}
               </Text>
             </View>
             <View
@@ -1712,7 +1888,7 @@ const PinpointFareScreen = ({ navigation }) => {
                 style={[styles.metricValue, { color: "#16A34A", fontSize: 13 }]}
                 numberOfLines={1}
               >
-                {destination.name}
+                {destination?.name || "Not set"}
               </Text>
             </View>
           </View>
@@ -1722,6 +1898,7 @@ const PinpointFareScreen = ({ navigation }) => {
         {trackingState === "idle" ? (
           <TouchableOpacity
             style={[styles.startRideBtn, { backgroundColor: "#0284C7" }]}
+            disabled={!destination && !pendingPinpoint}
             onPress={handleStartTracking}
             activeOpacity={0.88}
           >
@@ -1769,7 +1946,7 @@ const PinpointFareScreen = ({ navigation }) => {
             >
               Destination:{" "}
               <Text style={{ fontWeight: "700", color: colors.textPrimary }}>
-                {destination.name}
+                {destination?.name || "Not set"}
               </Text>
             </Text>
 
@@ -1860,8 +2037,9 @@ const PinpointFareScreen = ({ navigation }) => {
               <Text
                 style={[styles.lockedWarningText, { color: colors.textMuted }]}
               >
-                🔒 "Arrived" button unlocks when you reach {destination.name}.
-                If you're ending your trip early, tap "End Navigation".
+                🔒 "Arrived" button unlocks when you reach{" "}
+                {destination?.name || "your destination"}. If you're ending your
+                trip early, tap "End Navigation".
               </Text>
             )}
           </View>
@@ -1949,6 +2127,59 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
   },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+  },
+  searchInputWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    height: 40,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    paddingVertical: 0,
+  },
+  searchBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#0284C7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchResults: {
+    position: "absolute",
+    top: 0,
+    left: 12,
+    right: 12,
+    maxHeight: 220,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    zIndex: 1200,
+    elevation: 10,
+    overflow: "hidden",
+  },
+  searchResultItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  searchResultName: { fontSize: 13, fontWeight: "700" },
+  searchResultAddr: { fontSize: 10, marginTop: 1 },
   mapContainer: {
     width: "100%",
     backgroundColor: "#0f172a",
