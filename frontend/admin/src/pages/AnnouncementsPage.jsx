@@ -150,7 +150,7 @@ const AnnouncementsPage = () => {
     const matchesSearch =
       item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.message?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.route?.toLowerCase().includes(searchQuery.toLowerCase()) || item.locationArea?.toLowerCase().includes(searchQuery.toLowerCase()));
+      item.locationArea?.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesSeverity =
       severityFilter === "all" || item.severity === severityFilter;
@@ -410,7 +410,7 @@ const AnnouncementsPage = () => {
                         <div style={{ fontWeight: "700", color: colors.textPrimary }}>
                           {item.title}
                         </div>
-                        {(item.route || item.locationArea) && (
+                        {item.locationArea && (
                           <div
                             style={{
                               display: "inline-flex",
@@ -422,7 +422,7 @@ const AnnouncementsPage = () => {
                             }}
                           >
                             <MapPin size={11} color="#D97706" />
-                            {item.route || item.locationArea}
+                            {item.locationArea}
                           </div>
                         )}
                       </td>
@@ -971,9 +971,9 @@ const AnnouncementsPage = () => {
                 <div style={{ fontSize: "14px", fontWeight: "700", color: colors.textPrimary, marginBottom: "4px" }}>
                   "{archiveTarget.title}"
                 </div>
-                {(archiveTarget.route || archiveTarget.locationArea) && (
+                {archiveTarget.locationArea && (
                   <div style={{ fontSize: "12px", color: colors.textMuted }}>
-                    📍 {archiveTarget.route || archiveTarget.locationArea}
+                    📍 {archiveTarget.locationArea}
                   </div>
                 )}
               </div>

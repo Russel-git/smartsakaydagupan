@@ -38,7 +38,6 @@ const notificationSchema = new mongoose.Schema(
       default: 'info',
     },
     locationArea: { type: String, default: '', trim: true },
-    route: { type: String, default: '', trim: true },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     expiresAt: {
       type: Date,
