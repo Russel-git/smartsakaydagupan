@@ -9,11 +9,8 @@ import {
   Image as ImageIcon,
   ShieldAlert,
   Car,
-  PlusCircle,
-  CheckCircle,
-  CheckCircle2,
-  Filter,
   XCircle,
+  CircleCheck,
 } from "lucide-react";
 
 import { complaintsAPI } from "../api/services";
@@ -51,7 +48,7 @@ const getImageUrl = (photoUrl) => {
 const ComplaintsPage = () => {
   const { colors } = useTheme();
   const { showSuccess, showError } = useToast();
-  const { isAdmin, isLgu, isPoso, user } = useAuth();
+  const { isAdmin, isLgu, isPoso } = useAuth();
   const location = useLocation();
 
   const [complaints, setComplaints] = useState([]);
@@ -60,6 +57,7 @@ const ComplaintsPage = () => {
 
   // Filters & Tabs
   const [posoTab, setPosoTab] = useState("pending"); // "pending" | "endorsed"
+  const [lguTab, setLguTab] = useState("pending"); // "pending" | "resolved"
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -298,16 +296,6 @@ const ComplaintsPage = () => {
           "LGU Action Recorded",
           `Enforcement action saved for case ${data.data.lguCaseNumber}.`,
         );
-      } else {
-        const { data } = await complaintsAPI.lguTerminate(complaint._id, {
-          lguTerminationNotes: notes,
-          resolutionNotes: notes,
-        });
-
-        showSuccess(
-          "Case Resolved",
-          `Grievance case ${data.data.lguCaseNumber} officially resolved and recorded.`,
-        );
       }
 
       setLguModalConfig({
@@ -418,21 +406,6 @@ const ComplaintsPage = () => {
           </span>
         );
 
-      case "resolved":
-        return (
-          <span
-            style={{
-              ...baseStyle,
-              backgroundColor: "rgba(16, 185, 129, 0.15)",
-              color: "#059669",
-              border: "1px solid rgba(16, 185, 129, 0.3)",
-            }}
-          >
-            {statusDot("#059669")}
-            Resolved
-          </span>
-        );
-
       case "terminated":
         return (
           <span
@@ -499,14 +472,28 @@ const ComplaintsPage = () => {
     // POSO Tabs filter
     if (isPoso) {
       if (posoTab === "pending") {
-        if (c.status !== "pending" && c.status !== "under_review") return false;
+        if (c.status !== "pending" && c.status !== "under_review") {
+          return false;
+        }
       } else if (posoTab === "endorsed") {
         if (
           c.status !== "endorsed_to_lgu" &&
           c.status !== "action_taken" &&
-          c.status !== "terminated" &&
-          c.status !== "resolved"
+          c.status !== "terminated"
         ) {
+          return false;
+        }
+      }
+    }
+
+    // LGU Tabs filter
+    if (isLgu) {
+      if (lguTab === "pending") {
+        if (c.status !== "endorsed_to_lgu") {
+          return false;
+        }
+      } else if (lguTab === "resolved") {
+        if (c.status !== "action_taken") {
           return false;
         }
       }
@@ -537,12 +524,21 @@ const ComplaintsPage = () => {
   const pendingCount = complaints.filter(
     (c) => c.status === "pending" || c.status === "under_review",
   ).length;
+
   const endorsedCount = complaints.filter(
     (c) =>
       c.status === "endorsed_to_lgu" ||
       c.status === "action_taken" ||
-      c.status === "terminated" ||
-      c.status === "resolved",
+      c.status === "terminated",
+  ).length;
+
+  // Count metrics for LGU tabs
+  const lguPendingCount = complaints.filter(
+    (c) => c.status === "endorsed_to_lgu",
+  ).length;
+
+  const resolvedCount = complaints.filter(
+    (c) => c.status === "action_taken",
   ).length;
 
   return (
@@ -698,7 +694,7 @@ const ComplaintsPage = () => {
               padding: "8px 16px",
             }}
           >
-            <CheckCircle size={16} />
+            <CircleCheck size={16} />
             <span>Endorsed to LGU</span>
             <span
               style={{
@@ -717,19 +713,117 @@ const ComplaintsPage = () => {
         </div>
       )}
 
+      {/* LGU DEDICATED TABS */}
+      {isLgu && (
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            marginBottom: "20px",
+            borderBottom: `1px solid ${colors.border}`,
+            paddingBottom: "12px",
+            flexWrap: "wrap",
+          }}
+        >
+          {/* AWAITING LGU ACTION TAB */}
+          <button
+            type="button"
+            onClick={() => {
+              setLguTab("pending");
+              setStatusFilter("all");
+            }}
+            className="btn"
+            style={{
+              backgroundColor:
+                lguTab === "pending" ? "#D97706" : colors.surface,
+              color: lguTab === "pending" ? "#FFFFFF" : colors.textPrimary,
+              border: `1px solid ${
+                lguTab === "pending" ? "#D97706" : colors.border
+              }`,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              fontWeight: "600",
+              padding: "8px 16px",
+            }}
+          >
+            <ShieldAlert size={16} />
+
+            <span>Awaiting LGU Action</span>
+
+            <span
+              style={{
+                backgroundColor:
+                  lguTab === "pending"
+                    ? "rgba(0,0,0,0.2)"
+                    : colors.surfaceElevated,
+                padding: "2px 7px",
+                borderRadius: "999px",
+                fontSize: "11px",
+              }}
+            >
+              {lguPendingCount}
+            </span>
+          </button>
+
+          {/* CASE RESOLVED TAB */}
+          <button
+            type="button"
+            onClick={() => {
+              setLguTab("resolved");
+              setStatusFilter("all");
+            }}
+            className="btn"
+            style={{
+              backgroundColor:
+                lguTab === "resolved" ? "#059669" : colors.surface,
+              color: lguTab === "resolved" ? "#FFFFFF" : colors.textPrimary,
+              border: `1px solid ${
+                lguTab === "resolved" ? "#059669" : colors.border
+              }`,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              fontWeight: "600",
+              padding: "8px 16px",
+            }}
+          >
+            <CircleCheck size={16} />
+
+            <span>Case Resolved</span>
+
+            <span
+              style={{
+                backgroundColor:
+                  lguTab === "resolved"
+                    ? "rgba(0,0,0,0.2)"
+                    : colors.surfaceElevated,
+                padding: "2px 7px",
+                borderRadius: "999px",
+                fontSize: "11px",
+              }}
+            >
+              {resolvedCount}
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* FILTERS & SEARCH */}
       <div
         style={{
           display: "flex",
+          alignItems: "center",
           gap: "12px",
           marginBottom: "20px",
           flexWrap: "wrap",
         }}
       >
+        {/* SEARCH */}
         <div
           style={{
             position: "relative",
-            flex: 1,
+            flex: "1 1 240px",
             minWidth: "240px",
             maxWidth: "360px",
           }}
@@ -743,27 +837,32 @@ const ComplaintsPage = () => {
           />
         </div>
 
-        {!isPoso && (
+        {/* STATUS FILTER */}
+        {isLgu ? (
           <select
             className="form-select"
-            style={{ maxWidth: "200px" }}
+            style={{
+              width: "200px",
+              maxWidth: "100%",
+            }}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
-            <option value="all">All Statuses</option>
-            <option value="pending">Pending Road Verification</option>
-            <option value="under_review">Under Review</option>
-            <option value="endorsed_to_lgu">Endorsed to LGU</option>
-            <option value="action_taken">Action Taken</option>
-            <option value="resolved">Resolved</option>
-            <option value="terminated">Terminated</option>
-            {isAdmin && <option value="deleted">Discarded (Deleted)</option>}
+            <>
+              <option value="all">All Statuses</option>
+              <option value="endorsed_to_lgu">Awaiting LGU Action</option>
+              <option value="action_taken">Action Taken</option>
+            </>
           </select>
-        )}
+        ) : null}
 
+        {/* CATEGORY FILTER */}
         <select
           className="form-select"
-          style={{ maxWidth: "200px" }}
+          style={{
+            width: "200px",
+            maxWidth: "100%",
+          }}
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
         >
@@ -775,6 +874,29 @@ const ComplaintsPage = () => {
           <option value="vehicle_condition">Vehicle Condition</option>
           <option value="other">Other</option>
         </select>
+
+        {/* CLEAR FILTERS */}
+        {(search || statusFilter !== "all" || categoryFilter !== "all") && (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setSearch("");
+              setStatusFilter("all");
+              setCategoryFilter("all");
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <X size={14} />
+            Clear Filters
+          </button>
+        )}
       </div>
 
       {/* COMPLAINTS TABLE */}
@@ -807,7 +929,11 @@ const ComplaintsPage = () => {
               ? "No pending complaints requiring road verification."
               : isPoso && posoTab === "endorsed"
                 ? "No complaints endorsed to LGU yet."
-                : "No complaint records found matching criteria."}
+                : isLgu && lguTab === "pending"
+                  ? "No complaints are awaiting LGU action."
+                  : isLgu && lguTab === "resolved"
+                    ? "No resolved cases found."
+                    : "No complaint records found matching criteria."}
           </div>
         ) : (
           <div className="table-container">
@@ -1009,18 +1135,38 @@ const ComplaintsPage = () => {
                         <div
                           style={{
                             display: "flex",
-                            gap: "6px",
+                            flexDirection: "row",
                             alignItems: "center",
-                            flexWrap: "wrap",
+                            gap: "8px",
+                            minWidth: "max-content",
+                            flexWrap: "nowrap",
+                            whiteSpace: "nowrap",
                           }}
                         >
                           {/* VIEW DETAILS */}
                           <button
+                            type="button"
                             onClick={() => setSelectedComplaint(c)}
                             className="btn btn-sm btn-secondary"
                             title="Inspect Details"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              minWidth: "32px",
+                              minHeight: "32px",
+                              padding: "6px",
+                              flexShrink: 0,
+                            }}
                           >
-                            <Eye size={13} />
+                            <Eye
+                              size={16}
+                              strokeWidth={2}
+                              style={{
+                                display: "block",
+                                flexShrink: 0,
+                              }}
+                            />
                           </button>
 
                           {/* POSO VERIFY & ENDORSE OR REJECT */}
@@ -1064,81 +1210,67 @@ const ComplaintsPage = () => {
                                   title="Reject commuter complaint"
                                 >
                                   <XCircle size={12} />
-                                  <span>Reject</span>
+                                  <span>Reject Complain</span>
                                 </button>
                               </>
                             )}
 
                           {/* LGU ACTIONS (Action Taken & Resolve) */}
-                          {(isLgu || isAdmin) &&
-                            c.status !== "deleted" &&
-                            c.status !== "resolved" &&
-                            c.status !== "terminated" && (
-                              <>
+                          {isLgu && (
+                            <>
+                              {c.status === "action_taken" ? (
                                 <button
-                                  onClick={() =>
-                                    handleOpenLguModal(c, "action")
-                                  }
-                                  className="btn btn-sm"
+                                  disabled
+                                  className="btn btn-sm bg-none border border-gray-300 dark:border-gray-500 color-black dark:color-white"
                                   style={{
-                                    backgroundColor: "rgba(16, 185, 129, 0.15)",
-                                    color: "#059669",
-                                    border: "1px solid rgba(16, 185, 129, 0.3)",
-                                    fontSize: "11px",
-                                    padding: "4px 8px",
-                                    fontWeight: "600",
-                                  }}
-                                  title="Record official LGU penalty or action taken"
-                                >
-                                  Take Action
-                                </button>
-
-                                <button
-                                  onClick={() =>
-                                    handleOpenLguModal(c, "resolve")
-                                  }
-                                  className="btn btn-sm"
-                                  style={{
-                                    backgroundColor: "#10B981",
-                                    color: "#FFFFFF",
-                                    border: "none",
-                                    fontSize: "11px",
-                                    padding: "4px 10px",
-                                    fontWeight: "600",
                                     display: "inline-flex",
                                     alignItems: "center",
-                                    gap: "4px",
-                                    borderRadius: "6px",
+                                    gap: "6px",
+                                    cursor: "default",
+                                    opacity: 1,
+                                    fontSize: "11px",
+                                    padding: "5px 9px",
                                   }}
-                                  title="Resolve and officially close grievance"
                                 >
-                                  <CheckCircle2 size={13} />
-                                  <span>Resolved</span>
+                                  <CircleCheck size={14} />
+                                  <span>Case Resolved</span>
                                 </button>
-                              </>
-                            )}
+                              ) : c.status === "deleted" ||
+                                c.status === "terminated" ? null : (
+                                <>
+                                  <button
+                                    onClick={() =>
+                                      handleOpenLguModal(c, "action")
+                                    }
+                                    className="btn btn-sm"
+                                    style={{
+                                      backgroundColor: "#059669",
+                                      color: "#FFFFFF",
+                                      fontSize: "11px",
+                                      padding: "5px 9px",
+                                    }}
+                                  >
+                                    <CircleCheck size={14} />
+                                    Take Action
+                                  </button>
 
-                          {/* REMOVE / ARCHIVE ACTION DESK BUTTON */}
-                          {(isLgu || isAdmin) && c.status !== "deleted" && (
-                            <button
-                              onClick={() => handleOpenDelete(c)}
-                              className="btn btn-sm"
-                              style={{
-                                backgroundColor: "rgba(239, 68, 68, 0.1)",
-                                color: "#DC2626",
-                                border: "1px solid rgba(239, 68, 68, 0.25)",
-                                padding: "4px 8px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "4px",
-                                fontSize: "11px",
-                                fontWeight: "600",
-                              }}
-                              title="Remove complaint and move to archive"
-                            >
-                              <Trash2 size={12} />
-                              <span>Remove</span>
-                            </button>
+                                  <button
+                                    onClick={() => handleOpenDelete(c)}
+                                    className="btn btn-sm"
+                                    style={{
+                                      cursor: "pointer",
+                                      backgroundColor: "#EF44441F",
+                                      color: "#DC2626",
+                                      fontSize: "11px",
+                                      padding: "5px 9px",
+                                    }}
+                                  >
+                                    <Trash2 size={14} />
+                                    <span>Remove Complaint</span>
+                                  </button>
+                                </>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -1477,16 +1609,6 @@ const ComplaintsPage = () => {
                     borderRadius: "8px",
                   }}
                 >
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: "700",
-                      color: colors.textSecondary,
-                      marginBottom: "4px",
-                    }}
-                  >
-                    Case Officially Terminated & Resolved
-                  </div>
                   <div style={{ fontSize: "13px", color: colors.textPrimary }}>
                     {selectedComplaint.lguTerminationNotes}
                   </div>
@@ -1541,68 +1663,6 @@ const ComplaintsPage = () => {
                       >
                         <XCircle size={14} />
                         <span>Reject Complaint</span>
-                      </button>
-                    </>
-                  )}
-
-                {/* LGU IN-MODAL ACTIONS */}
-                {(isLgu || isAdmin) &&
-                  selectedComplaint.status !== "terminated" &&
-                  selectedComplaint.status !== "resolved" &&
-                  selectedComplaint.status !== "deleted" && (
-                    <>
-                      <button
-                        onClick={() => {
-                          handleOpenLguModal(selectedComplaint, "action");
-                          setSelectedComplaint(null);
-                        }}
-                        className="btn"
-                        style={{
-                          backgroundColor: "#059669",
-                          color: "#FFFFFF",
-                        }}
-                      >
-                        Take Action
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          handleOpenLguModal(selectedComplaint, "resolve");
-                          setSelectedComplaint(null);
-                        }}
-                        className="btn"
-                        style={{
-                          backgroundColor: "#10B981",
-                          color: "#FFFFFF",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        <CheckCircle2 size={14} />
-                        <span>Resolved</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          const target = selectedComplaint;
-                          setSelectedComplaint(null);
-                          handleOpenDelete(target);
-                        }}
-                        className="btn"
-                        style={{
-                          backgroundColor: "rgba(239, 68, 68, 0.12)",
-                          color: "#DC2626",
-                          border: "1px solid rgba(239, 68, 68, 0.3)",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        <Trash2 size={14} />
-                        <span>Remove Complaint</span>
                       </button>
                     </>
                   )}
