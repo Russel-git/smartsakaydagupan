@@ -34,28 +34,23 @@ const register = async (req, res, next) => {
       },
     });
 
-    // Dispatch code to user's email via emailService
-    let emailSent = false;
-    try {
-      await emailService.sendOtp(email, otpCode, 'registration');
-      emailSent = true;
-    } catch (mailErr) {
-      console.warn(`⚠️ [REGISTRATION] Email dispatch issue (${mailErr.message}).`);
-    }
-
+    // Dispatch code to user's email in the background (non-blocking)
+    // OTP is already saved in the database, so the user can proceed immediately
     const isDev = config.nodeEnv !== 'production';
+    emailService.sendOtp(email, otpCode, 'registration').then(() => {
+      console.log(`✉️ [REGISTRATION] OTP email dispatched to ${email}`);
+    }).catch((mailErr) => {
+      console.warn(`⚠️ [REGISTRATION] Email dispatch issue (${mailErr.message}). User can use "Resend OTP".`);
+    });
+
     return apiResponse.success(
       res,
       {
         email: email.toLowerCase(),
         requiresVerification: true,
-        demoOtp: (!emailSent && isDev) ? otpCode : undefined,
+        demoOtp: isDev ? otpCode : undefined,
       },
-      emailSent
-        ? 'Verification code sent to your email. Please check your inbox to complete account creation.'
-        : (isDev
-            ? `Verification code generated (${otpCode}). Please enter it to complete account creation.`
-            : 'Verification code sent. Please check your email to complete account creation.'),
+      'Verification code sent to your email. Please check your inbox to complete account creation.',
       201
     );
   } catch (error) {
@@ -161,26 +156,21 @@ const resendOtp = async (req, res, next) => {
       registrationData,
     });
 
-    let emailSent = false;
-    try {
-      await emailService.sendOtp(email, otpCode, type);
-      emailSent = true;
-    } catch (mailErr) {
-      console.warn(`⚠️ [RESEND OTP] Email dispatch issue (${mailErr.message}).`);
-    }
-
+    // Dispatch email in the background (non-blocking)
     const isDev = config.nodeEnv !== 'production';
+    emailService.sendOtp(email, otpCode, type).then(() => {
+      console.log(`✉️ [RESEND OTP] Email dispatched to ${email}`);
+    }).catch((mailErr) => {
+      console.warn(`⚠️ [RESEND OTP] Email dispatch issue (${mailErr.message}).`);
+    });
+
     return apiResponse.success(
       res,
       {
         email: email.toLowerCase(),
-        demoOtp: (!emailSent && isDev) ? otpCode : undefined,
+        demoOtp: isDev ? otpCode : undefined,
       },
-      emailSent
-        ? 'OTP sent successfully to your email.'
-        : (isDev
-            ? `Verification code generated (${otpCode}). Please enter it to continue.`
-            : 'OTP sent. Please check your email to continue.')
+      'OTP sent successfully to your email.'
     );
   } catch (error) {
     next(error);
@@ -275,11 +265,12 @@ const forgotPassword = async (req, res, next) => {
       email: email.toLowerCase(), code: otpCode, type: 'password_reset',
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     });
-    try {
-      await emailService.sendOtp(email, otpCode, 'password_reset');
-    } catch (mailErr) {
+    // Send email in the background (non-blocking)
+    emailService.sendOtp(email, otpCode, 'password_reset').then(() => {
+      console.log(`✉️ [FORGOT PASSWORD] Reset code dispatched to ${email}`);
+    }).catch((mailErr) => {
       console.warn(`⚠️ [FORGOT PASSWORD] Email dispatch issue (${mailErr.message}).`);
-    }
+    });
     return apiResponse.success(res, null, 'If an account exists with this email, a reset code has been sent.');
   } catch (error) { next(error); }
 };
