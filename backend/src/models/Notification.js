@@ -34,10 +34,16 @@ const notificationSchema = new mongoose.Schema(
     rejectionReason: { type: String, default: '', trim: true },
     severity: {
       type: String,
-      enum: ['info', 'warning', 'critical'],
+      enum: ['info', 'warning', 'critical', 'advisory'],
       default: 'info',
     },
     locationArea: { type: String, default: '', trim: true },
+    municipality: {
+      type: String,
+      trim: true,
+      default: 'Dagupan',
+      index: true,
+    },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     expiresAt: {
       type: Date,
@@ -56,5 +62,6 @@ const notificationSchema = new mongoose.Schema(
 
 notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ category: 1, createdAt: -1 });
+notificationSchema.index({ municipality: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Notification', notificationSchema);

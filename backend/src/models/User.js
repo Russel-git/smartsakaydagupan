@@ -49,6 +49,11 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    municipality: {
+      type: String,
+      trim: true,
+      default: "Dagupan",
+    },
     theme: {
       type: String,
       enum: ["theme1", "theme2", "theme3", "theme4"],

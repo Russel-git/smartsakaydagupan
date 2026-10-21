@@ -10,6 +10,7 @@ import {
   Image,
   useWindowDimensions,
   TextInput,
+  ScrollView,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -20,6 +21,7 @@ import { useFeedback } from "../../contexts/FeedbackContext";
 import { Card, LoadingSpinner } from "../../components/common/SharedComponents";
 import { routesAPI, locationSharingAPI } from "../../api/services";
 import { FONTS, SPACING, RADIUS, API_BASE_URL } from "../../utils/constants";
+import { getMunicipality, saveMunicipality } from "../../utils/storage";
 import LocationSharingModal from "./LocationSharingModal";
 import { useSharedLocation } from "../../contexts/LocationContext";
 import {
@@ -28,6 +30,14 @@ import {
 } from "../../components/common/LocationPermissionPrompt";
 
 const GPS_ICON = require("../../../assets/gps_access_icon.png");
+
+const MUNICIPALITY_CENTROIDS = {
+  Dagupan: { lat: 16.0433, lng: 120.3397, name: "Dagupan City" },
+  Calasiao: { lat: 16.0125, lng: 120.3586, name: "Calasiao" },
+  Binmaley: { lat: 16.0294, lng: 120.2689, name: "Binmaley" },
+  Lingayen: { lat: 16.0217, lng: 120.2319, name: "Lingayen" },
+  Mangaldan: { lat: 16.0694, lng: 120.4022, name: "Mangaldan" },
+};
 
 // Haversine distance calculator in km
 const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
@@ -38,9 +48,9 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(R * c * 10) / 10;
 };
@@ -63,6 +73,7 @@ const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.45) => {
 
 const RouteMapScreen = ({ navigation }) => {
   const {
+    location: sharedLocation,
     setLocation: setSharedLocation,
     locationPermission,
     ensureLocationPermission,
@@ -86,19 +97,40 @@ const RouteMapScreen = ({ navigation }) => {
   const [routes, setRoutes] = useState([]);
   const [busTerminals, setBusTerminals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedMunicipality, setSelectedMunicipality] = useState(user?.municipality || "Dagupan");
   const [activeTab, setActiveTab] = useState("jeepneys"); // 'jeepneys' | 'buses'
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isListCollapsed, setIsListCollapsed] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [commuterLocation, setCommuterLocation] = useState({
-    lat: 16.0433,
-    lng: 120.3342,
-    accuracy: 25,
-    isReal: false,
+    lat: sharedLocation?.lat ?? null,
+    lng: sharedLocation?.lng ?? null,
+    accuracy: sharedLocation?.accuracy ?? 25,
+    isReal: Boolean(sharedLocation?.isReal),
   });
-  const [locationStatus, setLocationStatus] = useState("Acquiring GPS...");
+  const [locationStatus, setLocationStatus] = useState(
+    sharedLocation?.isReal ? `Live GPS Active (±${sharedLocation?.accuracy || 20}m)` : "Acquiring GPS..."
+  );
   const [recenterCount, setRecenterCount] = useState(0);
+
+  // Sync if sharedLocation acquires real GPS
+  useEffect(() => {
+    if (sharedLocation && sharedLocation.isReal && sharedLocation.lat != null && sharedLocation.lng != null) {
+      setCommuterLocation(sharedLocation);
+      setLocationStatus(`Live GPS Active (±${sharedLocation.accuracy || 20}m)`);
+    }
+  }, [sharedLocation]);
+
+  useEffect(() => {
+    (async () => {
+      const saved = await getMunicipality();
+      const muni = saved || user?.municipality || "Dagupan";
+      if (muni && MUNICIPALITY_CENTROIDS[muni]) {
+        setSelectedMunicipality(muni);
+      }
+    })();
+  }, [user?.municipality]);
 
   // Peer Location Sharing states
   const [showLocationSharingModal, setShowLocationSharingModal] =
@@ -108,12 +140,15 @@ const RouteMapScreen = ({ navigation }) => {
   useEffect(() => {
     if (
       commuterLocation &&
+      commuterLocation.isReal &&
       Number.isFinite(commuterLocation.lat) &&
       Number.isFinite(commuterLocation.lng)
     ) {
-      setSharedLocation(commuterLocation);
+      if (!sharedLocation || sharedLocation.lat !== commuterLocation.lat || sharedLocation.lng !== commuterLocation.lng) {
+        setSharedLocation(commuterLocation);
+      }
     }
-  }, [commuterLocation, setSharedLocation]);
+  }, [commuterLocation, sharedLocation, setSharedLocation]);
 
   // Real-time continuous location tracking
   useEffect(() => {
@@ -173,14 +208,14 @@ const RouteMapScreen = ({ navigation }) => {
     };
   }, [locationPermission]);
   // Fetch routes and bus terminals
-  const loadData = async () => {
+  const loadData = async (muni = selectedMunicipality) => {
     try {
       const [routesRes, terminalsRes] = await Promise.all([
-        routesAPI.getAllRoutes(),
+        routesAPI.getAllRoutes({ municipality: muni }),
         routesAPI.getBusTerminals(
           commuterLocation.isReal
-            ? { lat: commuterLocation.lat, lng: commuterLocation.lng }
-            : {},
+            ? { lat: commuterLocation.lat, lng: commuterLocation.lng, municipality: muni }
+            : { municipality: muni },
         ),
       ]);
       setRoutes(Array.isArray(routesRes.data?.data) ? routesRes.data.data : []);
@@ -196,8 +231,15 @@ const RouteMapScreen = ({ navigation }) => {
   };
 
   useEffect(() => {
-    loadData();
-  }, [activeTab]);
+    loadData(selectedMunicipality);
+  }, [activeTab, selectedMunicipality]);
+
+  const handleSelectMunicipality = async (muni) => {
+    if (muni === selectedMunicipality) return;
+    setSelectedMunicipality(muni);
+    await saveMunicipality(muni);
+    setRecenterCount((c) => c + 1);
+  };
 
   // Real-time synchronization for peer locations
   const fetchPeerLocations = async () => {
@@ -218,40 +260,42 @@ const RouteMapScreen = ({ navigation }) => {
       return;
     }
 
-    if (commuterLocation.lat && commuterLocation.lng) {
+    if (commuterLocation.isReal && commuterLocation.lat && commuterLocation.lng) {
       locationSharingAPI
         .updateMyLocation({
           lat: commuterLocation.lat,
           lng: commuterLocation.lng,
         })
-        .catch(() => {});
+        .catch(() => { });
     }
     fetchPeerLocations();
 
     const interval = setInterval(() => {
-      if (commuterLocation.lat && commuterLocation.lng) {
+      if (commuterLocation.isReal && commuterLocation.lat && commuterLocation.lng) {
         locationSharingAPI
           .updateMyLocation({
             lat: commuterLocation.lat,
             lng: commuterLocation.lng,
           })
-          .catch(() => {});
+          .catch(() => { });
       }
       fetchPeerLocations();
     }, 8000);
 
     return () => clearInterval(interval);
-  }, [commuterLocation.lat, commuterLocation.lng, isAuthenticated, user]);
+  }, [commuterLocation.lat, commuterLocation.lng, commuterLocation.isReal, isAuthenticated, user]);
 
   // Compute live distances for terminals based on current commuterLocation
   const terminalsWithLiveDistance = busTerminals
     .map((t) => {
-      const dist = calculateDistanceKm(
-        commuterLocation.lat,
-        commuterLocation.lng,
-        t.lat,
-        t.lng,
-      );
+      const dist = (commuterLocation.isReal && commuterLocation.lat != null && commuterLocation.lng != null)
+        ? calculateDistanceKm(
+            commuterLocation.lat,
+            commuterLocation.lng,
+            t.lat,
+            t.lng,
+          )
+        : null;
       return {
         ...t,
         distanceKm: dist !== null ? dist : t.distanceKm,
@@ -397,20 +441,21 @@ const RouteMapScreen = ({ navigation }) => {
 
   const pushLocationToMap = () => {
     const { lat, lng, accuracy, isReal } = commuterLocation;
+    if (lat == null || lng == null) return;
     if (Platform.OS === "web") {
       iframeRef.current?.contentWindow?.postMessage(
         JSON.stringify({
           type: "UPDATE_USER_LOCATION",
           lat,
           lng,
-          accuracy,
-          isReal,
+          accuracy: accuracy || 20,
+          isReal: Boolean(isReal),
         }),
         "*",
       );
     } else {
       webViewRef.current?.injectJavaScript(
-        `window.updateUserLocation && window.updateUserLocation(${lat},${lng},${accuracy},${isReal}); true;`,
+        `window.updateUserLocation && window.updateUserLocation(${lat},${lng},${accuracy || 20},${Boolean(isReal)}); true;`,
       );
     }
   };
@@ -419,10 +464,15 @@ const RouteMapScreen = ({ navigation }) => {
 
   // Generate HTML for the embedded Leaflet Map
   const generateLeafletHtml = () => {
-    const lat = commuterLocation.lat || 16.0433;
-    const lng = commuterLocation.lng || 120.3342;
-    const accuracy = commuterLocation.accuracy || 25;
-    const isRealGPS = commuterLocation.isReal;
+    const centroid = MUNICIPALITY_CENTROIDS[selectedMunicipality] || {
+      lat: 16.0433,
+      lng: 120.3397,
+      name: "Dagupan City",
+    };
+    const isRealGPS = Boolean(commuterLocation?.isReal && commuterLocation?.lat != null && commuterLocation?.lng != null);
+    const lat = isRealGPS ? commuterLocation.lat : (centroid.lat || 16.0433);
+    const lng = isRealGPS ? commuterLocation.lng : (centroid.lng || 120.3397);
+    const accuracy = commuterLocation?.accuracy || 25;
 
     const routesJson = JSON.stringify(
       routes.map((r) => ({
@@ -544,16 +594,9 @@ const RouteMapScreen = ({ navigation }) => {
             setTimeout(function() { if (map) map.invalidateSize(); }, 200);
             setTimeout(function() { if (map) map.invalidateSize(); }, 600);
 
-          // 1. Accuracy Circle for Commuter GPS
-          var commuterCircle = L.circle([userLat, userLng], {
-            radius: Math.max(userAccuracy, 20),
-            color: '#2563EB',
-            fillColor: '#3B82F6',
-            fillOpacity: 0.15,
-            weight: 1.5
-          }).addTo(map);
+          var commuterCircle = null;
+          var commuterMarker = null;
 
-          // 2. High-Visibility Pulsating Commuter Beacon
           var commuterIcon = L.divIcon({
             className: 'commuter-live-beacon',
             html: '<div class="commuter-beacon-wrapper"><div class="commuter-pulse-ring"></div><div class="commuter-pulse-ring-outer"></div><div class="commuter-core-dot"><div class="commuter-core-inner"></div></div></div>',
@@ -561,42 +604,71 @@ const RouteMapScreen = ({ navigation }) => {
             iconAnchor: [18, 18]
           });
 
-          var commuterMarker = L.marker([userLat, userLng], {
-            icon: commuterIcon,
-            zIndexOffset: 3000
-          }).addTo(map);
+          function buildCommuterPopup(pLat, pLng, pAcc) {
+            return '<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif; min-width:180px;">' +
+              '<div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">' +
+              '<span style="background:#2563EB; color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:3px;">YOU ARE HERE</span>' +
+              '<span style="color:#10B981; font-weight:700; font-size:11px;">● LIVE GPS</span>' +
+              '</div>' +
+              '<div style="font-size:13px; font-weight:800; color:#0f172a;">Your Current Location</div>' +
+              '<div style="font-family:monospace; font-size:11px; color:#64748b; margin-top:2px;">' +
+              pLat.toFixed(5) + '°N, ' + pLng.toFixed(5) + '°E (±' + pAcc + 'm)' +
+              '</div>' +
+              '<div style="font-size:11px; color:#3b82f6; margin-top:4px;">' +
+              ${JSON.stringify((MUNICIPALITY_CENTROIDS[selectedMunicipality]?.name || selectedMunicipality) + ", Pangasinan")} + '</div>' +
+              '</div>';
+          }
 
-          var commuterPopupHtml = 
-            '<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif; min-width:180px;">' +
-            '<div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">' +
-            '<span style="background:#2563EB; color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:3px;">YOU ARE HERE</span>' +
-            '<span style="color:#10B981; font-weight:700; font-size:11px;">● LIVE GPS</span>' +
-            '</div>' +
-            '<div style="font-size:13px; font-weight:800; color:#0f172a;">Your Current Location</div>' +
-            '<div style="font-family:monospace; font-size:11px; color:#64748b; margin-top:2px;">' +
-            userLat.toFixed(5) + '°N, ' + userLng.toFixed(5) + '°E (±' + userAccuracy + 'm)' +
-            '</div>' +
-            '<div style="font-size:11px; color:#3b82f6; margin-top:4px;">Dagupan City, Pangasinan</div>' +
-            '</div>';
+          function setupCommuter(pLat, pLng, pAcc) {
+            if (!commuterCircle) {
+              commuterCircle = L.circle([pLat, pLng], {
+                radius: Math.max(pAcc, 20),
+                color: '#2563EB',
+                fillColor: '#3B82F6',
+                fillOpacity: 0.15,
+                weight: 1.5
+              }).addTo(map);
+            } else {
+              commuterCircle.setLatLng([pLat, pLng]);
+              commuterCircle.setRadius(Math.max(pAcc, 20));
+            }
 
-          commuterMarker.bindPopup(commuterPopupHtml);
+            if (!commuterMarker) {
+              commuterMarker = L.marker([pLat, pLng], {
+                icon: commuterIcon,
+                zIndexOffset: 3000
+              }).addTo(map);
+              commuterMarker.bindPopup(buildCommuterPopup(pLat, pLng, pAcc));
+            } else {
+              commuterMarker.setLatLng([pLat, pLng]);
+              commuterMarker.setPopupContent(buildCommuterPopup(pLat, pLng, pAcc));
+            }
+          }
+
+          if (isRealFix) {
+            setupCommuter(userLat, userLng, userAccuracy);
+          }
 
           // Center On Commuter Function for Native / Web bridge
           window.centerOnCommuter = function() {
-            map.setView([userLat, userLng], 16, { animate: true });
-            commuterMarker.openPopup();
+            if (commuterMarker) {
+              map.setView(commuterMarker.getLatLng(), 16, { animate: true });
+              commuterMarker.openPopup();
+            } else {
+              map.setView([userLat, userLng], 14, { animate: true });
+            }
           };
 
-                    var hasCentered = false;
+          var hasCentered = false;
           window.updateUserLocation = function(lat, lng, acc, real) {
             if (typeof lat !== 'number' || typeof lng !== 'number') return;
             userLat = lat; userLng = lng; userAccuracy = acc || 20;
-            commuterMarker.setLatLng([lat, lng]);
-            commuterCircle.setLatLng([lat, lng]);
-            commuterCircle.setRadius(Math.max(userAccuracy, 20));
-            if (real && !hasCentered && !selectedId) {
-              hasCentered = true;
-              map.setView([lat, lng], 15);
+            if (real) {
+              setupCommuter(lat, lng, userAccuracy);
+              if (!hasCentered && !selectedId) {
+                hasCentered = true;
+                map.setView([lat, lng], 15);
+              }
             }
           };
           window.addEventListener('message', function(e) {
@@ -604,6 +676,8 @@ const RouteMapScreen = ({ navigation }) => {
               var d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
               if (d && d.type === 'UPDATE_USER_LOCATION') {
                 window.updateUserLocation(d.lat, d.lng, d.accuracy, d.isReal);
+              } else if (d && d.type === 'CENTER_ON_COMMUTER') {
+                window.centerOnCommuter();
               }
             } catch (_) {}
           });
@@ -811,6 +885,7 @@ const RouteMapScreen = ({ navigation }) => {
       selectedItem,
       selectedCategory,
       activeTab,
+      selectedMunicipality,
       recenterCount,
       commuterLocation.isReal,
     ],
@@ -859,8 +934,9 @@ const RouteMapScreen = ({ navigation }) => {
             resizeMode="contain"
           />
           <Text style={styles.recenterHeaderText}>
-            {commuterLocation.lat.toFixed(4)}°N,{" "}
-            {commuterLocation.lng.toFixed(4)}°E
+            {commuterLocation.isReal && commuterLocation.lat != null
+              ? `${commuterLocation.lat.toFixed(4)}°N, ${commuterLocation.lng.toFixed(4)}°E`
+              : (MUNICIPALITY_CENTROIDS[selectedMunicipality]?.name || selectedMunicipality)}
           </Text>
         </TouchableOpacity>
       </View>
@@ -960,6 +1036,62 @@ const RouteMapScreen = ({ navigation }) => {
         </View>
       </View>
 
+      {/* Active Municipality Scope Bar */}
+      <View
+        style={[
+          styles.municipalityBar,
+          {
+            backgroundColor: colors.surface,
+            borderBottomColor: colors.border,
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: SPACING.md,
+            paddingVertical: SPACING.xs,
+          },
+        ]}
+      >
+        <View style={styles.municipalityLabelRow}>
+          <MaterialCommunityIcons
+            name="map-marker-radius"
+            size={16}
+            color={colors.primary}
+          />
+          <Text style={[styles.municipalityLabel, { color: colors.textSecondary }]}>
+            Active LGU:
+          </Text>
+          <View
+            style={[
+              styles.municipalityPill,
+              {
+                backgroundColor: colors.primary,
+                borderColor: colors.primary,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.municipalityPillText,
+                {
+                  color: "#FFFFFF",
+                  fontWeight: "700",
+                },
+              ]}
+            >
+              {selectedMunicipality}
+            </Text>
+          </View>
+        </View>
+        <Text
+          style={{
+            fontSize: FONTS.sizes.xs,
+            color: colors.textSecondary,
+            marginLeft: "auto",
+          }}
+        >
+          Transit Routes: {selectedMunicipality}
+        </Text>
+      </View>
+
       {/* Embedded Interactive Leaflet Map (Takes Full Screen when routes list is toggled down) */}
       <View
         style={[
@@ -1001,7 +1133,7 @@ const RouteMapScreen = ({ navigation }) => {
           <iframe
             ref={iframeRef}
             onLoad={pushLocationToMap}
-            key={`leaflet-map-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || "all"}-${isListCollapsed ? "full" : "norm"}-${peers.length}`}
+            key={`leaflet-map-${selectedMunicipality}-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || "all"}-${isListCollapsed ? "full" : "norm"}-${peers.length}`}
             title="Dagupan Transit Leaflet Map"
             srcDoc={mapHtml}
             allow="geolocation"
@@ -1011,7 +1143,7 @@ const RouteMapScreen = ({ navigation }) => {
           <WebView
             ref={webViewRef}
             onLoadEnd={pushLocationToMap}
-            key={`leaflet-webview-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || "all"}-${isListCollapsed ? "full" : "norm"}-${peers.length}`}
+            key={`leaflet-webview-${selectedMunicipality}-${activeTab}-${selectedCategory}-${recenterCount}-${selectedItem?._id || "all"}-${isListCollapsed ? "full" : "norm"}-${peers.length}`}
             originWhitelist={["*"]}
             source={{ html: mapHtml }}
             style={{
@@ -1835,6 +1967,39 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: "#8B5CF6",
+  },
+  municipalityBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  municipalityLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  municipalityLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  municipalityScroll: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingRight: 10,
+  },
+  municipalityPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  municipalityPillText: {
+    fontSize: 11,
   },
 });
 

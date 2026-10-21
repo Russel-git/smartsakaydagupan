@@ -42,6 +42,7 @@ const NotificationsPage = () => {
 
   const [sending, setSending] = useState(false);
   const [alertMessage, setAlertMessage] = useState(null);
+  const [targetMunicipality, setTargetMunicipality] = useState(user?.municipality || "Dagupan");
 
   // Data states
   const [recentNotifications, setRecentNotifications] = useState([]);
@@ -111,11 +112,12 @@ const NotificationsPage = () => {
         message: messageText,
         severity,
         locationArea,
+        municipality: user?.municipality || "Dagupan",
       });
 
       showSuccess(
         "Advisory Submitted to LGU",
-        "Your road alert has been sent to Dagupan City LGU for review and broadcast."
+        `Your road alert has been sent to LGU ${user?.municipality || "Dagupan"} for review and broadcast.`
       );
 
       setAlertMessage({
@@ -169,21 +171,18 @@ const NotificationsPage = () => {
     setSending(true);
     setAlertMessage(null);
 
-    const type =
-      category === "weather_updates"
-        ? "weather_alert"
-        : category === "complaint_updates"
-        ? "complaint_update"
-        : "broadcast";
+    const finalType = isLgu ? "broadcast" : (category === "weather_updates" ? "weather_alert" : category === "complaint_updates" ? "complaint_update" : "broadcast");
+    const finalCategory = isLgu ? "broadcast_by_admin" : category;
 
     try {
       await notificationsAPI.broadcast({
         title,
         message: messageText,
-        type,
-        category,
+        type: finalType,
+        category: finalCategory,
         severity,
         locationArea,
+        municipality: isLgu ? (user?.municipality || "Dagupan") : targetMunicipality,
         photoUrl: evidencePhotoUrl || null,
         evidencePhoto: evidencePhotoUrl || null,
         metadata: evidencePhotoUrl ? { photoUrl: evidencePhotoUrl, evidencePhoto: evidencePhotoUrl } : {},
@@ -191,7 +190,7 @@ const NotificationsPage = () => {
 
       showSuccess(
         "Broadcast Dispatched",
-        "Official announcement published and delivered to all active commuters."
+        `Official announcement published and delivered to ${isLgu ? `LGU ${user?.municipality || "Dagupan"}` : targetMunicipality} commuters.`
       );
 
       setAlertMessage({
@@ -303,36 +302,37 @@ const NotificationsPage = () => {
     },
   ];
 
+  const activeMuniName = user?.municipality || "Dagupan";
   const lguTemplates = [
     {
-      label: "Broadcast by LGU: General Advisory",
+      label: "Broadcast by LGU: General Transit Advisory",
       title: "SmartSakay Official Transit Advisory",
       message:
-        "Notice to all commuters: Expect normal PUJ and loop operations today across downtown Dagupan and intercity corridors.",
+        `Notice to all commuters: Expect normal PUJ and loop operations today across ${activeMuniName} and intercity corridors.`,
       category: "broadcast_by_admin",
       severity: "info",
     },
     {
-      label: "Weather Updates: Heavy Rain / Flood Warning",
+      label: "Broadcast by LGU: Weather / Flood Road Advisory",
       title: "Severe Weather / Heavy Rain Travel Advisory",
       message:
-        "Heavy localized rainfall and high tide expected across low-lying Dagupan corridors today. Commuters are advised to exercise caution and expect minor delays.",
-      category: "weather_updates",
+        `Heavy localized rainfall and high tide expected across low-lying ${activeMuniName} corridors today. Commuters are advised to exercise caution and expect minor delays.`,
+      category: "broadcast_by_admin",
       severity: "warning",
     },
     {
-      label: "Complaint Updates: POSO Investigation Resolution",
-      title: "Dagupan POSO Grievance Resolution Notice",
+      label: "Broadcast by LGU: Temporary Road Rerouting",
+      title: "Temporary Transit Loop Rerouting Advisory",
       message:
-        "Action taken on reported transit grievance: Driver has been cited and referred to Dagupan POSO for administrative compliance.",
-      category: "complaint_updates",
-      severity: "info",
+        `Special transit advisory for ${activeMuniName}: Temporary PUJ reroute in effect along central corridors. Commuters are advised to plan accordingly.`,
+      category: "broadcast_by_admin",
+      severity: "warning",
     },
     {
       label: "Broadcast by LGU: LTFRB Fare Adjustment",
       title: "Official LTFRB Fare Adjustment Notice",
       message:
-        "Please be advised that updated jeepney fare tariffs are now in effect for all Dagupan City and Pangasinan routes.",
+        `Please be advised that updated jeepney fare tariffs are now in effect for all ${activeMuniName} transit routes.`,
       category: "broadcast_by_admin",
       severity: "info",
     },
@@ -753,6 +753,68 @@ const NotificationsPage = () => {
           </div>
 
           <form onSubmit={isPoso ? handlePosoSubmitAlert : handleDirectBroadcast}>
+            {/* JURISDICTION SELECTOR OR BADGE */}
+            {isAdmin && (
+              <div className="form-group" style={{ marginBottom: "14px" }}>
+                <label className="form-label">Target Municipal Jurisdiction</label>
+                <select
+                  className="form-select"
+                  value={targetMunicipality}
+                  onChange={(e) => setTargetMunicipality(e.target.value)}
+                  style={{ fontWeight: "600" }}
+                >
+                  <option value="all">🌐 All Municipalities (System-Wide)</option>
+                  <option value="Dagupan">Dagupan City</option>
+                  <option value="Calasiao">Calasiao</option>
+                  <option value="Binmaley">Binmaley</option>
+                  <option value="Lingayen">Lingayen</option>
+                  <option value="Mangaldan">Mangaldan</option>
+                </select>
+              </div>
+            )}
+
+            {isLgu && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  backgroundColor: colors.primary + "15",
+                  border: `1px solid ${colors.primary}33`,
+                  marginBottom: "14px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  color: colors.primary,
+                }}
+              >
+                <span>📍 Jurisdiction:</span>
+                <span>Restricted to LGU {user?.municipality || "Dagupan"} Commuters</span>
+              </div>
+            )}
+
+            {isPoso && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  backgroundColor: "rgba(217, 119, 6, 0.15)",
+                  border: "1px solid rgba(217, 119, 6, 0.3)",
+                  marginBottom: "14px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  color: "#D97706",
+                }}
+              >
+                <span>🛡️ Field Enforcer:</span>
+                <span>Drafting for LGU {user?.municipality || "Dagupan"} Approval Desk</span>
+              </div>
+            )}
+
             {/* SEVERITY & LOCATION FIELDS */}
             <div
               style={{

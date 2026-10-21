@@ -25,11 +25,12 @@ import { useToast } from "../contexts/ToastContext";
 import { useTheme } from "../contexts/theme/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
 import { getEvidenceImageUrl } from "../utils/imageUrl";
+import { formatLguJurisdiction } from "../utils/lguHelpers";
 
 const AnnouncementsPage = () => {
   const { colors } = useTheme();
   const { showSuccess, showError } = useToast();
-  const { isAdmin, isLgu, isPoso } = useAuth();
+  const { isAdmin, isLgu, isPoso, admin } = useAuth();
 
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -206,7 +207,7 @@ const AnnouncementsPage = () => {
                   color: colors.textMuted,
                 }}
               >
-                Official Dagupan City public transit advisories, rerouting notices, and emergency broadcasts.
+                Official {admin?.municipality ? formatLguJurisdiction(admin.municipality) : "Dagupan City"} public transit advisories, rerouting notices, and emergency broadcasts.
               </p>
             </div>
           </div>

@@ -308,48 +308,7 @@ const LeafletMap = ({
           }
         }
 
-        // ------------------------------------------------------
-        // WAYPOINTS (Numbered Checkpoints for Selected Route)
-        // ------------------------------------------------------
-        if (isSelected && route.waypoints && route.waypoints.length > 0) {
-          route.waypoints.forEach((wp, wpIdx) => {
-            const wLat = parseFloat(wp.lat);
-            const wLng = parseFloat(wp.lng);
-            if (isNaN(wLat) || isNaN(wLng)) return;
 
-            const wpIcon = L.divIcon({
-              className: "route-waypoint-pin",
-              html: `
-                <div style="
-                  background: #3B82F6;
-                  color: #FFFFFF;
-                  width: 20px;
-                  height: 20px;
-                  border-radius: 50%;
-                  border: 2px solid #FFFFFF;
-                  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  font-size: 10px;
-                  font-weight: 700;
-                ">
-                  ${wpIdx + 1}
-                </div>
-              `,
-              iconSize: [20, 20],
-              iconAnchor: [10, 10],
-            });
-
-            const wpMarker = L.marker([wLat, wLng], { icon: wpIcon });
-            wpMarker.bindPopup(`
-              <div style="font-family: sans-serif; font-size: 12px; color: ${colors.textPrimary};">
-                <strong>Waypoint ${wpIdx + 1}:</strong> ${wp.name || "Checkpoint"}
-              </div>
-            `);
-            wpMarker.addTo(layerGroupRef.current);
-          });
-        }
       });
 
       // ------------------------------------------------------

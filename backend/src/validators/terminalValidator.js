@@ -12,6 +12,7 @@ const createTerminalSchema = Joi.object({
   destinations: Joi.array().items(Joi.string().trim().max(100)).default([]),
   amenities: Joi.array().items(Joi.string().trim().max(100)).default([]),
   description: Joi.string().trim().allow('').max(2000),
+  municipality: Joi.string().trim().max(100).default('Dagupan'),
   isActive: Joi.boolean().default(true),
 });
 
@@ -27,6 +28,7 @@ const updateTerminalSchema = Joi.object({
   destinations: Joi.array().items(Joi.string().trim().max(100)),
   amenities: Joi.array().items(Joi.string().trim().max(100)),
   description: Joi.string().trim().allow('').max(2000),
+  municipality: Joi.string().trim().max(100),
   isActive: Joi.boolean(),
 }).min(1);
 

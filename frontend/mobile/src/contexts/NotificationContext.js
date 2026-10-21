@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { notificationsAPI } from '../api/services';
 import { useAuth } from './AuthContext';
+import { getMunicipality } from '../utils/storage';
 
 const NotificationContext = createContext(null);
 
@@ -11,29 +12,31 @@ export const useNotifications = () => {
 };
 
 export const NotificationProvider = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
 
   const fetchUnreadCount = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
-      const { data } = await notificationsAPI.getUnreadCount();
+      const muni = (await getMunicipality()) || user?.municipality || 'Dagupan';
+      const { data } = await notificationsAPI.getUnreadCount({ municipality: muni });
       setUnreadCount(data.data?.count || 0);
     } catch (e) {
-      // Silently fail
+      console.warn('Error fetching unread count:', e?.message || e);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.municipality]);
 
   const fetchNotifications = useCallback(async (params) => {
     if (!isAuthenticated) return;
     try {
-      const { data } = await notificationsAPI.getNotifications(params);
+      const muni = (await getMunicipality()) || user?.municipality || 'Dagupan';
+      const { data } = await notificationsAPI.getNotifications({ municipality: muni, ...params });
       setNotifications(data.data || []);
     } catch (e) {
-      // Silently fail
+      console.warn('Error fetching notifications:', e?.message || e);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.municipality]);
 
   const markAsRead = useCallback(async (id) => {
     try {

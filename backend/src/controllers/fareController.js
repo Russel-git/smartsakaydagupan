@@ -50,8 +50,29 @@ const calculateFare = async (req, res, next) => {
 
 const getFareMatrix = async (req, res, next) => {
   try {
-    const matrix = await FareMatrix.find({ isActive: true })
-      .populate('routeId', 'name code category distanceKm').sort({ 'routeId.name': 1 });
+    let targetMuni = req.query.municipality;
+    if (req.user && (req.user.role === 'lgu' || req.user.role === 'poso')) {
+      targetMuni = req.user.municipality || 'Dagupan';
+    } else if (req.user && req.user.role === 'commuter') {
+      targetMuni = req.user.municipality || targetMuni || 'Dagupan';
+    }
+
+    let matrix = await FareMatrix.find({ isActive: true })
+      .populate('routeId', 'name code category distanceKm municipalities')
+      .sort({ 'routeId.name': 1 });
+
+    if (targetMuni && targetMuni !== 'all') {
+      const cleanMuni = targetMuni.trim().toLowerCase();
+      matrix = matrix.filter((item) => {
+        if (!item.routeId) return false;
+        const munis = item.routeId.municipalities || [];
+        if (cleanMuni === 'dagupan') {
+          return munis.length === 0 || munis.some((m) => m.toLowerCase() === 'dagupan');
+        }
+        return munis.some((m) => m.toLowerCase() === cleanMuni);
+      });
+    }
+
     return apiResponse.success(res, matrix, 'Fare matrix retrieved');
   } catch (error) { next(error); }
 };

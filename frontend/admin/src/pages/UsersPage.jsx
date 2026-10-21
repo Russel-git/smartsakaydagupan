@@ -45,6 +45,7 @@ const UsersPage = () => {
     email: "",
     password: "",
     role: isAdmin ? "lgu" : "poso",
+    municipality: "Dagupan",
     department: isAdmin ? "City Transport & Public Safety Office (CTPSO)" : "Public Order & Safety Office (POSO)",
     badgeNumber: "",
     assignedZone: "",
@@ -262,6 +263,7 @@ const UsersPage = () => {
         email: "",
         password: "",
         role: isAdmin ? "lgu" : "poso",
+        municipality: "Dagupan",
         department: isAdmin ? "City Transport & Public Safety Office (CTPSO)" : "Public Order & Safety Office (POSO)",
         badgeNumber: "",
         assignedZone: "",
@@ -499,9 +501,26 @@ const UsersPage = () => {
                             </div>
                           </div>
                         ) : (
-                          <span style={{ fontSize: "12px", color: colors.textSecondary }}>
-                            {u.department || "City Transport & Public Safety Office (CTPSO)"}
-                          </span>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px" }}>
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  padding: "2px 8px",
+                                  borderRadius: "6px",
+                                  backgroundColor: "#EEF2FF",
+                                  color: "#4F46E5",
+                                  fontSize: "11px",
+                                  fontWeight: "700",
+                                }}
+                              >
+                                LGU {u.municipality || "Dagupan"}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: "12px", color: colors.textSecondary }}>
+                              {u.department || (u.municipality && u.municipality !== "Dagupan" ? `Municipal Transport (${u.municipality})` : "City Transport & Public Safety Office (CTPSO)")}
+                            </span>
+                          </div>
                         )}
                       </td>
 
@@ -776,16 +795,46 @@ const UsersPage = () => {
                 </div>
 
                 {isAdmin ? (
-                  <div>
-                    <label className="form-label">Department / Agency</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="City Transport & Public Safety Office (CTPSO)"
-                      value={createForm.department}
-                      onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}
-                    />
-                  </div>
+                  <>
+                    <div>
+                      <label className="form-label">Municipality / City Jurisdiction *</label>
+                      <select
+                        className="form-input"
+                        value={createForm.municipality}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const newDept =
+                            val === "Dagupan"
+                              ? "City Transport & Public Safety Office (CTPSO)"
+                              : `Municipal Transport & Traffic Management (${val})`;
+                          setCreateForm({
+                            ...createForm,
+                            municipality: val,
+                            department: newDept,
+                          });
+                        }}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <option value="Dagupan">Dagupan City</option>
+                        <option value="Calasiao">Calasiao (Municipality)</option>
+                        <option value="Binmaley">Binmaley (Municipality)</option>
+                        <option value="Lingayen">Lingayen (Capital / Municipality)</option>
+                        <option value="Mangaldan">Mangaldan (Municipality)</option>
+                        <option value="San Fabian">San Fabian (Municipality)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="form-label">Department / Agency</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="City Transport & Public Safety Office (CTPSO)"
+                        value={createForm.department}
+                        onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}
+                      />
+                    </div>
+                  </>
                 ) : (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                     <div>

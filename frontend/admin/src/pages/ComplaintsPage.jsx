@@ -20,6 +20,7 @@ import { complaintsAPI } from "../api/services";
 import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/theme/ThemeContext";
+import { formatLguJurisdiction, getLguActionDeskTitle } from "../utils/lguHelpers";
 
 import DeleteReasonModal from "../components/complaints/DeleteReasonModal";
 import LguActionModal from "../components/complaints/LguActionModal";
@@ -51,7 +52,8 @@ const getImageUrl = (photoUrl) => {
 const ComplaintsPage = () => {
   const { colors } = useTheme();
   const { showSuccess, showError } = useToast();
-  const { isAdmin, isLgu, isPoso, user } = useAuth();
+  const { isAdmin, isLgu, isPoso, user, admin } = useAuth();
+  const activeMunicipality = admin?.municipality || user?.municipality || "Dagupan";
   const location = useLocation();
 
   const [complaints, setComplaints] = useState([]);
@@ -144,7 +146,7 @@ const ComplaintsPage = () => {
 
       showSuccess(
         "Endorsed to LGU",
-        `Complaint "${complaint.subject}" verified and forwarded to Dagupan LGU. Case #: ${
+        `Complaint "${complaint.subject}" verified and forwarded to ${complaint.municipality || activeMunicipality} LGU. Case #: ${
           data.data?.lguCaseNumber || "Assigned"
         }.`,
       );
@@ -212,7 +214,7 @@ const ComplaintsPage = () => {
 
       showSuccess(
         "Violation Report Filed",
-        `Direct road report "${data.data?.subject}" filed and escalated to Dagupan LGU (Case: ${
+        `Direct road report "${data.data?.subject}" filed and escalated to ${activeMunicipality} LGU (Case: ${
           data.data?.lguCaseNumber || "Assigned"
         }).`,
       );
@@ -572,9 +574,9 @@ const ComplaintsPage = () => {
           >
             <span>
               {isPoso
-                ? "POSO Complaints Hub"
+                ? `POSO Complaints Hub - ${formatLguJurisdiction(activeMunicipality)}`
                 : isLgu
-                  ? "LGU Action Desk - City of Dagupan"
+                  ? getLguActionDeskTitle(activeMunicipality)
                   : "Commuter Complaints & Grievance Hub"}
             </span>
 
@@ -607,7 +609,7 @@ const ComplaintsPage = () => {
             }}
           >
             {isPoso
-              ? "Verify commuter complaints on the road, inspect vehicle violations, endorse cases to Dagupan LGU, or directly file field citation reports."
+              ? `Verify commuter complaints on the road, inspect vehicle violations, endorse cases to ${activeMunicipality} LGU, or directly file field citation reports.`
               : isLgu
                 ? "Receive verified complaints endorsed by POSO field enforcers, review road inspection remarks, record official sanctions, and terminate cases."
                 : "Comprehensive audit records of commuter grievances, POSO on-road verifications, and LGU municipal enforcement actions."}
@@ -1041,7 +1043,7 @@ const ComplaintsPage = () => {
                                     gap: "5px",
                                     fontWeight: "600",
                                   }}
-                                  title="Verify on road and endorse to Dagupan LGU"
+                                  title={`Verify on road and endorse to ${c.municipality || activeMunicipality} LGU`}
                                 >
                                   <Send size={12} />
                                   <span>Verify & Endorse</span>
@@ -1069,52 +1071,74 @@ const ComplaintsPage = () => {
                               </>
                             )}
 
-                          {/* LGU ACTIONS (Action Taken & Resolve) */}
+                          {/* LGU ACTIONS (Sequential Flow: Take Action first -> Resolved appears only after action_taken) */}
                           {(isLgu || isAdmin) &&
                             c.status !== "deleted" &&
                             c.status !== "resolved" &&
                             c.status !== "terminated" && (
                               <>
-                                <button
-                                  onClick={() =>
-                                    handleOpenLguModal(c, "action")
-                                  }
-                                  className="btn btn-sm"
-                                  style={{
-                                    backgroundColor: "rgba(16, 185, 129, 0.15)",
-                                    color: "#059669",
-                                    border: "1px solid rgba(16, 185, 129, 0.3)",
-                                    fontSize: "11px",
-                                    padding: "4px 8px",
-                                    fontWeight: "600",
-                                  }}
-                                  title="Record official LGU penalty or action taken"
-                                >
-                                  Take Action
-                                </button>
+                                {c.status !== "action_taken" ? (
+                                  <button
+                                    onClick={() =>
+                                      handleOpenLguModal(c, "action")
+                                    }
+                                    className="btn btn-sm"
+                                    style={{
+                                      backgroundColor: "rgba(16, 185, 129, 0.15)",
+                                      color: "#059669",
+                                      border: "1px solid rgba(16, 185, 129, 0.3)",
+                                      fontSize: "11px",
+                                      padding: "4px 8px",
+                                      fontWeight: "600",
+                                    }}
+                                    title="Record official LGU penalty or action taken"
+                                  >
+                                    Take Action
+                                  </button>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() =>
+                                        handleOpenLguModal(c, "action")
+                                      }
+                                      className="btn btn-sm"
+                                      style={{
+                                        backgroundColor: "rgba(37, 99, 235, 0.12)",
+                                        color: "#2563EB",
+                                        border: "1px solid rgba(37, 99, 235, 0.25)",
+                                        fontSize: "11px",
+                                        padding: "4px 8px",
+                                        fontWeight: "600",
+                                      }}
+                                      title="Update action notes or citation photo"
+                                    >
+                                      Update Action
+                                    </button>
 
-                                <button
-                                  onClick={() =>
-                                    handleOpenLguModal(c, "resolve")
-                                  }
-                                  className="btn btn-sm"
-                                  style={{
-                                    backgroundColor: "#10B981",
-                                    color: "#FFFFFF",
-                                    border: "none",
-                                    fontSize: "11px",
-                                    padding: "4px 10px",
-                                    fontWeight: "600",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "4px",
-                                    borderRadius: "6px",
-                                  }}
-                                  title="Resolve and officially close grievance"
-                                >
-                                  <CheckCircle2 size={13} />
-                                  <span>Resolved</span>
-                                </button>
+                                    <button
+                                      onClick={() =>
+                                        handleOpenLguModal(c, "resolve")
+                                      }
+                                      className="btn btn-sm"
+                                      style={{
+                                        backgroundColor: "#10B981",
+                                        color: "#FFFFFF",
+                                        border: "none",
+                                        fontSize: "11px",
+                                        padding: "4px 10px",
+                                        fontWeight: "600",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                        borderRadius: "6px",
+                                      }}
+                                      title="Resolve and officially close grievance"
+                                    >
+                                      <CheckCircle2 size={13} />
+                                      <span>Resolved</span>
+                                    </button>
+                                  </>
+                                )}
                               </>
                             )}
 
@@ -1244,7 +1268,7 @@ const ComplaintsPage = () => {
                       fontWeight: "700",
                     }}
                   >
-                    Official Dagupan LGU Case Tracking #:{" "}
+                    Official {selectedComplaint.municipality || activeMunicipality} LGU Case Tracking #:{" "}
                     {selectedComplaint.lguCaseNumber}
                   </span>
                 </div>
@@ -1545,44 +1569,62 @@ const ComplaintsPage = () => {
                     </>
                   )}
 
-                {/* LGU IN-MODAL ACTIONS */}
+                {/* LGU IN-MODAL ACTIONS (Sequential Flow: Take Action first -> Resolved appears only after action_taken) */}
                 {(isLgu || isAdmin) &&
                   selectedComplaint.status !== "terminated" &&
                   selectedComplaint.status !== "resolved" &&
                   selectedComplaint.status !== "deleted" && (
                     <>
-                      <button
-                        onClick={() => {
-                          handleOpenLguModal(selectedComplaint, "action");
-                          setSelectedComplaint(null);
-                        }}
-                        className="btn"
-                        style={{
-                          backgroundColor: "#059669",
-                          color: "#FFFFFF",
-                        }}
-                      >
-                        Take Action
-                      </button>
+                      {selectedComplaint.status !== "action_taken" ? (
+                        <button
+                          onClick={() => {
+                            handleOpenLguModal(selectedComplaint, "action");
+                            setSelectedComplaint(null);
+                          }}
+                          className="btn"
+                          style={{
+                            backgroundColor: "#059669",
+                            color: "#FFFFFF",
+                            fontWeight: "600",
+                          }}
+                        >
+                          Take Action
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => {
+                              handleOpenLguModal(selectedComplaint, "action");
+                              setSelectedComplaint(null);
+                            }}
+                            className="btn btn-secondary"
+                            style={{
+                              fontWeight: "600",
+                            }}
+                          >
+                            Update Action
+                          </button>
 
-                      <button
-                        onClick={() => {
-                          handleOpenLguModal(selectedComplaint, "resolve");
-                          setSelectedComplaint(null);
-                        }}
-                        className="btn"
-                        style={{
-                          backgroundColor: "#10B981",
-                          color: "#FFFFFF",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          fontWeight: "600",
-                        }}
-                      >
-                        <CheckCircle2 size={14} />
-                        <span>Resolved</span>
-                      </button>
+                          <button
+                            onClick={() => {
+                              handleOpenLguModal(selectedComplaint, "resolve");
+                              setSelectedComplaint(null);
+                            }}
+                            className="btn"
+                            style={{
+                              backgroundColor: "#10B981",
+                              color: "#FFFFFF",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontWeight: "600",
+                            }}
+                          >
+                            <CheckCircle2 size={14} />
+                            <span>Resolved</span>
+                          </button>
+                        </>
+                      )}
 
                       <button
                         onClick={() => {

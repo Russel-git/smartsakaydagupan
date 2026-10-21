@@ -369,6 +369,7 @@ const PinpointFareScreen = ({ navigation }) => {
   // Watch Device Compass / Orientation in Real-Time (Rotates flashlight as phone turns)
   useEffect(() => {
     let isMounted = true;
+    let webOrientationHandler = null;
 
     const startHeadingWatcher = async () => {
       try {
@@ -391,7 +392,7 @@ const PinpointFareScreen = ({ navigation }) => {
             });
           }
         } else if (typeof window !== "undefined") {
-          const handleWebOrientation = (ev) => {
+          webOrientationHandler = (ev) => {
             if (!isMounted) return;
             let h = null;
             if (
@@ -403,28 +404,62 @@ const PinpointFareScreen = ({ navigation }) => {
               h = (360 - ev.alpha) % 360;
             }
             if (h !== null && !isNaN(h)) {
-              sendHeadingToMap(h);
+              const screenAngle =
+                window.screen?.orientation?.angle ||
+                (typeof window.orientation === "number"
+                  ? window.orientation
+                  : 0);
+              const adjusted = (h + screenAngle + 360) % 360;
+              sendHeadingToMap(adjusted);
             }
           };
-          window.addEventListener(
-            "deviceorientationabsolute",
-            handleWebOrientation,
-            false,
-          );
-          window.addEventListener(
-            "deviceorientation",
-            handleWebOrientation,
-            false,
-          );
+
+          if ("ondeviceorientationabsolute" in window) {
+            window.addEventListener(
+              "deviceorientationabsolute",
+              webOrientationHandler,
+              false,
+            );
+          } else if ("ondeviceorientation" in window) {
+            window.addEventListener(
+              "deviceorientation",
+              webOrientationHandler,
+              false,
+            );
+          }
+
+          const requestIosPermission = async () => {
+            if (
+              typeof DeviceOrientationEvent !== "undefined" &&
+              typeof DeviceOrientationEvent.requestPermission === "function"
+            ) {
+              try {
+                const resp = await DeviceOrientationEvent.requestPermission();
+                if (resp === "granted" && webOrientationHandler) {
+                  window.addEventListener(
+                    "deviceorientation",
+                    webOrientationHandler,
+                    false,
+                  );
+                }
+              } catch (_) {}
+            }
+            window.removeEventListener("click", requestIosPermission);
+            window.removeEventListener("touchend", requestIosPermission);
+          };
+          window.addEventListener("click", requestIosPermission, {
+            once: true,
+          });
+          window.addEventListener("touchend", requestIosPermission, {
+            once: true,
+          });
         }
       } catch (err) {
-        console.warn("Heading watch initialization error:", err);
+        console.warn("Heading watch initialization error in Solo/Visitor:", err);
       }
     };
 
-    if (permissionStatus === "granted") {
-      startHeadingWatcher();
-    }
+    startHeadingWatcher();
 
     return () => {
       isMounted = false;
@@ -434,6 +469,20 @@ const PinpointFareScreen = ({ navigation }) => {
       ) {
         headingSubRef.current.remove();
         headingSubRef.current = null;
+      }
+      if (
+        Platform.OS === "web" &&
+        typeof window !== "undefined" &&
+        webOrientationHandler
+      ) {
+        window.removeEventListener(
+          "deviceorientationabsolute",
+          webOrientationHandler,
+        );
+        window.removeEventListener(
+          "deviceorientation",
+          webOrientationHandler,
+        );
       }
     };
   }, [permissionStatus]);
@@ -1040,22 +1089,6 @@ const PinpointFareScreen = ({ navigation }) => {
             }
           };
 
-          // Direct browser orientation listener for Web
-          if (window.DeviceOrientationEvent) {
-            var handleOrientation = function(ev) {
-              var h = null;
-              if (ev.webkitCompassHeading !== undefined && ev.webkitCompassHeading !== null) {
-                h = ev.webkitCompassHeading;
-              } else if (ev.alpha !== null && ev.alpha !== undefined) {
-                h = (360 - ev.alpha) % 360;
-              }
-              if (h !== null && !isNaN(h)) {
-                window.updateHeading(h);
-              }
-            };
-            window.addEventListener('deviceorientationabsolute', handleOrientation, false);
-            window.addEventListener('deviceorientation', handleOrientation, false);
-          }
 
           // Smaller Destination Marker
           var destIcon = L.divIcon({
@@ -1483,6 +1516,7 @@ const PinpointFareScreen = ({ navigation }) => {
             key="solo-ride-pinpoint-map"
             title="Dagupan Solo Ride / Visitor Pinpoint Map"
             srcDoc={leafletHtml}
+            allow="geolocation; accelerometer; gyroscope; magnetometer"
             style={{ width: "100%", height: "100%", border: "none" }}
           />
         ) : (

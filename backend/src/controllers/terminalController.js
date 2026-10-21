@@ -25,7 +25,7 @@ const ensureTerminalsSeeded = async () => {
 
 const getAllTerminals = async (req, res, next) => {
   try {
-    const { type, search, lat, lng, includeInactive } = req.query;
+    const { type, search, lat, lng, includeInactive, municipality } = req.query;
     const filter = {};
 
     if (!includeInactive || includeInactive === 'false') {
@@ -36,14 +36,40 @@ const getAllTerminals = async (req, res, next) => {
       filter.type = type;
     }
 
+    // Jurisdictional isolation: LGU / POSO only see terminals in their municipality
+    let targetMuni = municipality;
+    if (req.user && (req.user.role === 'lgu' || req.user.role === 'poso')) {
+      targetMuni = req.user.municipality || 'Dagupan';
+    }
+
+    if (targetMuni && targetMuni !== 'all') {
+      const cleanMuni = targetMuni.trim();
+      if (cleanMuni.toLowerCase() === 'dagupan') {
+        filter.$and = filter.$and || [];
+        filter.$and.push({
+          $or: [
+            { municipality: cleanMuni },
+            { municipality: { $exists: false } },
+          ],
+        });
+      } else {
+        filter.municipality = cleanMuni;
+      }
+    }
+
     if (search && search.trim()) {
       const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      filter.$or = [
+      const searchOr = [
         { name: { $regex: escaped, $options: 'i' } },
         { company: { $regex: escaped, $options: 'i' } },
         { address: { $regex: escaped, $options: 'i' } },
         { destinations: { $elemMatch: { $regex: escaped, $options: 'i' } } },
       ];
+      if (filter.$and) {
+        filter.$and.push({ $or: searchOr });
+      } else {
+        filter.$or = searchOr;
+      }
     }
 
     let terminals = await Terminal.find(filter).sort({ name: 1 }).lean();
@@ -71,6 +97,14 @@ const getTerminalById = async (req, res, next) => {
     if (!terminal) {
       return apiResponse.error(res, 'Terminal not found', 404);
     }
+
+    if (req.user && (req.user.role === 'lgu' || req.user.role === 'poso')) {
+      const userMuni = (req.user.municipality || 'Dagupan').trim();
+      if (terminal.municipality !== userMuni) {
+        return apiResponse.error(res, 'Access denied. Terminal outside your jurisdiction.', 403);
+      }
+    }
+
     return apiResponse.success(res, terminal, 'Terminal details retrieved');
   } catch (error) {
     next(error);
@@ -79,13 +113,17 @@ const getTerminalById = async (req, res, next) => {
 
 const createTerminal = async (req, res, next) => {
   try {
+    if (req.user && req.user.role === 'lgu') {
+      req.body.municipality = req.user.municipality || 'Dagupan';
+    }
+
     const terminal = await Terminal.create(req.body);
 
     await logAuditEvent(req, {
       action: 'TERMINAL_CREATE',
       resourceType: 'terminal',
       resourceId: terminal._id,
-      details: { name: terminal.name, type: terminal.type, address: terminal.address },
+      details: { name: terminal.name, type: terminal.type, address: terminal.address, municipality: terminal.municipality },
     });
 
     return apiResponse.success(res, terminal, 'Terminal created successfully', 201);
@@ -96,6 +134,16 @@ const createTerminal = async (req, res, next) => {
 
 const updateTerminal = async (req, res, next) => {
   try {
+    if (req.user && req.user.role === 'lgu') {
+      const existing = await Terminal.findById(req.params.id);
+      if (!existing) return apiResponse.error(res, 'Terminal not found', 404);
+      const userMuni = (req.user.municipality || 'Dagupan').trim();
+      if (existing.municipality !== userMuni) {
+        return apiResponse.error(res, 'Access denied. You can only update terminals within your municipality jurisdiction.', 403);
+      }
+      req.body.municipality = userMuni;
+    }
+
     const terminal = await Terminal.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
@@ -120,6 +168,15 @@ const updateTerminal = async (req, res, next) => {
 
 const deleteTerminal = async (req, res, next) => {
   try {
+    if (req.user && req.user.role === 'lgu') {
+      const existing = await Terminal.findById(req.params.id);
+      if (!existing) return apiResponse.error(res, 'Terminal not found', 404);
+      const userMuni = (req.user.municipality || 'Dagupan').trim();
+      if (existing.municipality !== userMuni) {
+        return apiResponse.error(res, 'Access denied. You can only delete terminals within your municipality jurisdiction.', 403);
+      }
+    }
+
     const terminal = await Terminal.findByIdAndDelete(req.params.id);
     if (!terminal) {
       return apiResponse.error(res, 'Terminal not found', 404);
@@ -140,13 +197,18 @@ const deleteTerminal = async (req, res, next) => {
 
 const clearAllTerminals = async (req, res, next) => {
   try {
-    const result = await Terminal.deleteMany({});
+    const filter = {};
+    if (req.user && req.user.role === 'lgu') {
+      filter.municipality = req.user.municipality || 'Dagupan';
+    }
+
+    const result = await Terminal.deleteMany(filter);
     await logAuditEvent(req, {
       action: 'TERMINAL_CLEAR_ALL',
       resourceType: 'terminal',
-      details: { deletedCount: result.deletedCount },
+      details: { deletedCount: result.deletedCount, filter },
     });
-    return apiResponse.success(res, { deletedCount: result.deletedCount }, 'All terminals removed successfully');
+    return apiResponse.success(res, { deletedCount: result.deletedCount }, 'Terminals removed successfully');
   } catch (error) {
     next(error);
   }

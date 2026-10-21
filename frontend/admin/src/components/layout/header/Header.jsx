@@ -4,6 +4,7 @@ import { Menu, X, ChevronRight, Sun, Moon } from "lucide-react";
 import { useSidebar } from "../../../contexts/SidebarContext";
 import { useTheme } from "../../../contexts/theme/ThemeContext";
 import { useAuth } from "../../../contexts/AuthContext";
+import { formatLguJurisdiction } from "../../../utils/lguHelpers";
 
 const Header = () => {
   const { isMobile, isMobileOpen, toggleSidebar, toggleMobileSidebar } =
@@ -11,7 +12,7 @@ const Header = () => {
 
   const { colors, isDark, toggleTheme } = useTheme();
 
-  const { isAdmin, isLgu, isPoso } = useAuth();
+  const { isAdmin, isLgu, isPoso, admin } = useAuth();
 
   // ============================================================
   // SIDEBAR TOGGLE
@@ -113,7 +114,9 @@ const Header = () => {
               color: colors.textMuted,
             }}
           >
-            Dagupan City
+            {admin?.municipality
+              ? formatLguJurisdiction(admin.municipality)
+              : "Dagupan City"}
           </span>
 
           <ChevronRight size={14} color={colors.textMuted} />

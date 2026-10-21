@@ -14,12 +14,15 @@ const getProfile = async (req, res, next) => {
 
 const updateProfile = async (req, res, next) => {
   try {
-    const { firstName, lastName, suffix, profilePhoto } = req.body;
+    const { firstName, lastName, suffix, profilePhoto, municipality } = req.body;
     const updates = {};
     if (firstName) updates.firstName = firstName;
     if (lastName) updates.lastName = lastName;
     if (suffix !== undefined) updates.suffix = suffix?.trim() || '';
     if (profilePhoto !== undefined) updates.profilePhoto = profilePhoto;
+    if (municipality && typeof municipality === 'string' && municipality.trim()) {
+      updates.municipality = municipality.trim();
+    }
 
     const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true, runValidators: true })
 
@@ -49,11 +52,26 @@ const getAllUsers = async (req, res, next) => {
     // Role-scoped visibility
     if (req.user.role === 'lgu') {
       filter.role = 'poso';
+      const userMuni = (req.user.municipality || 'Dagupan').trim();
+      if (userMuni.toLowerCase() === 'dagupan') {
+        filter.$and = filter.$and || [];
+        filter.$and.push({
+          $or: [
+            { municipality: userMuni },
+            { municipality: { $exists: false } },
+          ],
+        });
+      } else {
+        filter.municipality = userMuni;
+      }
     } else if (req.user.role === 'admin') {
       if (role && role !== 'all') {
         filter.role = role;
       } else if (!role) {
         filter.role = 'lgu';
+      }
+      if (req.query.municipality && req.query.municipality !== 'all') {
+        filter.municipality = req.query.municipality.trim();
       }
     } else if (role) {
       filter.role = role;
@@ -92,16 +110,19 @@ const createUser = async (req, res, next) => {
       department = '',
       badgeNumber = '',
       assignedZone = '',
+      municipality = 'Dagupan',
     } = req.body;
 
     // Enforce role-scoped provisioning
     let targetRole = role;
+    let targetMunicipality = (municipality || 'Dagupan').trim();
     if (req.user.role === 'admin') {
-      // Admin is strictly scoped to provisioning LGU accounts
+      // Admin is strictly scoped to provisioning LGU accounts across municipalities
       targetRole = 'lgu';
     } else if (req.user.role === 'lgu') {
-      // LGU is strictly scoped to provisioning POSO accounts
+      // LGU is strictly scoped to provisioning POSO accounts for their municipality
       targetRole = 'poso';
+      targetMunicipality = req.user.municipality || 'Dagupan';
     } else {
       return apiResponse.error(res, 'You do not have permission to provision staff accounts.', 403);
     }
@@ -111,8 +132,10 @@ const createUser = async (req, res, next) => {
 
     const defaultDept =
       targetRole === 'lgu'
-        ? 'City Transport & Public Safety Office (CTPSO)'
-        : 'Public Order & Safety Office (POSO)';
+        ? (targetMunicipality && targetMunicipality !== 'Dagupan'
+            ? `Municipal Transport & Traffic Management (${targetMunicipality})`
+            : 'City Transport & Public Safety Office (CTPSO)')
+        : `Public Order & Safety Office (POSO - ${targetMunicipality})`;
 
     const user = await User.create({
       email: email.toLowerCase(),
@@ -121,6 +144,7 @@ const createUser = async (req, res, next) => {
       lastName: lastName?.trim(),
       suffix: suffix?.trim() || '',
       role: targetRole,
+      municipality: targetMunicipality,
       department: department?.trim() || defaultDept,
       badgeNumber: badgeNumber?.trim() || '',
       assignedZone: assignedZone?.trim() || '',
@@ -132,10 +156,10 @@ const createUser = async (req, res, next) => {
       action: 'USER_CREATE_STAFF',
       resourceType: 'user',
       resourceId: user._id,
-      details: { email: user.email, name: `${user.firstName} ${user.lastName}`, role: user.role, badge: user.badgeNumber },
+      details: { email: user.email, name: `${user.firstName} ${user.lastName}`, role: user.role, municipality: user.municipality, badge: user.badgeNumber },
     });
 
-    return apiResponse.success(res, user.toJSON(), `${targetRole.toUpperCase()} account created successfully.`, 201);
+    return apiResponse.success(res, user.toJSON(), `${targetRole.toUpperCase()} account created successfully for ${targetMunicipality}.`, 201);
   } catch (error) { next(error); }
 };
 

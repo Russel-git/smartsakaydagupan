@@ -18,6 +18,7 @@ import Button from "../../components/common/Button";
 import Input from "../../components/common/Input";
 import AuthPromptModal from "../../components/common/AuthPromptModal";
 import { complaintsAPI, routesAPI } from "../../api/services";
+import { getMunicipality } from "../../utils/storage";
 import {
   FONTS,
   SPACING,
@@ -35,11 +36,15 @@ const countWords = (text) => {
 
 const SubmitComplaintScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
-  const { isGuest } = useAuth();
+  const { isGuest, user } = useAuth();
   const { showSuccess, showError, showWarning } = useFeedback();
 
   const { width, height } = useWindowDimensions();
   const isTablet = Math.min(width, height) >= 600;
+
+  const [selectedMunicipality, setSelectedMunicipality] = useState(
+    user?.municipality || "Dagupan",
+  );
 
   const initialCategory = route?.params?.category || "";
   const initialCategoryLabel = COMPLAINT_CATEGORIES.find(
@@ -88,15 +93,28 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
   }, [route?.params]);
 
   useEffect(() => {
-    routesAPI
-      .getAllRoutes()
-      .then(({ data }) => setRoutes(data.data || []))
-      .catch(() => {});
+    let isMounted = true;
+
+    const loadData = async () => {
+      try {
+        const savedMuni = await getMunicipality();
+        const activeMuni = (savedMuni || user?.municipality || "Dagupan").trim();
+        if (isMounted) setSelectedMunicipality(activeMuni);
+
+        const { data } = await routesAPI.getAllRoutes({ municipality: activeMuni });
+        if (isMounted) setRoutes(data?.data || []);
+      } catch (err) {
+        console.warn("Failed to load routes for municipality:", err);
+      }
+    };
+
+    loadData();
 
     if (!isGuest) {
       complaintsAPI
         .getMyComplaints()
         .then(({ data }) => {
+          if (!isMounted) return;
           const list = data.data || [];
           const startOfDay = new Date();
           startOfDay.setHours(0, 0, 0, 0);
@@ -108,7 +126,11 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         })
         .catch(() => {});
     }
-  }, [isGuest]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isGuest, user?.municipality]);
 
   const updateField = (key, val) => {
     setForm((p) => ({ ...p, [key]: val }));
@@ -298,6 +320,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
 
       await complaintsAPI.createComplaint({
         ...form,
+        municipality: selectedMunicipality,
         subject: (form.subject || "").trim(),
         vehiclePlateNumber: (form.vehiclePlateNumber || "")
           .trim()
@@ -308,7 +331,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
 
       showSuccess(
         "Complaint Submitted!",
-        "Your report has been received and queued for investigation by Dagupan transit authorities.",
+        `Your report has been received and queued for investigation by ${selectedMunicipality} transit authorities.`,
       );
 
       navigation.goBack();
@@ -351,7 +374,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         visible={promptVisible}
         onClose={() => setPromptVisible(false)}
         title="Account Required to Report"
-        message="Dagupan transport authorities require verified commuter credentials to investigate grievances and provide resolution status updates."
+        message={`${selectedMunicipality} transport authorities require verified commuter credentials to investigate grievances and provide resolution status updates.`}
         icon="clipboard-alert"
         featureTag="Verified Report"
       />
@@ -377,7 +400,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
                 Report a Grievance
               </Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                Help us improve commuter transit services in Dagupan
+                Help us improve commuter transit services in {selectedMunicipality}
               </Text>
             </View>
 
@@ -634,8 +657,8 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
                 ]}
               >
                 {descWordCount >= 5
-                  ? `✓ Thank you! Your description contains ${descWordCount} words, giving Dagupan traffic investigators adequate details.`
-                  : "Please write at least 5 to 8 words describing what happened so Dagupan traffic officers and the LGU can verify and take action on your report."}
+                  ? `✓ Thank you! Your description contains ${descWordCount} words, giving ${selectedMunicipality} traffic investigators adequate details.`
+                  : `Please write at least 5 to 8 words describing what happened so ${selectedMunicipality} traffic officers and the LGU can verify and take action on your report.`}
               </Text>
             </View>
           </View>

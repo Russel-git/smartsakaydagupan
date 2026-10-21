@@ -1,55 +1,109 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, StyleSheet, Platform, Text, TouchableOpacity } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSharedLocation } from '../../contexts/LocationContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { routesAPI, terminalsAPI } from '../../api/services';
+import { getMunicipality } from '../../utils/storage';
 import { RADIUS, SHADOWS } from '../../utils/constants';
+
+const MUNICIPALITY_CENTROIDS = {
+  Dagupan: { lat: 16.0433, lng: 120.3397, name: 'Dagupan City' },
+  Calasiao: { lat: 16.0125, lng: 120.3586, name: 'Calasiao' },
+  Binmaley: { lat: 16.0272, lng: 120.2686, name: 'Binmaley' },
+  Lingayen: { lat: 16.0216, lng: 120.2319, name: 'Lingayen' },
+  Mangaldan: { lat: 16.0694, lng: 120.4022, name: 'Mangaldan' },
+};
 
 /**
  * HomeMapWidget — compact Leaflet map embedded in the Home Screen.
  * Shows live GPS location, jeepney route polylines, and terminal pins.
- * No legend. Tapping "View Full Map" navigates to the full RouteMapScreen.
+ * Removes fixed Dagupan dummy pin; user marker only displays when actual GPS is available.
  */
-const HomeMapWidget = ({ navigation, height = 240 }) => {
+const HomeMapWidget = ({ navigation, height = 240, municipality: propMuni }) => {
   const { colors } = useTheme();
+  const { user } = useAuth();
+  const { location: sharedLocation } = useSharedLocation();
+  const [activeMuni, setActiveMuni] = useState(propMuni || user?.municipality || 'Dagupan');
   const [routes, setRoutes] = useState([]);
   const [terminals, setTerminals] = useState([]);
-  const [userLat, setUserLat] = useState(16.0433);
-  const [userLng, setUserLng] = useState(120.3342);
-  const [locationLabel, setLocationLabel] = useState('Dagupan City');
+  const iframeRef = useRef(null);
+  const webViewRef = useRef(null);
 
-  // Acquire GPS on web / native
+  // Sync propMuni when passed from parent screen
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setUserLat(pos.coords.latitude);
-          setUserLng(pos.coords.longitude);
-          setLocationLabel('Location Active');
-        },
-        () => setLocationLabel('Dagupan City'),
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
-      );
+    if (propMuni) {
+      setActiveMuni(propMuni);
     }
-  }, []);
+  }, [propMuni]);
 
-  // Fetch routes & terminals once
+  // Load active municipality from storage
   useEffect(() => {
+    (async () => {
+      const savedMuni = await getMunicipality();
+      const current = (propMuni || savedMuni || user?.municipality || 'Dagupan').trim();
+      setActiveMuni(current);
+    })();
+  }, [user?.municipality, propMuni]);
+
+  // Fetch routes & terminals for active municipality
+  useEffect(() => {
+    let isMounted = true;
     const load = async () => {
       try {
         const [rRes, tRes] = await Promise.allSettled([
-          routesAPI.getAllRoutes(),
-          terminalsAPI.getAll(),
+          routesAPI.getAllRoutes({ municipality: activeMuni }),
+          terminalsAPI.getAll({ municipality: activeMuni }),
         ]);
-        if (rRes.status === 'fulfilled') setRoutes(rRes.value.data.data || []);
-        if (tRes.status === 'fulfilled') setTerminals(tRes.value.data.data || []);
+        if (isMounted) {
+          if (rRes.status === 'fulfilled') setRoutes(rRes.value.data.data || []);
+          if (tRes.status === 'fulfilled') setTerminals(tRes.value.data.data || []);
+        }
       } catch (_) {}
     };
     load();
-  }, []);
+    return () => { isMounted = false; };
+  }, [activeMuni]);
 
-  const routesJson = JSON.stringify(
+  const isRealUserLocation = Boolean(
+    sharedLocation && sharedLocation.isReal && sharedLocation.lat != null && sharedLocation.lng != null
+  );
+  const userLat = isRealUserLocation ? sharedLocation.lat : null;
+  const userLng = isRealUserLocation ? sharedLocation.lng : null;
+
+  const centroid = MUNICIPALITY_CENTROIDS[activeMuni] || MUNICIPALITY_CENTROIDS.Dagupan;
+  const centerLat = userLat != null ? userLat : centroid.lat;
+  const centerLng = userLng != null ? userLng : centroid.lng;
+
+  const locationLabel = isRealUserLocation ? 'Location Active' : (centroid.name || activeMuni);
+
+  const pushLocationToMap = (loc) => {
+    if (!loc || !loc.isReal || loc.lat == null || loc.lng == null) return;
+    if (Platform.OS === 'web') {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({
+          type: 'UPDATE_USER_LOCATION',
+          lat: loc.lat,
+          lng: loc.lng,
+        }),
+        '*',
+      );
+    } else {
+      webViewRef.current?.injectJavaScript(
+        `window.updateUserPosition && window.updateUserPosition(${loc.lat}, ${loc.lng}); true;`,
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (sharedLocation && sharedLocation.isReal) {
+      pushLocationToMap(sharedLocation);
+    }
+  }, [sharedLocation?.lat, sharedLocation?.lng, sharedLocation?.isReal]);
+
+  const routesJson = useMemo(() => JSON.stringify(
     routes.map((r) => ({
       id: r._id,
       name: r.name,
@@ -60,18 +114,19 @@ const HomeMapWidget = ({ navigation, height = 240 }) => {
       endPoint: r.endPoint,
       waypoints: r.waypoints || [],
     }))
-  );
+  ), [routes]);
 
-  const terminalsJson = JSON.stringify(
+  const terminalsJson = useMemo(() => JSON.stringify(
     terminals.map((t) => ({
       name: t.name,
       lat: t.location?.coordinates?.[1] ?? t.latitude ?? t.lat,
       lng: t.location?.coordinates?.[0] ?? t.longitude ?? t.lng,
       type: t.type,
     }))
-  );
+  ), [terminals]);
 
-  const mapHtml = `<!DOCTYPE html>
+  const mapHtml = useMemo(() => {
+    return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
@@ -123,39 +178,68 @@ const HomeMapWidget = ({ navigation, height = 240 }) => {
 <div id="map"></div>
 <button id="locateBtn" title="Re-center">🎯</button>
 <script>
-  var lat = ${userLat}, lng = ${userLng};
+  var centerLat = ${centerLat}, centerLng = ${centerLng};
   var map = L.map('map', { zoomControl:false, attributionControl:true })
-             .setView([lat, lng], 14);
+             .setView([centerLat, centerLng], 14);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution:'© OSM', maxZoom:19
   }).addTo(map);
 
-  /* ---- GPS circle ---- */
-  var circle = L.circle([lat, lng], {
-    radius:40, color:'#f97316', fillColor:'#f97316', fillOpacity:0.15, weight:1
-  }).addTo(map);
-
-  /* ---- User beacon ---- */
+  /* ---- User beacon (ONLY shown when user location is truly available!) ---- */
   var beaconIcon = L.divIcon({
     className:'',
     html:'<div class="beacon-wrap"><div class="pulse-ring"></div><div class="pulse-ring-2"></div><div class="core-dot"></div></div>',
     iconSize:[32,32], iconAnchor:[16,16]
   });
-  var marker = L.marker([lat,lng],{icon:beaconIcon,zIndexOffset:3000}).addTo(map);
 
-  /* ---- Live GPS watch ---- */
+  var marker = null;
+  var circle = null;
+  var hasInitialRealUser = ${isRealUserLocation ? "true" : "false"};
+
+  function updateUserPosition(lat, lng) {
+    if (lat == null || lng == null) return;
+    if (!marker) {
+      circle = L.circle([lat, lng], {
+        radius:40, color:'#f97316', fillColor:'#f97316', fillOpacity:0.15, weight:1
+      }).addTo(map);
+      marker = L.marker([lat, lng], { icon:beaconIcon, zIndexOffset:3000 }).addTo(map);
+    } else {
+      marker.setLatLng([lat, lng]);
+      if (circle) circle.setLatLng([lat, lng]);
+    }
+  }
+
+  if (hasInitialRealUser) {
+    updateUserPosition(${userLat !== null ? userLat : "null"}, ${userLng !== null ? userLng : "null"});
+  }
+
+  /* ---- Live GPS watch (only plots actual coordinates!) ---- */
   if (navigator.geolocation) {
     navigator.geolocation.watchPosition(function(p){
-      lat=p.coords.latitude; lng=p.coords.longitude;
-      marker.setLatLng([lat,lng]);
-      circle.setLatLng([lat,lng]);
-    },null,{enableHighAccuracy:true,timeout:12000,maximumAge:5000});
+      if (p && p.coords) {
+        updateUserPosition(p.coords.latitude, p.coords.longitude);
+      }
+    }, null, { enableHighAccuracy:true, timeout:12000, maximumAge:5000 });
   }
+
+  /* ---- Web postMessage bridge ---- */
+  window.addEventListener('message', function(e) {
+    try {
+      var d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+      if (d && (d.type === 'UPDATE_USER_LOCATION' || d.type === 'UPDATE_COMMUTER_LOCATION')) {
+        updateUserPosition(d.lat, d.lng);
+      }
+    } catch(err) {}
+  });
 
   /* ---- Locate btn ---- */
   document.getElementById('locateBtn').onclick = function(){
-    map.setView([lat,lng],15,{animate:true});
+    if (marker) {
+      map.setView(marker.getLatLng(), 15, { animate:true });
+    } else {
+      map.setView([centerLat, centerLng], 14, { animate:true });
+    }
   };
 
   /* ---- Route colour map ---- */
@@ -207,13 +291,14 @@ const HomeMapWidget = ({ navigation, height = 240 }) => {
 </script>
 </body>
 </html>`;
+  }, [centerLat, centerLng, isRealUserLocation, userLat, userLng, routesJson, terminalsJson]);
 
   return (
     <View style={[styles.wrapper, { height, borderColor: colors.border }]}>
       {/* Status bar */}
       <View style={[styles.statusBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.statusLeft}>
-          <View style={[styles.statusDot, { backgroundColor: '#22c55e' }]} />
+          <View style={[styles.statusDot, { backgroundColor: isRealUserLocation ? '#22c55e' : '#f97316' }]} />
           <Text style={[styles.statusText, { color: colors.textSecondary }]}>
             {locationLabel}
           </Text>
@@ -232,12 +317,15 @@ const HomeMapWidget = ({ navigation, height = 240 }) => {
       <View style={styles.mapContainer}>
         {Platform.OS === 'web' ? (
           <iframe
+            ref={iframeRef}
             srcDoc={mapHtml}
             style={{ width: '100%', height: '100%', border: 'none' }}
             title="SmartSakay Map"
+            onLoad={() => pushLocationToMap(sharedLocation)}
           />
         ) : (
           <WebView
+            ref={webViewRef}
             source={{ html: mapHtml }}
             style={styles.webview}
             javaScriptEnabled
@@ -247,6 +335,7 @@ const HomeMapWidget = ({ navigation, height = 240 }) => {
             bounces={false}
             showsHorizontalScrollIndicator={false}
             showsVerticalScrollIndicator={false}
+            onLoadEnd={() => pushLocationToMap(sharedLocation)}
           />
         )}
       </View>

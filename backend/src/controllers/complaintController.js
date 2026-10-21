@@ -31,7 +31,10 @@ const createComplaint = async (req, res, next) => {
       vehiclePlateNumber,
       location,
       attachments,
+      municipality,
     } = req.body;
+
+    const targetMunicipality = (municipality || req.user.municipality || 'Dagupan').trim();
 
     const complaint = await Complaint.create({
       userId: req.user._id,
@@ -42,6 +45,7 @@ const createComplaint = async (req, res, next) => {
       vehiclePlateNumber: vehiclePlateNumber ? vehiclePlateNumber.trim().toUpperCase() : '',
       location: location || {},
       attachments: Array.isArray(attachments) ? attachments : [],
+      municipality: targetMunicipality,
       status: 'pending',
       source: req.user.role === 'poso' ? 'poso_field_report' : 'commuter',
     });
@@ -61,8 +65,31 @@ const uploadEvidencePhoto = async (req, res, next) => {
 
 const getMyComplaints = async (req, res, next) => {
   try {
-    const { page = 1, limit = 50, status, tab = 'all', search } = req.query;
+    const { page = 1, limit = 50, status, tab = 'all', search, municipality } = req.query;
+    const targetMuni = municipality || (req.user && req.user.municipality);
     const filter = { userId: req.user._id };
+    const baseFilter = { userId: req.user._id };
+
+    if (targetMuni && targetMuni !== 'all') {
+      const cleanMuni = targetMuni.trim();
+      let muniCondition;
+      if (cleanMuni.toLowerCase() === 'dagupan') {
+        muniCondition = {
+          $or: [
+            { municipality: cleanMuni },
+            { municipality: { $exists: false } },
+            { municipality: null },
+            { municipality: '' },
+          ],
+        };
+      } else {
+        muniCondition = { municipality: cleanMuni };
+      }
+      filter.$and = filter.$and || [];
+      filter.$and.push(muniCondition);
+      baseFilter.$and = baseFilter.$and || [];
+      baseFilter.$and.push(muniCondition);
+    }
 
     if (tab === 'active') {
       filter.status = { $in: ['pending', 'under_review', 'endorsed_to_lgu'] };
@@ -94,19 +121,19 @@ const getMyComplaints = async (req, res, next) => {
     }
 
     const [totalAll, totalActive, totalResolved, totalArchived, totalDeleted] = await Promise.all([
-      Complaint.countDocuments({ userId: req.user._id, status: { $ne: 'deleted' }, isArchived: { $ne: true } }),
+      Complaint.countDocuments({ ...baseFilter, status: { $ne: 'deleted' }, isArchived: { $ne: true } }),
       Complaint.countDocuments({
-        userId: req.user._id,
+        ...baseFilter,
         status: { $in: ['pending', 'under_review', 'endorsed_to_lgu'] },
         isArchived: { $ne: true },
       }),
       Complaint.countDocuments({
-        userId: req.user._id,
+        ...baseFilter,
         status: { $in: ['action_taken', 'terminated', 'resolved', 'dismissed'] },
         isArchived: { $ne: true },
       }),
-      Complaint.countDocuments({ userId: req.user._id, isArchived: true, status: { $ne: 'deleted' } }),
-      Complaint.countDocuments({ userId: req.user._id, status: 'deleted' }),
+      Complaint.countDocuments({ ...baseFilter, isArchived: true, status: { $ne: 'deleted' } }),
+      Complaint.countDocuments({ ...baseFilter, status: 'deleted' }),
     ]);
 
     const total = await Complaint.countDocuments(filter);
@@ -151,6 +178,13 @@ const getComplaintById = async (req, res, next) => {
     if (req.user.role === 'commuter' && complaint.userId._id.toString() !== req.user._id.toString()) {
       return apiResponse.error(res, 'Not authorized', 403);
     }
+    if (req.user && (req.user.role === 'lgu' || req.user.role === 'poso')) {
+      const userMuni = (req.user.municipality || 'Dagupan').trim().toLowerCase();
+      const compMuni = (complaint.municipality || 'Dagupan').trim().toLowerCase();
+      if (userMuni !== compMuni) {
+        return apiResponse.error(res, 'Access denied. Complaint outside your municipality jurisdiction.', 403);
+      }
+    }
     return apiResponse.success(res, complaint);
   } catch (error) { next(error); }
 };
@@ -178,6 +212,39 @@ const getAllComplaints = async (req, res, next) => {
         filter.status = status;
       } else {
         filter.status = { $ne: 'deleted' };
+      }
+    }
+
+    // Jurisdictional multi-tenancy: LGU and POSO only see complaints within their own municipality
+    if (req.user.role === 'lgu' || req.user.role === 'poso') {
+      const userMuni = (req.user.municipality || 'Dagupan').trim();
+      if (userMuni.toLowerCase() === 'dagupan') {
+        filter.$and = filter.$and || [];
+        filter.$and.push({
+          $or: [
+            { municipality: userMuni },
+            { municipality: { $exists: false } },
+            { municipality: null },
+            { municipality: '' },
+          ],
+        });
+      } else {
+        filter.municipality = userMuni;
+      }
+    } else if (req.user.role === 'admin' && req.query.municipality && req.query.municipality !== 'all') {
+      const qMuni = req.query.municipality.trim();
+      if (qMuni.toLowerCase() === 'dagupan') {
+        filter.$and = filter.$and || [];
+        filter.$and.push({
+          $or: [
+            { municipality: qMuni },
+            { municipality: { $exists: false } },
+            { municipality: null },
+            { municipality: '' },
+          ],
+        });
+      } else {
+        filter.municipality = qMuni;
       }
     }
 
@@ -210,7 +277,9 @@ const verifyAndEndorseToLgu = async (req, res, next) => {
 
     const year = new Date().getFullYear();
     const randHex = complaint._id.toString().slice(-6).toUpperCase();
-    const lguCaseNumber = `LGU-DAG-${year}-${randHex}`;
+    const muniName = complaint.municipality || 'Dagupan';
+    const muniCode = muniName.slice(0, 3).toUpperCase();
+    const lguCaseNumber = `LGU-${muniCode}-${year}-${randHex}`;
 
     complaint.status = 'endorsed_to_lgu';
     complaint.lguCaseNumber = lguCaseNumber;
@@ -221,9 +290,10 @@ const verifyAndEndorseToLgu = async (req, res, next) => {
 
     await Notification.create({
       userId: complaint.userId,
-      title: '🏛️ Verified & Endorsed to Dagupan LGU',
-      message: `Your complaint "${complaint.subject}" was verified by transit operators and escalated to Dagupan City POSO/LGU. Case Tracking No: ${lguCaseNumber}.`,
+      title: `🏛️ Verified & Endorsed to ${muniName} LGU`,
+      message: `Your complaint "${complaint.subject}" was verified by transit operators and escalated to ${muniName} POSO/LGU. Case Tracking No: ${lguCaseNumber}.`,
       type: 'complaint_update',
+      municipality: muniName,
       metadata: { complaintId: complaint._id, status: 'endorsed_to_lgu', lguCaseNumber },
     });
 
@@ -234,7 +304,7 @@ const verifyAndEndorseToLgu = async (req, res, next) => {
       details: { subject: complaint.subject, lguCaseNumber },
     });
 
-    return apiResponse.success(res, complaint, 'Complaint verified and forwarded to Dagupan LGU.');
+    return apiResponse.success(res, complaint, `Complaint verified and forwarded to ${muniName} LGU.`);
   } catch (error) { next(error); }
 };
 
@@ -257,7 +327,9 @@ const createFieldReport = async (req, res, next) => {
 
     const year = new Date().getFullYear();
     const randHex = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const lguCaseNumber = `POSO-FLD-${year}-${randHex}`;
+    const targetMuni = (req.body.municipality || req.user.municipality || 'Dagupan').trim();
+    const muniCode = targetMuni.slice(0, 3).toUpperCase();
+    const lguCaseNumber = `POSO-${muniCode}-${year}-${randHex}`;
 
     const complaint = await Complaint.create({
       userId: req.user._id,
@@ -269,6 +341,7 @@ const createFieldReport = async (req, res, next) => {
       routeId: routeId || null,
       location: typeof location === 'string' ? { address: location } : location,
       attachments: attachments || [],
+      municipality: (req.body.municipality || req.user.municipality || 'Dagupan').trim(),
       status: 'endorsed_to_lgu',
       posoOfficerId: req.user._id,
       posoBadgeNumber: req.user.badgeNumber || 'POSO-OFFICER',
@@ -299,7 +372,9 @@ const endorseToLgu = async (req, res, next) => {
 
     const year = new Date().getFullYear();
     const randHex = complaint._id.toString().slice(-6).toUpperCase();
-    const lguCaseNumber = `LGU-DAG-${year}-${randHex}`;
+    const muniName = complaint.municipality || 'Dagupan';
+    const muniCode = muniName.slice(0, 3).toUpperCase();
+    const lguCaseNumber = `LGU-${muniCode}-${year}-${randHex}`;
     const officerNotes = endorsementNotes || notes || adminNotes || '';
 
     complaint.status = 'endorsed_to_lgu';
@@ -316,9 +391,10 @@ const endorseToLgu = async (req, res, next) => {
     if (complaint.userId) {
       await Notification.create({
         userId: complaint.userId,
-        title: '🏛️ Verified by POSO & Endorsed to Dagupan LGU',
-        message: `Your complaint "${complaint.subject}" has been road-verified by POSO Officers and escalated to Dagupan City LGU. Tracking No: ${lguCaseNumber}.${officerNotes ? ` Notes: ${officerNotes}` : ''}`,
+        title: `🏛️ Verified by POSO & Endorsed to ${muniName} LGU`,
+        message: `Your complaint "${complaint.subject}" has been road-verified by POSO Officers and escalated to ${muniName} LGU. Tracking No: ${lguCaseNumber}.${officerNotes ? ` Notes: ${officerNotes}` : ''}`,
         type: 'complaint_update',
+        municipality: muniName,
         metadata: { complaintId: complaint._id, status: 'endorsed_to_lgu', lguCaseNumber },
       });
     }
@@ -330,7 +406,7 @@ const endorseToLgu = async (req, res, next) => {
       details: { subject: complaint.subject, lguCaseNumber, posoBadge: req.user.badgeNumber },
     });
 
-    return apiResponse.success(res, complaint, 'Complaint road-verified by POSO and endorsed to Dagupan LGU.');
+    return apiResponse.success(res, complaint, `Complaint road-verified by POSO and endorsed to ${muniName} LGU.`);
   } catch (error) { next(error); }
 };
 
@@ -425,6 +501,14 @@ const lguTakeAction = async (req, res, next) => {
     const complaint = await Complaint.findById(id);
     if (!complaint) return apiResponse.error(res, 'Complaint not found.', 404);
 
+    if (req.user.role === 'lgu') {
+      const userMuni = (req.user.municipality || 'Dagupan').trim().toLowerCase();
+      const compMuni = (complaint.municipality || 'Dagupan').trim().toLowerCase();
+      if (userMuni !== compMuni) {
+        return apiResponse.error(res, 'Access denied. You can only take action on complaints within your municipality jurisdiction.', 403);
+      }
+    }
+
     complaint.status = 'action_taken';
     complaint.lguActionNotes = lguActionNotes;
     if (sanctionIssued) complaint.sanctionIssued = sanctionIssued;
@@ -443,7 +527,7 @@ const lguTakeAction = async (req, res, next) => {
     await Notification.create({
       userId: complaint.userId,
       title: '🚨 Official Action Taken by LGU',
-      message: `Dagupan City POSO/LGU has taken administrative action on your complaint "${complaint.subject}": ${lguActionNotes}`,
+      message: `${req.user.municipality || 'Dagupan'} LGU/POSO has taken administrative action on your complaint "${complaint.subject}": ${lguActionNotes}`,
       type: 'complaint_update',
       metadata: { complaintId: complaint._id, status: 'action_taken', evidencePhoto: photoToSave || null },
     });
@@ -466,6 +550,14 @@ const lguTerminate = async (req, res, next) => {
     const complaint = await Complaint.findById(id);
     if (!complaint) return apiResponse.error(res, 'Complaint not found.', 404);
 
+    if (req.user.role === 'lgu') {
+      const userMuni = (req.user.municipality || 'Dagupan').trim().toLowerCase();
+      const compMuni = (complaint.municipality || 'Dagupan').trim().toLowerCase();
+      if (userMuni !== compMuni) {
+        return apiResponse.error(res, 'Access denied. You can only resolve complaints within your municipality jurisdiction.', 403);
+      }
+    }
+
     const notesToSave = resolutionNotes || lguTerminationNotes || '';
 
     complaint.status = 'resolved';
@@ -476,11 +568,13 @@ const lguTerminate = async (req, res, next) => {
     complaint.lguHandledBy = req.user._id;
     await complaint.save();
 
+    const muniName = complaint.municipality || req.user.municipality || 'Dagupan';
     await Notification.create({
       userId: complaint.userId,
       title: '✅ Grievance Officially Resolved',
-      message: `Your complaint "${complaint.subject}" has been officially resolved by Dagupan City authorities: ${notesToSave || 'Case successfully concluded and resolved.'}`,
+      message: `Your complaint "${complaint.subject}" has been officially resolved by ${muniName} authorities: ${notesToSave || 'Case successfully concluded and resolved.'}`,
       type: 'complaint_update',
+      municipality: muniName,
       metadata: { complaintId: complaint._id, status: 'resolved' },
     });
 
@@ -511,11 +605,12 @@ const updateComplaintStatus = async (req, res, next) => {
     if (!complaint) return apiResponse.error(res, 'Complaint not found', 404);
 
     if (complaint.userId) {
+      const muniName = complaint.municipality || 'Dagupan';
       const statusLabels = {
         pending: 'Pending',
         under_review: 'Under Review',
-        endorsed_to_lgu: 'Endorsed to Dagupan LGU',
-        action_taken: 'Action Taken by LGU',
+        endorsed_to_lgu: `Endorsed to ${muniName} LGU`,
+        action_taken: `Action Taken by ${muniName} LGU`,
         terminated: 'Resolved & Closed',
         resolved: 'Resolved',
         dismissed: 'Dismissed',
@@ -526,6 +621,7 @@ const updateComplaintStatus = async (req, res, next) => {
         title: `📋 Complaint Status: ${label}`,
         message: `Your complaint "${complaint.subject}" was updated to ${label}.${adminNotes ? ` Note: ${adminNotes}` : ''}`,
         type: 'complaint_update',
+        municipality: muniName,
         metadata: {
           complaintId: complaint._id,
           status: complaint.status,
@@ -813,6 +909,11 @@ const CATEGORY_META = {
 
 const getMonthlyComplaintAnalytics = async (req, res, next) => {
   try {
+    const isLgu = req.user?.role === 'lgu';
+    const isPoso = req.user?.role === 'poso';
+    const municipality = req.user?.municipality || 'Dagupan';
+    const muniScope = (isLgu || isPoso) ? { municipality } : {};
+
     const monthsCount = Math.min(Math.max(parseInt(req.query.months, 10) || 6, 3), 24);
     const now = new Date();
 
@@ -832,6 +933,7 @@ const getMonthlyComplaintAnalytics = async (req, res, next) => {
       const results = await Complaint.aggregate([
         {
           $match: {
+            ...muniScope,
             status: matchStatus,
             $or: [
               { [dateField]: { $gte: startDate } },
@@ -864,6 +966,7 @@ const getMonthlyComplaintAnalytics = async (req, res, next) => {
       const results = await Complaint.aggregate([
         {
           $match: {
+            ...muniScope,
             createdAt: { $gte: startDate },
           },
         },
@@ -886,6 +989,7 @@ const getMonthlyComplaintAnalytics = async (req, res, next) => {
       const results = await Complaint.aggregate([
         {
           $match: {
+            ...muniScope,
             status: { $ne: 'deleted' },
           },
         },
@@ -929,14 +1033,14 @@ const getMonthlyComplaintAnalytics = async (req, res, next) => {
       aggregateStatus(['endorsed_to_lgu', 'action_taken', 'terminated', 'resolved'], 'posoEndorsedAt'),
       aggregateTotalCreated(),
       aggregateCategories(),
-      Complaint.countDocuments({ status: { $in: ['resolved', 'terminated'] } }),
-      Complaint.countDocuments({ status: 'deleted' }),
-      Complaint.countDocuments({ status: 'action_taken' }),
-      Complaint.countDocuments({ status: 'terminated' }),
-      Complaint.countDocuments({ status: { $in: ['rejected', 'dismissed'] } }),
-      Complaint.countDocuments({ status: { $in: ['pending', 'under_review'] } }),
-      Complaint.countDocuments({ status: { $in: ['endorsed_to_lgu', 'action_taken', 'terminated', 'resolved'] } }),
-      Complaint.countDocuments(),
+      Complaint.countDocuments({ ...muniScope, status: { $in: ['resolved', 'terminated'] } }),
+      Complaint.countDocuments({ ...muniScope, status: 'deleted' }),
+      Complaint.countDocuments({ ...muniScope, status: 'action_taken' }),
+      Complaint.countDocuments({ ...muniScope, status: 'terminated' }),
+      Complaint.countDocuments({ ...muniScope, status: { $in: ['rejected', 'dismissed'] } }),
+      Complaint.countDocuments({ ...muniScope, status: { $in: ['pending', 'under_review'] } }),
+      Complaint.countDocuments({ ...muniScope, status: { $in: ['endorsed_to_lgu', 'action_taken', 'terminated', 'resolved'] } }),
+      Complaint.countDocuments(muniScope),
     ]);
 
     const monthlyTrends = monthList.map((m) => ({

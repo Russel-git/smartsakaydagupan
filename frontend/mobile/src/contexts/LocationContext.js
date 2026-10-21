@@ -85,6 +85,58 @@ export const LocationProvider = ({ children }) => {
     };
   }, []);
 
+  // Continuous position tracking across entire mobile app once permission is granted
+  useEffect(() => {
+    if (locationPermission !== 'granted') return;
+    let isMounted = true;
+    let webWatchId = null;
+    let nativeSub = null;
+
+    const onFix = (c, fallbackAcc = 20) => {
+      if (!isMounted) return;
+      const acc = Math.round(c.accuracy || fallbackAcc);
+      setLocation({
+        lat: c.latitude,
+        lng: c.longitude,
+        accuracy: acc,
+        isReal: true,
+      });
+    };
+
+    (async () => {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && navigator.geolocation) {
+          webWatchId = navigator.geolocation.watchPosition(
+            (pos) => onFix(pos.coords),
+            (err) => console.warn('Web GPS watch:', err.message),
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+          );
+        }
+        return;
+      }
+      try {
+        nativeSub = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 3000,
+            distanceInterval: 4,
+          },
+          (loc) => onFix(loc.coords, 15)
+        );
+      } catch (e) {
+        console.warn('Native GPS watch err:', e);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+      if (webWatchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(webWatchId);
+      }
+      if (nativeSub) nativeSub.remove();
+    };
+  }, [locationPermission]);
+
   return (
     <LocationContext.Provider
       value={{

@@ -15,6 +15,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useFeedback } from '../../contexts/FeedbackContext';
 import { complaintsAPI, routesAPI } from '../../api/services';
+import { getMunicipality } from '../../utils/storage';
 import { FONTS, SPACING, RADIUS, SHADOWS, COMPLAINT_CATEGORIES } from '../../utils/constants';
 
 const JEEPNEY_PLATE_REGEX = /^[A-Z]{3}[ -]?[0-9]{3,4}$/i;
@@ -45,11 +46,15 @@ const EditComplaintModal = ({ visible, complaint, onClose, onSuccess }) => {
       });
       setErrors({});
 
-      // Fetch active routes
-      routesAPI
-        .getAllRoutes()
-        .then(({ data }) => setRoutes(data.data || []))
-        .catch(() => {});
+      // Fetch active routes scoped to this municipality
+      (async () => {
+        try {
+          const savedMuni = await getMunicipality();
+          const activeMuni = (complaint.municipality || savedMuni || 'Dagupan').trim();
+          const { data } = await routesAPI.getAllRoutes({ municipality: activeMuni });
+          setRoutes(data.data || []);
+        } catch (_) {}
+      })();
     }
   }, [visible, complaint]);
 
@@ -106,7 +111,8 @@ const EditComplaintModal = ({ visible, complaint, onClose, onSuccess }) => {
         routeId: form.routeId || undefined,
       });
 
-      showSuccess('Report Updated', 'Your corrections have been updated in the Dagupan LGU system.');
+      const lguName = complaint.municipality || 'LGU';
+      showSuccess('Report Updated', `Your corrections have been updated in the ${lguName} LGU system.`);
       if (onSuccess) onSuccess(data.data || data);
       onClose();
     } catch (err) {
@@ -150,7 +156,7 @@ const EditComplaintModal = ({ visible, complaint, onClose, onSuccess }) => {
             <View style={styles.infoBanner}>
               <MaterialCommunityIcons name="information" size={18} color="#0284C7" />
               <Text style={styles.infoBannerText}>
-                You can correct mistake details before Dagupan LGU takes final action.
+                You can correct mistake details before {complaint.municipality || 'the'} LGU takes final action.
               </Text>
             </View>
           )}

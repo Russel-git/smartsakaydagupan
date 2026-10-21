@@ -110,10 +110,12 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email, password, municipality) => {
     setError(null);
     try {
-      const { data } = await authAPI.login({ email, password });
+      const payload = { email, password };
+      if (municipality) payload.municipality = municipality;
+      const { data } = await authAPI.login(payload);
       const { user: userData, accessToken, refreshToken } = data.data;
       await saveTokens(accessToken, refreshToken);
       await saveUser(userData);

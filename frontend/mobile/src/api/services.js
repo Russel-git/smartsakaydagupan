@@ -36,7 +36,7 @@ export const faresAPI = {
 };
 
 export const routesAPI = {
-  getAllRoutes: () => apiClient.get("/routes"),
+  getAllRoutes: (params) => apiClient.get("/routes", { params }),
   getRouteById: (id) => apiClient.get(`/routes/${id}`),
   getNearbyRoutes: (params) => apiClient.get("/routes/nearby", { params }),
   getBusTerminals: (params) =>
@@ -91,7 +91,7 @@ export const weatherAPI = {
 
 export const notificationsAPI = {
   getNotifications: (params) => apiClient.get("/notifications", { params }),
-  getUnreadCount: () => apiClient.get("/notifications/unread-count"),
+  getUnreadCount: (params) => apiClient.get("/notifications/unread-count", { params }),
   markAsRead: (id) => apiClient.put(`/notifications/${id}/read`),
   markAllAsRead: () => apiClient.put("/notifications/read-all"),
   deleteNotification: (id) => apiClient.delete(`/notifications/${id}`),

@@ -7,6 +7,18 @@ const apiResponse = require('../utils/apiResponse');
 
 const getStats = async (req, res, next) => {
   try {
+    const isLgu = req.user?.role === 'lgu';
+    const isPoso = req.user?.role === 'poso';
+    const municipality = req.user?.municipality || 'Dagupan';
+
+    const userFilter = (isLgu || isPoso) ? { municipality } : {};
+    const complaintFilter = (isLgu || isPoso) ? { municipality } : {};
+    const routeFilter = (isLgu || isPoso) ? { municipalities: municipality } : {};
+    const terminalFilter = (isLgu || isPoso) ? { municipality } : {};
+    const alertFilter = (isLgu || isPoso)
+      ? { municipality, status: 'pending_approval' }
+      : { status: 'pending_approval' };
+
     const [
       totalUsers,
       totalCommuters,
@@ -22,19 +34,19 @@ const getStats = async (req, res, next) => {
       totalTerminals,
       pendingAlertsCount,
     ] = await Promise.all([
-      User.countDocuments({ isActive: true }),
-      User.countDocuments({ role: 'commuter', isActive: true }),
-      User.countDocuments({ isVerified: true }),
-      User.countDocuments({ role: 'poso', isActive: true }),
-      Complaint.countDocuments(),
-      Complaint.countDocuments({ status: 'pending' }),
-      Complaint.countDocuments({ status: 'under_review' }),
-      Complaint.countDocuments({ status: 'endorsed_to_lgu' }),
-      Complaint.countDocuments({ status: 'resolved' }),
-      Route.countDocuments(),
-      Route.countDocuments({ isActive: true }),
-      Terminal.countDocuments(),
-      Notification.countDocuments({ status: 'pending_approval' }),
+      User.countDocuments({ ...userFilter, isActive: true }),
+      User.countDocuments({ ...userFilter, role: 'commuter', isActive: true }),
+      User.countDocuments({ ...userFilter, isVerified: true }),
+      User.countDocuments({ ...userFilter, role: 'poso', isActive: true }),
+      Complaint.countDocuments(complaintFilter),
+      Complaint.countDocuments({ ...complaintFilter, status: 'pending' }),
+      Complaint.countDocuments({ ...complaintFilter, status: 'under_review' }),
+      Complaint.countDocuments({ ...complaintFilter, status: 'endorsed_to_lgu' }),
+      Complaint.countDocuments({ ...complaintFilter, status: 'resolved' }),
+      Route.countDocuments(routeFilter),
+      Route.countDocuments({ ...routeFilter, isActive: true }),
+      Terminal.countDocuments(terminalFilter),
+      Notification.countDocuments(alertFilter),
     ]);
 
     return apiResponse.success(res, {
@@ -56,6 +68,11 @@ const getStats = async (req, res, next) => {
 
 const getAccountMetrics = async (req, res, next) => {
   try {
+    const isLgu = req.user?.role === 'lgu';
+    const isPoso = req.user?.role === 'poso';
+    const municipality = req.user?.municipality || 'Dagupan';
+    const baseFilter = (isLgu || isPoso) ? { municipality } : {};
+
     const [
       activeAccounts,
       suspendedAccounts,
@@ -64,12 +81,12 @@ const getAccountMetrics = async (req, res, next) => {
       commuterAccounts,
       adminAccounts,
     ] = await Promise.all([
-      User.countDocuments({ isActive: true }),
-      User.countDocuments({ isActive: false }),
-      User.countDocuments({ role: 'lgu' }),
-      User.countDocuments({ role: 'poso' }),
-      User.countDocuments({ role: 'commuter' }),
-      User.countDocuments({ role: 'admin' }),
+      User.countDocuments({ ...baseFilter, isActive: true }),
+      User.countDocuments({ ...baseFilter, isActive: false }),
+      User.countDocuments({ ...baseFilter, role: 'lgu' }),
+      User.countDocuments({ ...baseFilter, role: 'poso' }),
+      User.countDocuments({ ...baseFilter, role: 'commuter' }),
+      User.countDocuments({ ...baseFilter, role: 'admin' }),
     ]);
 
     return apiResponse.success(
@@ -89,10 +106,17 @@ const getAccountMetrics = async (req, res, next) => {
 
 const getActivity = async (req, res, next) => {
   try {
+    const isLgu = req.user?.role === 'lgu';
+    const isPoso = req.user?.role === 'poso';
+    const municipality = req.user?.municipality || 'Dagupan';
+
+    const userFilter = (isLgu || isPoso) ? { municipality } : {};
+    const complaintFilter = (isLgu || isPoso) ? { municipality } : {};
+
     const [recentUsers, recentComplaints] = await Promise.all([
-      User.find().sort({ createdAt: -1 }).limit(5).select('firstName lastName email role createdAt'),
-      Complaint.find().sort({ createdAt: -1 }).limit(5)
-        .populate('userId', 'firstName lastName').select('subject category status createdAt'),
+      User.find(userFilter).sort({ createdAt: -1 }).limit(5).select('firstName lastName email role createdAt municipality'),
+      Complaint.find(complaintFilter).sort({ createdAt: -1 }).limit(5)
+        .populate('userId', 'firstName lastName').select('subject category status createdAt municipality'),
     ]);
     return apiResponse.success(res, { recentUsers, recentComplaints });
   } catch (error) { next(error); }
@@ -131,6 +155,10 @@ const getAuditLogs = async (req, res, next) => {
 
 const getUserScalabilityAnalytics = async (req, res, next) => {
   try {
+    const isLgu = req.user?.role === 'lgu';
+    const municipality = req.user?.municipality || 'Dagupan';
+    const userScope = isLgu ? { municipality } : {};
+
     const monthsCount = Math.min(Math.max(parseInt(req.query.months, 10) || 6, 3), 24);
     const now = new Date();
 
@@ -155,16 +183,17 @@ const getUserScalabilityAnalytics = async (req, res, next) => {
       suspendedCount,
       userGrowthRaw,
     ] = await Promise.all([
-      User.countDocuments(),
-      User.countDocuments({ role: 'commuter' }),
-      User.countDocuments({ role: 'lgu' }),
-      User.countDocuments({ role: 'poso' }),
-      User.countDocuments({ role: 'admin' }),
-      User.countDocuments({ isActive: true }),
-      User.countDocuments({ isActive: false }),
+      User.countDocuments(userScope),
+      User.countDocuments({ ...userScope, role: 'commuter' }),
+      User.countDocuments({ ...userScope, role: 'lgu' }),
+      User.countDocuments({ ...userScope, role: 'poso' }),
+      User.countDocuments({ ...userScope, role: 'admin' }),
+      User.countDocuments({ ...userScope, isActive: true }),
+      User.countDocuments({ ...userScope, isActive: false }),
       User.aggregate([
         {
           $match: {
+            ...userScope,
             createdAt: { $gte: startDate },
           },
         },

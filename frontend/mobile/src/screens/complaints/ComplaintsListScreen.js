@@ -11,11 +11,13 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useFeedback } from '../../contexts/FeedbackContext';
 import { Card, LoadingSpinner, EmptyState, StatusBadge } from '../../components/common/SharedComponents';
 import ConfirmDialogModal from '../../components/common/ConfirmDialogModal';
 import EditComplaintModal from './EditComplaintModal';
 import { complaintsAPI } from '../../api/services';
+import { getMunicipality } from '../../utils/storage';
 import { FONTS, SPACING, RADIUS, SHADOWS, COMPLAINT_STATUS, COMPLAINT_CATEGORIES } from '../../utils/constants';
 import { formatDate, formatDateTime } from '../../utils/helpers';
 
@@ -34,13 +36,14 @@ const getStepProgress = (complaint) => {
   if (complaint.isArchived) {
     return { step: 0, label: 'Report Archived', percent: 100, color: '#F59E0B' };
   }
+  const muni = complaint.municipality || 'LGU';
   switch (complaint.status) {
     case 'pending':
       return { step: 1, label: 'Report Received (In Progress)', percent: 25, color: '#3B82F6' };
     case 'under_review':
       return { step: 2, label: 'Under Operator Review (In Progress)', percent: 50, color: '#0284C7' };
     case 'endorsed_to_lgu':
-      return { step: 3, label: 'Endorsed to Dagupan LGU', percent: 75, color: '#0284C7' };
+      return { step: 3, label: `Endorsed to ${muni} LGU`, percent: 75, color: '#0284C7' };
     case 'action_taken':
       return { step: 4, label: 'Official Action Taken', percent: 90, color: '#059669' };
     case 'terminated':
@@ -55,8 +58,10 @@ const getStepProgress = (complaint) => {
 
 const ComplaintsListScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
+  const { user } = useAuth();
   const { showSuccess, showError, showWarning } = useFeedback();
 
+  const [activeMuni, setActiveMuni] = useState(user?.municipality || 'Dagupan');
   const [complaints, setComplaints] = useState([]);
   const [counts, setCounts] = useState({ all: 0, active: 0, resolved: 0, archived: 0, deleted: 0 });
   const [loading, setLoading] = useState(true);
@@ -86,9 +91,13 @@ const ComplaintsListScreen = ({ navigation }) => {
 
   const loadComplaints = async (tabToLoad = activeTab) => {
     try {
+      const savedMuni = await getMunicipality();
+      const currentMuni = (savedMuni || user?.municipality || 'Dagupan').trim();
+      setActiveMuni(currentMuni);
       const { data } = await complaintsAPI.getMyComplaints({
         tab: tabToLoad,
         search: searchQuery.trim() || undefined,
+        municipality: currentMuni,
       });
 
       const list = data?.data || data?.complaints || [];
@@ -105,7 +114,7 @@ const ComplaintsListScreen = ({ navigation }) => {
 
   useEffect(() => {
     loadComplaints(activeTab);
-  }, [activeTab]);
+  }, [activeTab, user?.municipality]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -407,7 +416,7 @@ const ComplaintsListScreen = ({ navigation }) => {
                 ? 'Reports you archive to clean up your dashboard will appear here.'
                 : activeTab === 'deleted'
                 ? 'Cancelled or deleted reports will be kept here with full undo capability.'
-                : 'Your complaint history and official Dagupan LGU status will be displayed here.'
+                : `Your complaint history and official ${activeMuni} LGU status will be displayed here.`
             }
           />
         }
@@ -537,10 +546,10 @@ const ComplaintsListScreen = ({ navigation }) => {
                       : isArchived
                       ? 'Archived report (Read-only). Unarchive to edit or manage active tracking.'
                       : canEdit
-                      ? 'In Progress: You can edit or correct details before Dagupan LGU takes action.'
+                      ? `In Progress: You can edit or correct details before ${item.municipality || activeMuni} LGU takes action.`
                       : item.lguActionNotes
                       ? `LGU Action: ${item.lguActionNotes}`
-                      : `Escalated to Dagupan POSO for administrative review.`}
+                      : `Escalated to ${item.municipality || activeMuni} POSO for administrative review.`}
                   </Text>
                 </View>
 

@@ -4,25 +4,56 @@ import Constants from "expo-constants";
 import { getThemeColors } from "./themePalettes";
 
 const getDevServerIp = () => {
-  if (Platform.OS === "web") return "localhost";
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined" && window.location?.hostname) {
+      const h = window.location.hostname;
+      if (h && h !== "localhost" && h !== "127.0.0.1") {
+        return h;
+      }
+    }
+    return "localhost";
+  }
 
-  // Check modern Expo hostUri (Expo Go / SDK 49-54+)
+  // 1. Try hostUri from expoConfig (Expo SDK 49+)
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri && typeof hostUri === "string") {
+    const ip = hostUri.split(":")[0];
+    if (ip && ip !== "localhost" && ip !== "127.0.0.1") {
+      return ip;
+    }
+  }
+
+  // 2. Try linkingUri or experienceUrl (e.g., 'exp://192.168.1.3:8081')
+  const uri = Constants.linkingUri || Constants.experienceUrl;
+  if (uri && typeof uri === "string" && uri.includes("://")) {
+    const withoutScheme = uri.split("://")[1];
+    if (withoutScheme) {
+      const hostPart = withoutScheme.split("/")[0];
+      const ip = hostPart.split(":")[0];
+      if (ip && ip !== "localhost" && ip !== "127.0.0.1") {
+        return ip;
+      }
+    }
+  }
+
+  // 3. Try debuggerHost
   const debuggerHost =
-    Constants.expoConfig?.hostUri ||
     Constants.manifest2?.extra?.expoGo?.debuggerHost ||
+    Constants.expoGoConfig?.debuggerHost ||
     Constants.manifest?.debuggerHost;
 
-  if (debuggerHost) {
+  if (debuggerHost && typeof debuggerHost === "string") {
     const ip = debuggerHost.split(":")[0];
     if (ip && ip !== "localhost" && ip !== "127.0.0.1") {
       return ip;
     }
   }
 
+  // 4. Try NativeModules SourceCode scriptURL
   const scriptURL =
     NativeModules.SourceCode?.scriptURL ||
     NativeModules.ExponentConstants?.manifest?.debuggerHost;
-  if (scriptURL) {
+  if (scriptURL && typeof scriptURL === "string") {
     const address = scriptURL.includes("://")
       ? scriptURL.split("://")[1]
       : scriptURL;
@@ -35,8 +66,8 @@ const getDevServerIp = () => {
     }
   }
 
-  // Fallback to active local network IP
-  return "192.168.1.15";
+  // 5. Fallback to active local network IP of PC
+  return "192.168.1.3";
 };
 
 const DEV_IP = getDevServerIp();
@@ -52,26 +83,33 @@ export const API_BASE_URL = (() => {
       if (hostname === "localhost" || hostname === "127.0.0.1") {
         return "http://localhost:5000/api";
       }
-      // When deployed on Vercel or live cloud host, route to production Render API
+      // When accessed from a phone browser over LAN (e.g., 192.168.x.x, 10.x.x.x, 172.x.x.x, or direct IP)
       if (
-        !hostname.includes("192.168.") &&
-        !hostname.includes("10.") &&
-        !hostname.includes("172.")
+        hostname.includes("192.168.") ||
+        hostname.includes("10.") ||
+        hostname.includes("172.") ||
+        /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
       ) {
-        return "https://smartsakay-backend.onrender.com/api";
+        return `http://${hostname}:5000/api`;
       }
+      // When deployed on Vercel or live cloud host, route to production Render API
+      return "https://smartsakay-backend.onrender.com/api";
     }
   }
 
-  // 2. Explicit environment variable set at build or runtime
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
-
-  // 3. Dynamically resolve laptop's active IP from Expo connection for local mobile testing
+  // 2. Live Mobile / Expo Go connection:
+  // Dynamically resolve the host machine's IP address that Expo Go is currently connected to!
   const hostIp = getDevServerIp();
   if (hostIp && hostIp !== "localhost" && hostIp !== "127.0.0.1") {
     return `http://${hostIp}:5000/api`;
+  }
+
+  // 3. Explicit environment variable set at build or runtime (ignore stale 192.168.1.15 inlined string)
+  if (
+    process.env.EXPO_PUBLIC_API_URL &&
+    !process.env.EXPO_PUBLIC_API_URL.includes("192.168.1.15")
+  ) {
+    return process.env.EXPO_PUBLIC_API_URL;
   }
 
   return `http://${DEV_IP}:5000/api`;
@@ -223,11 +261,6 @@ export const COMPLAINT_STATUS = {
 export const VEHICLE_TYPES = [
   { value: "traditional", label: "Traditional Jeepney", icon: "bus" },
   { value: "modern", label: "Modern Jeepney", icon: "bus-articulated-front" },
-  {
-    value: "solo_ride",
-    label: "Solo Ride / Visitor",
-    icon: "account-arrow-right",
-  },
 ];
 
 export const DISCOUNT_TYPES = [

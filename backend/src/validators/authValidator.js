@@ -32,6 +32,7 @@ const registerSchema = Joi.object({
 const loginSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().required(),
+  municipality: Joi.string().trim().allow('', null).optional(),
 });
 
 const verifyOtpSchema = Joi.object({

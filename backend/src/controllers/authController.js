@@ -189,7 +189,7 @@ const resendOtp = async (req, res, next) => {
 
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, municipality } = req.body;
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       // Check if registration is still pending verification
@@ -239,6 +239,9 @@ const login = async (req, res, next) => {
     const accessToken = generateAccessToken(user._id, user.role);
     const refreshToken = generateRefreshToken(user._id);
     user.refreshToken = refreshToken;
+    if (municipality && typeof municipality === 'string' && municipality.trim() && (user.role === 'commuter' || user.role === 'guest')) {
+      user.municipality = municipality.trim();
+    }
     user.lastLogin = new Date();
     await user.save();
 

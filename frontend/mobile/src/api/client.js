@@ -10,9 +10,13 @@ const apiClient = axios.create({
   },
 });
 
-// Request interceptor — attach access token
+// Request interceptor — attach access token and ensure active baseURL
 apiClient.interceptors.request.use(
   async (config) => {
+    // Keep baseURL synchronized with active API_BASE_URL (clears any stale cached IP)
+    if (!config.baseURL || config.baseURL.includes("192.168.1.15")) {
+      config.baseURL = API_BASE_URL;
+    }
     const token = await getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

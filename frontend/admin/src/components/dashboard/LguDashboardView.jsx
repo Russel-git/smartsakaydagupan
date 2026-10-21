@@ -14,11 +14,14 @@ import {
 } from "lucide-react";
 import api from "../../api/client";
 import { useTheme } from "../../contexts/theme/ThemeContext";
+import { useAuth } from "../../contexts/AuthContext";
 import AnalyticsChart from "./AnalyticsChart";
 import ReportTypePieChart from "./ReportTypePieChart";
+import { formatLguJurisdiction } from "../../utils/lguHelpers";
 
 const LguDashboardView = () => {
   const { colors } = useTheme();
+  const { user } = useAuth();
 
   const [stats, setStats] = useState(null);
   const [cityRoutes, setCityRoutes] = useState([]);
@@ -192,8 +195,8 @@ const LguDashboardView = () => {
     },
     {
       title: "Terminal Hubs",
-      value: stats?.terminals?.total || 4,
-      subtitle: "Bus & Jeepney stations",
+      value: stats?.terminals?.total ?? 0,
+      subtitle: `${stats?.terminals?.total || 0} local terminals & hubs`,
       icon: Compass,
       to: "/terminals",
       color: "#7C3AED",
@@ -222,6 +225,8 @@ const LguDashboardView = () => {
     },
   ];
 
+  const currentMunicipality = user?.municipality || "Dagupan";
+
   return (
     <div style={{ padding: "0 0 40px 0" }}>
       {/* Header Banner */}
@@ -236,24 +241,39 @@ const LguDashboardView = () => {
         }}
       >
         <div>
-          <h1
-            style={{
-              fontSize: "24px",
-              fontWeight: "700",
-              color: colors.textPrimary,
-              margin: 0,
-            }}
-          >
-            City Transport Authority Operations
-          </h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <h1
+              style={{
+                fontSize: "24px",
+                fontWeight: "700",
+                color: colors.textPrimary,
+                margin: 0,
+              }}
+            >
+              {formatLguJurisdiction(currentMunicipality)} Transport Authority Operations
+            </h1>
+            <span
+              style={{
+                padding: "3px 10px",
+                borderRadius: "12px",
+                fontSize: "12px",
+                fontWeight: "700",
+                backgroundColor: colors.primary + "1A",
+                color: colors.primary,
+                border: `1px solid ${colors.primary}40`,
+              }}
+            >
+              LGU {currentMunicipality} Jurisdiction
+            </span>
+          </div>
           <p
             style={{
               fontSize: "13px",
               color: colors.textMuted,
-              margin: "4px 0 0 0",
+              margin: "6px 0 0 0",
             }}
           >
-            Executive transit telemetry, POSO field endorsement oversight, and road advisories for Dagupan City.
+            Executive transit telemetry, POSO field endorsement oversight, and road advisories for {formatLguJurisdiction(currentMunicipality)}.
           </p>
         </div>
 

@@ -24,6 +24,7 @@ import { useToast } from "../../../contexts/ToastContext";
 import { useTheme } from "../../../contexts/theme/ThemeContext";
 import { useSidebar } from "../../../contexts/SidebarContext";
 import ConfirmModal from "../../common/ConfirmModal";
+import { formatMunicipalityShort } from "../../../utils/lguHelpers";
 
 const Sidebar = () => {
   const { admin, logout, isAdmin, isLgu, isPoso } = useAuth();
@@ -234,7 +235,7 @@ const Sidebar = () => {
   const getRoleBadge = () => {
     if (isPoso) {
       return {
-        text: "POSO Field Enforcer",
+        text: admin?.municipality ? `POSO ${admin.municipality}` : "POSO Field Enforcer",
         color: "#D97706",
         backgroundColor: "#FEF3C7",
       };
@@ -242,7 +243,7 @@ const Sidebar = () => {
 
     if (isLgu) {
       return {
-        text: "LGU Transport Authority",
+        text: admin?.municipality ? `LGU ${admin.municipality}` : "LGU Transport Authority",
         color: "#059669",
         backgroundColor: "#D1FAE5",
       };
@@ -369,7 +370,9 @@ const Sidebar = () => {
                 fontSize: "11px",
               }}
             >
-              Dagupan City
+              {admin?.municipality
+                ? formatMunicipalityShort(admin.municipality)
+                : "Dagupan City"}
             </div>
           </div>
         )}

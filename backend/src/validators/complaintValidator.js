@@ -45,6 +45,7 @@ const createComplaintSchema = Joi.object({
     address: Joi.string().allow(''),
   }),
   attachments: Joi.array().items(Joi.string()).max(3),
+  municipality: Joi.string().trim().max(100).allow('', null),
 });
 
 const updateComplaintStatusSchema = Joi.object({
@@ -88,12 +89,17 @@ const lguActionSchema = Joi.object({
   sanctionIssued: Joi.string().allow('', null).max(200),
   lguEvidencePhoto: Joi.string().allow('', null).max(1000),
   evidencePhoto: Joi.string().allow('', null).max(1000),
-});
+  notes: Joi.string().allow('', null).max(2000),
+}).unknown(true);
 
 const lguTerminateSchema = Joi.object({
   lguTerminationNotes: Joi.string().allow('', null).max(2000),
+  resolutionNotes: Joi.string().allow('', null).max(2000),
   sanctionIssued: Joi.string().allow('', null).max(200),
-});
+  lguEvidencePhoto: Joi.string().allow('', null).max(1000),
+  evidencePhoto: Joi.string().allow('', null).max(1000),
+  notes: Joi.string().allow('', null).max(2000),
+}).unknown(true);
 
 const posoFieldReportSchema = Joi.object({
   subject: Joi.string().trim().min(3).max(200).required(),
@@ -113,6 +119,7 @@ const posoFieldReportSchema = Joi.object({
   ),
   attachments: Joi.array().items(Joi.string()).max(5),
   posoEndorsementNotes: Joi.string().allow('', null).max(2000),
+  municipality: Joi.string().trim().max(100).allow('', null),
 });
 
 const posoEndorseSchema = Joi.object({

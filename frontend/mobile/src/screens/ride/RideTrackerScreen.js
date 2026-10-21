@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -32,7 +32,10 @@ import {
   getRideHistory,
   saveRideToHistory,
   clearRideHistory,
+  getMunicipality,
 } from "../../utils/storage";
+
+
 
 // Haversine distance in kilometers
 const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
@@ -49,20 +52,191 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-// Check if commuter location is along a static route corridor (within threshold km)
-const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.45) => {
-  if (!routePath || !Array.isArray(routePath) || routePath.length === 0)
-    return true;
-  for (let i = 0; i < routePath.length; i++) {
-    const p = routePath[i];
-    const rLat = Array.isArray(p) ? p[0] : (p.lat ?? p.latitude);
-    const rLng = Array.isArray(p) ? p[1] : (p.lng ?? p.longitude);
-    if (rLat != null && rLng != null) {
-      const d = calculateDistanceKm(ptLat, ptLng, rLat, rLng);
-      if (d !== null && d <= thresholdKm) return true;
+// Calculate minimum perpendicular distance in km from a point to a route path
+const calculateDistanceToRouteKm = (ptLat, ptLng, routePath) => {
+  if (!routePath || !Array.isArray(routePath) || routePath.length === 0) {
+    return Infinity;
+  }
+  let minDistance = Infinity;
+  const numPoints = routePath.length;
+
+  for (let i = 0; i < numPoints; i++) {
+    const p1 = routePath[i];
+    const lat1 = Array.isArray(p1) ? p1[0] : (p1.lat ?? p1.latitude);
+    const lng1 = Array.isArray(p1) ? p1[1] : (p1.lng ?? p1.longitude);
+    if (lat1 == null || lng1 == null) continue;
+
+    // Distance to vertex
+    const dVertex = calculateDistanceKm(ptLat, ptLng, lat1, lng1);
+    if (dVertex < minDistance) minDistance = dVertex;
+
+    // Distance to line segment between vertex i and i + 1
+    if (i < numPoints - 1) {
+      const p2 = routePath[i + 1];
+      const lat2 = Array.isArray(p2) ? p2[0] : (p2.lat ?? p2.latitude);
+      const lng2 = Array.isArray(p2) ? p2[1] : (p2.lng ?? p2.longitude);
+      if (lat2 == null || lng2 == null) continue;
+
+      const cosMeanLat = Math.cos(((lat1 + lat2) * Math.PI) / 360);
+      const dx = (lng2 - lng1) * cosMeanLat;
+      const dy = lat2 - lat1;
+      const segLenSq = dx * dx + dy * dy;
+
+      if (segLenSq > 1e-12) {
+        const px = (ptLng - lng1) * cosMeanLat;
+        const py = ptLat - lat1;
+        const t = Math.max(0, Math.min(1, (px * dx + py * dy) / segLenSq));
+        const projLat = lat1 + t * (lat2 - lat1);
+        const projLng = lng1 + t * (lng2 - lng1);
+        const dSeg = calculateDistanceKm(ptLat, ptLng, projLat, projLng);
+        if (dSeg < minDistance) minDistance = dSeg;
+      }
     }
   }
-  return false;
+
+  return minDistance;
+};
+
+// Check if a point is strictly within the designated route corridor (within threshold km)
+const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.15) => {
+  if (!routePath || !Array.isArray(routePath) || routePath.length === 0) {
+    return false;
+  }
+  const dist = calculateDistanceToRouteKm(ptLat, ptLng, routePath);
+  return dist <= thresholdKm;
+};
+
+// Project any coordinate onto the closest point strictly on the route polyline
+const projectPointToRoute = (ptLat, ptLng, routePath) => {
+  if (!routePath || !Array.isArray(routePath) || routePath.length === 0) {
+    return { lat: ptLat, lng: ptLng, dist: 0 };
+  }
+  let best = { lat: ptLat, lng: ptLng, dist: Infinity, segIdx: 0, t: 0 };
+  const numPoints = routePath.length;
+
+  for (let i = 0; i < numPoints; i++) {
+    const p1 = routePath[i];
+    const lat1 = Number(p1.lat ?? p1[0]);
+    const lng1 = Number(p1.lng ?? p1[1]);
+    const dVertex = calculateDistanceKm(ptLat, ptLng, lat1, lng1);
+    if (dVertex < best.dist) {
+      best = { lat: lat1, lng: lng1, dist: dVertex, segIdx: i, t: 0 };
+    }
+
+    if (i < numPoints - 1) {
+      const p2 = routePath[i + 1];
+      const lat2 = Number(p2.lat ?? p2[0]);
+      const lng2 = Number(p2.lng ?? p2[1]);
+      const cosMeanLat = Math.cos(((lat1 + lat2) * Math.PI) / 360);
+      const dx = (lng2 - lng1) * cosMeanLat;
+      const dy = lat2 - lat1;
+      const segLenSq = dx * dx + dy * dy;
+
+      if (segLenSq > 1e-12) {
+        const px = (ptLng - lng1) * cosMeanLat;
+        const py = ptLat - lat1;
+        const t = Math.max(0, Math.min(1, (px * dx + py * dy) / segLenSq));
+        const projLat = lat1 + t * (lat2 - lat1);
+        const projLng = lng1 + t * (lng2 - lng1);
+        const dSeg = calculateDistanceKm(ptLat, ptLng, projLat, projLng);
+        if (dSeg < best.dist) {
+          best = { lat: projLat, lng: projLng, dist: dSeg, segIdx: i, t };
+        }
+      }
+    }
+  }
+
+  return best;
+};
+
+// Calculate distance strictly along the route polyline (km count starts on route itself)
+const getRouteDistanceKm = (origin, destination, routePath, isLoop = true) => {
+  if (!origin || !destination || origin.lat == null || destination.lat == null) return 0;
+  if (!routePath || !Array.isArray(routePath) || routePath.length < 2) {
+    return Number(
+      calculateDistanceKm(origin.lat, origin.lng, destination.lat, destination.lng).toFixed(2),
+    );
+  }
+
+  // Pre-calculate cumulative distance along the route polyline
+  const cumDist = [0];
+  for (let i = 0; i < routePath.length - 1; i++) {
+    const p1 = routePath[i];
+    const p2 = routePath[i + 1];
+    const lat1 = Number(p1.lat ?? p1[0]);
+    const lng1 = Number(p1.lng ?? p1[1]);
+    const lat2 = Number(p2.lat ?? p2[0]);
+    const lng2 = Number(p2.lng ?? p2[1]);
+    cumDist.push(cumDist[i] + calculateDistanceKm(lat1, lng1, lat2, lng2));
+  }
+  const totalLength = cumDist[cumDist.length - 1];
+  if (totalLength <= 0.001) return 0;
+
+  // Project points and gather candidate segments within corridor threshold
+  const getProjections = (pt) => {
+    let bestDist = Infinity;
+    const candidates = [];
+    const numPoints = routePath.length;
+
+    for (let i = 0; i < numPoints - 1; i++) {
+      const p1 = routePath[i];
+      const p2 = routePath[i + 1];
+      const lat1 = Number(p1.lat ?? p1[0]);
+      const lng1 = Number(p1.lng ?? p1[1]);
+      const lat2 = Number(p2.lat ?? p2[0]);
+      const lng2 = Number(p2.lng ?? p2[1]);
+
+      const cosMeanLat = Math.cos(((lat1 + lat2) * Math.PI) / 360);
+      const dx = (lng2 - lng1) * cosMeanLat;
+      const dy = lat2 - lat1;
+      const segLenSq = dx * dx + dy * dy;
+      let t = 0;
+      let projLat = lat1;
+      let projLng = lng1;
+
+      if (segLenSq > 1e-12) {
+        const px = (pt.lng - lng1) * cosMeanLat;
+        const py = pt.lat - lat1;
+        t = Math.max(0, Math.min(1, (px * dx + py * dy) / segLenSq));
+        projLat = lat1 + t * (lat2 - lat1);
+        projLng = lng1 + t * (lng2 - lng1);
+      }
+
+      const d = calculateDistanceKm(pt.lat, pt.lng, projLat, projLng);
+      if (d < bestDist) bestDist = d;
+      const segDist = cumDist[i + 1] - cumDist[i];
+      const routePosKm = cumDist[i] + t * segDist;
+      candidates.push({ dist: d, routePosKm });
+    }
+
+    const threshold = Math.max(bestDist + 0.05, 0.12);
+    return candidates.filter((c) => c.dist <= threshold);
+  };
+
+  const oProjs = getProjections(origin);
+  const dProjs = getProjections(destination);
+  if (oProjs.length === 0 || dProjs.length === 0) return 0;
+
+  let minTrip = Infinity;
+  for (const o of oProjs) {
+    for (const d of dProjs) {
+      let forwardDist;
+      if (d.routePosKm >= o.routePosKm) {
+        forwardDist = d.routePosKm - o.routePosKm;
+      } else if (isLoop) {
+        forwardDist = totalLength - o.routePosKm + d.routePosKm;
+      } else {
+        forwardDist = o.routePosKm - d.routePosKm;
+      }
+      const directDist = Math.abs(d.routePosKm - o.routePosKm);
+      const tripCandidate = Math.min(forwardDist, directDist);
+      if (tripCandidate < minTrip) {
+        minTrip = tripCandidate;
+      }
+    }
+  }
+
+  return minTrip === Infinity ? 0 : Number(minTrip.toFixed(2));
 };
 
 const normalizeLocation = (location) => {
@@ -99,7 +273,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
 
   const { location: sharedLocation } = useSharedLocation();
   const { colors } = useTheme();
-  const { isGuest } = useAuth();
+  const { isGuest, user } = useAuth();
   const { showSuccess, showInfo, showWarning } = useFeedback();
 
   const insets = useSafeAreaInsets();
@@ -123,6 +297,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
     onConfirm: () => {},
   });
   const webViewRef = useRef(null);
+  const iframeRef = useRef(null);
 
   // View Tab: 'tracker' | 'history'
   const [activeTab, setActiveTab] = useState(
@@ -146,6 +321,11 @@ const RideTrackerScreen = ({ route, navigation }) => {
   const [discount, setDiscount] = useState("none");
   const [openDropdown, setOpenDropdown] = useState(null); // 'route' | 'vehicle' | 'discount' | null
 
+  // Destination Pinpoint state & live expected fare
+  const [destination, setDestination] = useState(null);
+
+
+
   // Ride State: 'idle' | 'riding' | 'completed'
   const [rideState, setRideState] = useState("idle");
 
@@ -166,6 +346,9 @@ const RideTrackerScreen = ({ route, navigation }) => {
   const timerIntervalRef = useRef(null);
   const simulationIntervalRef = useRef(null);
   const watchSubscriptionRef = useRef(null);
+  const headingSubRef = useRef(null);
+  const lastSentHeadingRef = useRef(-999);
+  const currentHeadingRef = useRef(0);
 
   const loadHistory = async () => {
     const data = await getRideHistory();
@@ -178,12 +361,24 @@ const RideTrackerScreen = ({ route, navigation }) => {
     rideStateRef.current = rideState;
   }, [rideState]);
 
+  const selectedRouteRef = useRef(selectedRoute);
+  useEffect(() => {
+    selectedRouteRef.current = selectedRoute;
+  }, [selectedRoute]);
+
+  const startLocationRef = useRef(startLocation);
+  useEffect(() => {
+    startLocationRef.current = startLocation;
+  }, [startLocation]);
+
   // Load active routes & ride history
   useEffect(() => {
     loadHistory();
     const fetchRoutes = async () => {
       try {
-        const { data } = await routesAPI.getAllRoutes();
+        const savedMuni = await getMunicipality();
+        const activeMuni = (savedMuni || user?.municipality || "Dagupan").trim();
+        const { data } = await routesAPI.getAllRoutes({ municipality: activeMuni });
         const routeList = Array.isArray(data.data) ? data.data : [];
         setRoutes(routeList);
         if (routeList.length > 0) {
@@ -221,24 +416,41 @@ const RideTrackerScreen = ({ route, navigation }) => {
       return;
     }
 
-    const previousLocation = lastLocationRef.current;
+    const currentRoute = selectedRouteRef.current;
+    const routePoints =
+      currentRoute?.path &&
+      Array.isArray(currentRoute.path) &&
+      currentRoute.path.length > 0
+        ? currentRoute.path
+        : currentRoute?.waypoints;
 
-    if (!previousLocation) {
+    if (routePoints && routePoints.length >= 2 && startLocationRef.current) {
+      const traveledOnRoute = getRouteDistanceKm(
+        startLocationRef.current,
+        nextLocation,
+        routePoints,
+        currentRoute?.isLoop !== false,
+      );
+      if (traveledOnRoute > 0) {
+        setDistanceTraveledKm((prev) => Math.max(prev, traveledOnRoute));
+      }
       lastLocationRef.current = nextLocation;
-      return;
-    }
-
-    const stepDist = calculateDistanceKm(
-      previousLocation.lat,
-      previousLocation.lng,
-      nextLocation.lat,
-      nextLocation.lng,
-    );
-
-    if (stepDist > 0.003 && stepDist < 2.0) {
-      setDistanceTraveledKm((prev) => Number((prev + stepDist).toFixed(3)));
-
-      lastLocationRef.current = nextLocation;
+    } else {
+      const previousLocation = lastLocationRef.current;
+      if (!previousLocation) {
+        lastLocationRef.current = nextLocation;
+        return;
+      }
+      const stepDist = calculateDistanceKm(
+        previousLocation.lat,
+        previousLocation.lng,
+        nextLocation.lat,
+        nextLocation.lng,
+      );
+      if (stepDist > 0.003 && stepDist < 2.0) {
+        setDistanceTraveledKm((prev) => Number((prev + stepDist).toFixed(3)));
+        lastLocationRef.current = nextLocation;
+      }
     }
   }, [sharedLocation]);
 
@@ -256,10 +468,6 @@ const RideTrackerScreen = ({ route, navigation }) => {
       baseFare = 17;
       baseDistanceKm = 4;
       perKmRate = 2.4;
-    } else if (vehicleType === "solo_ride" || vehicleType === "tricycle") {
-      baseFare = 15;
-      baseDistanceKm = 1;
-      perKmRate = 3.0;
     }
 
     let subtotal;
@@ -288,6 +496,74 @@ const RideTrackerScreen = ({ route, navigation }) => {
   };
 
   const liveFareData = computeLiveFare(distanceTraveledKm);
+
+  // Pre-calculated fare to pinpointed destination strictly along the route polyline
+  const destinationFareData = useMemo(() => {
+    if (!destination) return null;
+    const origin = startLocation || currentLocation;
+    if (!origin || origin.lat == null || origin.lng == null) return null;
+
+    const routePoints =
+      selectedRoute?.path &&
+      Array.isArray(selectedRoute.path) &&
+      selectedRoute.path.length > 0
+        ? selectedRoute.path
+        : selectedRoute?.waypoints &&
+            Array.isArray(selectedRoute.waypoints) &&
+            selectedRoute.waypoints.length > 0
+          ? selectedRoute.waypoints
+          : [];
+
+    const routeKm = Math.max(
+      0.1,
+      getRouteDistanceKm(
+        origin,
+        destination,
+        routePoints,
+        selectedRoute?.isLoop !== false,
+      ),
+    );
+    const fareInfo = computeLiveFare(routeKm);
+    const estMins = Math.max(1, Math.round((routeKm / 30) * 60)); // ~30 km/h average PUJ speed
+
+    return {
+      distanceKm: routeKm,
+      estMinutes: estMins,
+      fare: fareInfo.finalFare,
+      regularFare: fareInfo.regularFare,
+      baseFare: fareInfo.baseFare,
+      baseDistanceKm: fareInfo.baseDistanceKm,
+      perKmRate: fareInfo.perKmRate,
+      extraKm: fareInfo.extraKm,
+      isBase: fareInfo.isBase,
+    };
+  }, [destination, startLocation, currentLocation, selectedRoute, vehicleType, discount]);
+
+  // Remaining distance to destination while riding measured strictly along the route polyline
+  const remainingDistanceToDestKm = useMemo(() => {
+    if (!destination || !currentLocation || currentLocation.lat == null) return null;
+    const routePoints =
+      selectedRoute?.path &&
+      Array.isArray(selectedRoute.path) &&
+      selectedRoute.path.length > 0
+        ? selectedRoute.path
+        : selectedRoute?.waypoints &&
+            Array.isArray(selectedRoute.waypoints) &&
+            selectedRoute.waypoints.length > 0
+          ? selectedRoute.waypoints
+          : [];
+
+    const routeKm = getRouteDistanceKm(
+      currentLocation,
+      destination,
+      routePoints,
+      selectedRoute?.isLoop !== false,
+    );
+    return Math.max(0, routeKm);
+  }, [destination, currentLocation, selectedRoute]);
+
+  const isNearDestination =
+    remainingDistanceToDestKm !== null && remainingDistanceToDestKm <= 0.15;
 
   // Start Ride handler
   const handleStartRide = async () => {
@@ -333,8 +609,20 @@ const RideTrackerScreen = ({ route, navigation }) => {
       }
     }
 
-    setStartLocation(currentLocation);
-    lastLocationRef.current = currentLocation;
+    // Snap starting point directly to the route polyline so km count starts on the route itself
+    const projStart =
+      routePoints && routePoints.length >= 2
+        ? projectPointToRoute(currentLocation.lat, currentLocation.lng, routePoints)
+        : currentLocation;
+    const initialRouteStart = {
+      ...currentLocation,
+      lat: projStart.lat,
+      lng: projStart.lng,
+    };
+
+    setStartLocation(initialRouteStart);
+    startLocationRef.current = initialRouteStart;
+    lastLocationRef.current = initialRouteStart;
     setDistanceTraveledKm(0);
     setElapsedSeconds(0);
     setRideState("riding");
@@ -400,29 +688,46 @@ const RideTrackerScreen = ({ route, navigation }) => {
     setGpsReady(true);
     setGpsError("");
 
-    const previousLocation = lastLocationRef.current;
-
-    if (!previousLocation) {
-      lastLocationRef.current = nextCoords;
-      return;
-    }
-
     if (rideStateRef.current !== "riding") {
       lastLocationRef.current = nextCoords;
       return;
     }
 
-    const stepDist = calculateDistanceKm(
-      previousLocation.lat,
-      previousLocation.lng,
-      nextCoords.lat,
-      nextCoords.lng,
-    );
+    const currentRoute = selectedRouteRef.current;
+    const routePoints =
+      currentRoute?.path &&
+      Array.isArray(currentRoute.path) &&
+      currentRoute.path.length > 0
+        ? currentRoute.path
+        : currentRoute?.waypoints;
 
-    if (stepDist > 0.003 && stepDist < 2.0) {
-      setDistanceTraveledKm((prev) => parseFloat((prev + stepDist).toFixed(3)));
-
+    if (routePoints && routePoints.length >= 2 && startLocationRef.current) {
+      const traveledOnRoute = getRouteDistanceKm(
+        startLocationRef.current,
+        nextCoords,
+        routePoints,
+        currentRoute?.isLoop !== false,
+      );
+      if (traveledOnRoute > 0) {
+        setDistanceTraveledKm((prev) => Math.max(prev, traveledOnRoute));
+      }
       lastLocationRef.current = nextCoords;
+    } else {
+      const previousLocation = lastLocationRef.current;
+      if (!previousLocation) {
+        lastLocationRef.current = nextCoords;
+        return;
+      }
+      const stepDist = calculateDistanceKm(
+        previousLocation.lat,
+        previousLocation.lng,
+        nextCoords.lat,
+        nextCoords.lng,
+      );
+      if (stepDist > 0.003 && stepDist < 2.0) {
+        setDistanceTraveledKm((prev) => parseFloat((prev + stepDist).toFixed(3)));
+        lastLocationRef.current = nextCoords;
+      }
     }
   };
 
@@ -471,6 +776,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
       timestamp: new Date().toISOString(),
       routeName: selectedRoute?.name || "Dagupan Route",
       routeCode: selectedRoute?.code || "",
+      destination: destination?.name || "Drop-Off",
       vehicleType,
       fare: liveFareData.finalFare,
       regularFare: liveFareData.regularFare,
@@ -512,6 +818,8 @@ const RideTrackerScreen = ({ route, navigation }) => {
     setDistanceTraveledKm(0);
     setElapsedSeconds(0);
     setStartLocation(null);
+    setDestination(null);
+    sendDestinationToMap(null);
     setRideState("idle");
   };
 
@@ -522,33 +830,321 @@ const RideTrackerScreen = ({ route, navigation }) => {
     return `${mins.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
+  const sendHeadingToMap = (deg) => {
+    if (typeof deg !== "number" || isNaN(deg)) return;
+    const rounded = Math.round(deg);
+    if (Math.abs(rounded - lastSentHeadingRef.current) < 1) return;
+    lastSentHeadingRef.current = rounded;
+    currentHeadingRef.current = rounded;
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ type: "UPDATE_HEADING", heading: rounded }),
+        "*",
+      );
+    } else if (webViewRef.current) {
+      webViewRef.current.injectJavaScript(
+        `if (window.updateHeading) { window.updateHeading(${rounded}); } true;`,
+      );
+    }
+  };
+
+  const pushLocationToMap = (loc) => {
+    const targetLoc = loc || currentLocation;
+    if (!targetLoc || targetLoc.lat == null || targetLoc.lng == null) return;
+    const { lat, lng, accuracy } = targetLoc;
+
+    if (Platform.OS === "web") {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({
+          type: "UPDATE_COMMUTER_LOCATION",
+          lat,
+          lng,
+          accuracy: accuracy || 10,
+          heading: currentHeadingRef.current,
+        }),
+        "*",
+      );
+    } else {
+      webViewRef.current?.injectJavaScript(
+        `if (window.updateCommuterLocation) { window.updateCommuterLocation(${lat}, ${lng}, ${accuracy || 10}, ${currentHeadingRef.current}); } true;`,
+      );
+    }
+  };
+
+  const sendDestinationToMap = (dest) => {
+    if (!dest) {
+      if (Platform.OS === "web") {
+        iframeRef.current?.contentWindow?.postMessage(
+          JSON.stringify({ type: "CLEAR_DESTINATION" }),
+          "*"
+        );
+      } else {
+        webViewRef.current?.injectJavaScript(
+          "window.clearDestinationFromApp && window.clearDestinationFromApp(); true;"
+        );
+      }
+      return;
+    }
+
+    if (Platform.OS === "web") {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({
+          type: "SET_DESTINATION",
+          lat: dest.lat,
+          lng: dest.lng,
+          name: dest.name || "Pinpointed Destination",
+        }),
+        "*"
+      );
+    } else {
+      webViewRef.current?.injectJavaScript(
+        `window.setDestinationFromApp && window.setDestinationFromApp(${dest.lat}, ${dest.lng}, ${JSON.stringify(dest.name || "Pinpointed Destination")}); true;`
+      );
+    }
+  };
+
+
+
+  const handleClearDestination = () => {
+    setDestination(null);
+    sendDestinationToMap(null);
+  };
+
+  const handleMapEvent = (data) => {
+    if (!data) return;
+    if (data.type === "PINPOINT_OUTSIDE_ROUTE") {
+      showWarning(
+        "Invalid Destination",
+        "Your destination is not within the route",
+      );
+      sendDestinationToMap(null);
+      setDestination(null);
+      return;
+    }
+    if (data.type === "PINPOINT_DESTINATION") {
+      const routePoints =
+        selectedRoute?.path &&
+        Array.isArray(selectedRoute.path) &&
+        selectedRoute.path.length > 0
+          ? selectedRoute.path
+          : selectedRoute?.waypoints &&
+              Array.isArray(selectedRoute.waypoints) &&
+              selectedRoute.waypoints.length > 0
+            ? selectedRoute.waypoints
+            : [];
+
+      if (!isPointNearRoute(data.lat, data.lng, routePoints, 0.15)) {
+        showWarning(
+          "Invalid Destination",
+          "Your destination is not within the route",
+        );
+        sendDestinationToMap(null);
+        setDestination(null);
+        return;
+      }
+
+      const proj = projectPointToRoute(data.lat, data.lng, routePoints);
+      const name = data.name || "Pinpointed Destination";
+      const snappedDest = {
+        lat: proj.lat,
+        lng: proj.lng,
+        name,
+      };
+
+      setDestination(snappedDest);
+      showInfo(
+        "Destination Dropped",
+        "Exact fare to pay driver updated based on your pinpointed drop-off!",
+      );
+    }
+  };
+
+  // Whenever selected route changes, clear destination if it is not within the new route
+  useEffect(() => {
+    if (!destination) return;
+    const routePoints =
+      selectedRoute?.path &&
+      Array.isArray(selectedRoute.path) &&
+      selectedRoute.path.length > 0
+        ? selectedRoute.path
+        : selectedRoute?.waypoints &&
+            Array.isArray(selectedRoute.waypoints) &&
+            selectedRoute.waypoints.length > 0
+          ? selectedRoute.waypoints
+          : [];
+    if (!isPointNearRoute(destination.lat, destination.lng, routePoints, 0.15)) {
+      setDestination(null);
+      sendDestinationToMap(null);
+    }
+  }, [selectedRoute?._id]);
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handler = (e) => {
+        try {
+          const d = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
+          if (
+            d &&
+            (d.type === "PINPOINT_DESTINATION" ||
+              d.type === "PINPOINT_OUTSIDE_ROUTE")
+          ) {
+            handleMapEvent(d);
+          }
+        } catch (_) {}
+      };
+      window.addEventListener("message", handler);
+      return () => window.removeEventListener("message", handler);
+    }
+  }, [selectedRoute]);
+
+  // Watch Device Compass / Orientation in Real-Time (Rotates flashlight beam as phone turns)
+  useEffect(() => {
+    let isMounted = true;
+    let webOrientationHandler = null;
+
+    const startHeadingWatcher = async () => {
+      try {
+        if (Platform.OS !== "web") {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (status === "granted") {
+            if (
+              headingSubRef.current &&
+              typeof headingSubRef.current.remove === "function"
+            ) {
+              headingSubRef.current.remove();
+            }
+            headingSubRef.current = await Location.watchHeadingAsync((data) => {
+              if (!isMounted) return;
+              const h =
+                data.trueHeading >= 0 ? data.trueHeading : data.magHeading;
+              if (typeof h === "number" && !isNaN(h)) {
+                sendHeadingToMap(h);
+              }
+            });
+          }
+        } else if (typeof window !== "undefined") {
+          webOrientationHandler = (ev) => {
+            if (!isMounted) return;
+            let h = null;
+            if (
+              ev.webkitCompassHeading !== undefined &&
+              ev.webkitCompassHeading !== null
+            ) {
+              h = ev.webkitCompassHeading;
+            } else if (ev.alpha !== null && ev.alpha !== undefined) {
+              h = (360 - ev.alpha) % 360;
+            }
+            if (h !== null && !isNaN(h)) {
+              const screenAngle =
+                window.screen?.orientation?.angle ||
+                (typeof window.orientation === "number"
+                  ? window.orientation
+                  : 0);
+              const adjusted = (h + screenAngle + 360) % 360;
+              sendHeadingToMap(adjusted);
+            }
+          };
+
+          if ("ondeviceorientationabsolute" in window) {
+            window.addEventListener(
+              "deviceorientationabsolute",
+              webOrientationHandler,
+              false,
+            );
+          } else if ("ondeviceorientation" in window) {
+            window.addEventListener(
+              "deviceorientation",
+              webOrientationHandler,
+              false,
+            );
+          }
+
+          const requestIosPermission = async () => {
+            if (
+              typeof DeviceOrientationEvent !== "undefined" &&
+              typeof DeviceOrientationEvent.requestPermission === "function"
+            ) {
+              try {
+                const resp = await DeviceOrientationEvent.requestPermission();
+                if (resp === "granted" && webOrientationHandler) {
+                  window.addEventListener(
+                    "deviceorientation",
+                    webOrientationHandler,
+                    false,
+                  );
+                }
+              } catch (_) {}
+            }
+            window.removeEventListener("click", requestIosPermission);
+            window.removeEventListener("touchend", requestIosPermission);
+          };
+          window.addEventListener("click", requestIosPermission, {
+            once: true,
+          });
+          window.addEventListener("touchend", requestIosPermission, {
+            once: true,
+          });
+        }
+      } catch (err) {
+        console.warn("Heading watch initialization error in RideTracker:", err);
+      }
+    };
+
+    startHeadingWatcher();
+
+    return () => {
+      isMounted = false;
+      if (
+        headingSubRef.current &&
+        typeof headingSubRef.current.remove === "function"
+      ) {
+        headingSubRef.current.remove();
+        headingSubRef.current = null;
+      }
+      if (
+        Platform.OS === "web" &&
+        typeof window !== "undefined" &&
+        webOrientationHandler
+      ) {
+        window.removeEventListener(
+          "deviceorientationabsolute",
+          webOrientationHandler,
+        );
+        window.removeEventListener(
+          "deviceorientation",
+          webOrientationHandler,
+        );
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (currentLocation?.lat != null && currentLocation?.lng != null) {
+      pushLocationToMap(currentLocation);
+    }
+  }, [currentLocation?.lat, currentLocation?.lng]);
+
   // Generate Leaflet Map HTML
   const generateMapHtml = () => {
-    const lat = currentLocation?.lat;
-    const lng = currentLocation?.lng;
+    const centerLat = startLocation?.lat ?? currentLocation?.lat ?? 16.0433;
+    const centerLng = startLocation?.lng ?? currentLocation?.lng ?? 120.3342;
+    const hasInitialLoc = Boolean(
+      currentLocation?.lat != null && currentLocation?.lng != null,
+    );
 
-    if (lat == null || lng == null) {
-      return `
-    <!DOCTYPE html>
-    <html>
-      <body style="
-        margin: 0;
-        height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #EFE6DD;
-        color: #463737;
-        font-family: sans-serif;
-      ">
-        <p>Waiting for your actual GPS location...</p>
-      </body>
-    </html>
-  `;
-    }
     const startLat = startLocation?.lat ?? null;
     const startLng = startLocation?.lng ?? null;
-    const pathCoords = selectedRoute?.path || [];
+    const pathCoords =
+      selectedRoute?.path &&
+      Array.isArray(selectedRoute.path) &&
+      selectedRoute.path.length > 0
+        ? selectedRoute.path
+        : selectedRoute?.waypoints &&
+            Array.isArray(selectedRoute.waypoints) &&
+            selectedRoute.waypoints.length > 0
+          ? selectedRoute.waypoints
+          : [];
 
     return `
       <!DOCTYPE html>
@@ -560,34 +1156,155 @@ const RideTrackerScreen = ({ route, navigation }) => {
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
           html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; background: #0f172a; }
-          .commuter-marker {
-            width: 24px; height: 24px; border-radius: 50%; background: #2563EB;
-            border: 3px solid #ffffff; box-shadow: 0 0 16px rgba(37,99,235,1);
-            display: flex; align-items: center; justify-content: center;
-            animation: pulse-ring 2s infinite;
+          
+          /* Directional Flashlight Beam for Live Commuter Location Marker */
+          .origin-marker-wrap {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
           }
-          .commuter-inner {
-            width: 8px; height: 8px; border-radius: 50%; background: #ffffff;
+          .light-beam-rotor {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 80px;
+            height: 80px;
+            pointer-events: none;
+            transform-origin: 40px 40px;
+            transition: transform 0.18s cubic-bezier(0.2, 0.9, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
-          @keyframes pulse-ring {
-            0% { box-shadow: 0 0 0 0 rgba(37,99,235,0.8); }
-            70% { box-shadow: 0 0 0 14px rgba(37,99,235,0); }
-            100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+          .light-beam-cone {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            /* ~96-degree wide high-contrast blue/cyan flashlight beam */
+            background: conic-gradient(
+              from -48deg at 50% 50%,
+              rgba(37, 99, 235, 0) 0deg,
+              rgba(56, 189, 248, 0.35) 14deg,
+              rgba(14, 165, 233, 0.82) 30deg,
+              rgba(240, 249, 255, 0.98) 48deg,
+              rgba(14, 165, 233, 0.82) 66deg,
+              rgba(56, 189, 248, 0.35) 82deg,
+              rgba(37, 99, 235, 0) 96deg,
+              transparent 96deg,
+              transparent 360deg
+            );
+            -webkit-mask-image: radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0.95) 28%, rgba(0,0,0,0) 60%);
+            mask-image: radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0.95) 28%, rgba(0,0,0,0) 60%);
+            filter: drop-shadow(0 0 6px rgba(14, 165, 233, 0.9)) drop-shadow(0 0 1.5px rgba(2, 132, 199, 0.65));
+            animation: googleBeamPulse 2.8s infinite ease-in-out;
           }
+          @keyframes googleBeamPulse {
+            0%, 100% { opacity: 0.92; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.03); }
+          }
+          .commuter-puck-beacon {
+            position: relative;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .commuter-puck-pulse {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: rgba(37, 99, 235, 0.4);
+            animation: googleRadar 2.2s infinite ease-out;
+          }
+          .commuter-puck-core {
+            position: relative;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #2563EB;
+            border: 2px solid #ffffff;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.35);
+          }
+          @keyframes googleRadar {
+            0% { transform: scale(0.65); opacity: 0.95; }
+            100% { transform: scale(2.0); opacity: 0; }
+          }
+
           .boarding-pin {
             background: #16A34A; color: white; width: 26px; height: 26px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center; font-size: 13px;
             font-weight: bold; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
           }
+
+          /* Small but highly noticeable 📍 pinpoint icon */
+          .dest-pin-compact {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #EF4444;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: bold;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 0 3px rgba(239, 68, 68, 0.35);
+            cursor: grab;
+            transition: transform 0.15s ease;
+            animation: pinPulse 2.2s infinite ease-in-out;
+          }
+          .dest-pin-compact:active {
+            cursor: grabbing;
+            transform: scale(1.2);
+          }
+          @keyframes pinPulse {
+            0%, 100% { box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 0 3px rgba(239, 68, 68, 0.35); }
+            50% { box-shadow: 0 2px 10px rgba(0,0,0,0.65), 0 0 0 6px rgba(239, 68, 68, 0.15); }
+          }
+
+          .map-hint-pill {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.88); color: #fff; padding: 5px 12px;
+            border-radius: 20px; font-size: 11px; font-family: sans-serif; font-weight: 600;
+            z-index: 1000; pointer-events: none; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            transition: background 0.25s ease;
+            white-space: nowrap;
+          }
         </style>
       </head>
       <body>
         <div id="map"></div>
+        <div class="map-hint-pill" id="map-hint">📍 Tap on route to pinpoint destination</div>
         <script>
-          const map = L.map('map', { zoomControl: false, scrollWheelZoom: false }).setView([${lat}, ${lng}], 15);
+          function postToApp(data) {
+            var str = JSON.stringify(data);
+            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+              window.ReactNativeWebView.postMessage(str);
+            } else if (window.parent && window.parent.postMessage) {
+              window.parent.postMessage(str, '*');
+            }
+          }
+
+          function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+            var R = 6371;
+            var dLat = ((lat2 - lat1) * Math.PI) / 180;
+            var dLon = ((lon2 - lon1) * Math.PI) / 180;
+            var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+          }
+
+          var map = L.map('map', { zoomControl: false, scrollWheelZoom: false }).setView([${centerLat}, ${centerLng}], 15);
           L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-          // Forward mouse wheel events to parent window so web users can scroll page seamlessly
           window.addEventListener('wheel', function(e) {
             try {
               if (window.parent && window.parent !== window) {
@@ -602,25 +1319,112 @@ const RideTrackerScreen = ({ route, navigation }) => {
           }).addTo(map);
 
           // Route Polyline
-          const rawPath = ${JSON.stringify(pathCoords)};
-          const path = rawPath.map(function(p) {
+          var rawPath = ${JSON.stringify(pathCoords)};
+          var path = rawPath.map(function(p) {
             return Array.isArray(p) ? [p[0], p[1]] : [p.lat, p.lng];
           });
           if (path.length > 0) {
-            const poly = L.polyline(path, {
+            var poly = L.polyline(path, {
               color: '#3B82F6',
-              weight: 5,
-              opacity: 0.85,
+              weight: 6,
+              opacity: 0.90,
               lineJoin: 'round',
               lineCap: 'round'
             }).addTo(map);
+
+            poly.on('click', function(e) {
+              var lat = e.latlng.lat;
+              var lng = e.latlng.lng;
+              var snapped = getClosestPointOnRoute(lat, lng);
+              updateDestinationPin(snapped.lat, snapped.lng, 'Pinpointed Destination');
+              postToApp({ type: 'PINPOINT_DESTINATION', lat: snapped.lat, lng: snapped.lng, name: 'Pinpointed Destination' });
+            });
+          }
+
+          function calculateDistanceToRouteKm(ptLat, ptLng) {
+            if (!path || path.length === 0) return Infinity;
+            var minDist = Infinity;
+            var numPoints = path.length;
+            for (var i = 0; i < numPoints; i++) {
+              var p1 = path[i];
+              var lat1 = p1[0];
+              var lng1 = p1[1];
+              var dVertex = calculateDistanceKm(ptLat, ptLng, lat1, lng1);
+              if (dVertex < minDist) minDist = dVertex;
+
+              if (i < numPoints - 1) {
+                var p2 = path[i + 1];
+                var lat2 = p2[0];
+                var lng2 = p2[1];
+                var cosMeanLat = Math.cos(((lat1 + lat2) * Math.PI) / 360);
+                var dx = (lng2 - lng1) * cosMeanLat;
+                var dy = lat2 - lat1;
+                var segLenSq = dx * dx + dy * dy;
+                if (segLenSq > 1e-12) {
+                  var px = (ptLng - lng1) * cosMeanLat;
+                  var py = ptLat - lat1;
+                  var t = Math.max(0, Math.min(1, (px * dx + py * dy) / segLenSq));
+                  var projLat = lat1 + t * (lat2 - lat1);
+                  var projLng = lng1 + t * (lng2 - lng1);
+                  var dSeg = calculateDistanceKm(ptLat, ptLng, projLat, projLng);
+                  if (dSeg < minDist) minDist = dSeg;
+                }
+              }
+            }
+            return minDist;
+          }
+
+          function getClosestPointOnRoute(ptLat, ptLng) {
+            if (!path || path.length === 0) return { lat: ptLat, lng: ptLng };
+            var minDist = Infinity;
+            var bestPt = { lat: ptLat, lng: ptLng };
+            var numPoints = path.length;
+            for (var i = 0; i < numPoints; i++) {
+              var p1 = path[i];
+              var lat1 = p1[0];
+              var lng1 = p1[1];
+              var dVertex = calculateDistanceKm(ptLat, ptLng, lat1, lng1);
+              if (dVertex < minDist) {
+                minDist = dVertex;
+                bestPt = { lat: lat1, lng: lng1 };
+              }
+
+              if (i < numPoints - 1) {
+                var p2 = path[i + 1];
+                var lat2 = p2[0];
+                var lng2 = p2[1];
+                var cosMeanLat = Math.cos(((lat1 + lat2) * Math.PI) / 360);
+                var dx = (lng2 - lng1) * cosMeanLat;
+                var dy = lat2 - lat1;
+                var segLenSq = dx * dx + dy * dy;
+                if (segLenSq > 1e-12) {
+                  var px = (ptLng - lng1) * cosMeanLat;
+                  var py = ptLat - lat1;
+                  var t = Math.max(0, Math.min(1, (px * dx + py * dy) / segLenSq));
+                  var projLat = lat1 + t * (lat2 - lat1);
+                  var projLng = lng1 + t * (lng2 - lng1);
+                  var dSeg = calculateDistanceKm(ptLat, ptLng, projLat, projLng);
+                  if (dSeg < minDist) {
+                    minDist = dSeg;
+                    bestPt = { lat: projLat, lng: projLng };
+                  }
+                }
+              }
+            }
+            return bestPt;
+          }
+
+          function isPointWithinRouteCorridor(ptLat, ptLng, thresholdKm) {
+            if (!path || path.length === 0) return false;
+            var thresh = thresholdKm || 0.15;
+            return calculateDistanceToRouteKm(ptLat, ptLng) <= thresh;
           }
 
           // Boarding Pin
-          const startLat = ${startLat ?? "null"};
-          const startLng = ${startLng ?? "null"};
+          var startLat = ${startLat !== null ? startLat : "null"};
+          var startLng = ${startLng !== null ? startLng : "null"};
           if (startLat !== null && startLng !== null) {
-            const boardIcon = L.divIcon({
+            var boardIcon = L.divIcon({
               className: '',
               html: '<div class="boarding-pin">🚏</div>',
               iconSize: [26, 26],
@@ -630,23 +1434,170 @@ const RideTrackerScreen = ({ route, navigation }) => {
               .bindPopup('<b>Boarding Location</b><br/>Ride started here');
           }
 
-          // Live Commuter Marker
-          const commuterIcon = L.divIcon({
+          // Live Commuter Marker with Directional Compass Flashlight
+          var commuterIcon = L.divIcon({
             className: '',
-            html: '<div class="commuter-marker"><div class="commuter-inner"></div></div>',
+            html:
+              '<div class="origin-marker-wrap">' +
+                '<div class="light-beam-rotor" id="directional-light" style="transform: rotate(0deg);">' +
+                  '<div class="light-beam-cone"></div>' +
+                '</div>' +
+                '<div class="commuter-puck-beacon">' +
+                  '<div class="commuter-puck-pulse"></div>' +
+                  '<div class="commuter-puck-core"></div>' +
+                '</div>' +
+              '</div>',
+            iconSize: [80, 80],
+            iconAnchor: [40, 40]
+          });
+
+          var commuterMarker = null;
+          var hasInitial = ${hasInitialLoc ? "true" : "false"};
+          if (hasInitial) {
+            commuterMarker = L.marker([${centerLat}, ${centerLng}], { icon: commuterIcon }).addTo(map);
+            commuterMarker.bindPopup('<b>Your Live Position</b><br/>Tracking ride...');
+          }
+
+          // Flashlight rotation
+          var currentBeamAngle = 0;
+          window.updateHeading = function(newHeading) {
+            if (typeof newHeading !== 'number' || isNaN(newHeading)) return;
+            var beamEl = document.getElementById('directional-light');
+            if (!beamEl) return;
+            var target = (newHeading % 360 + 360) % 360;
+            var diff = (target - (currentBeamAngle % 360) + 540) % 360 - 180;
+            currentBeamAngle += diff;
+            beamEl.style.transform = 'rotate(' + currentBeamAngle + 'deg)';
+          };
+
+          // Small noticeable 📍 Pinpointed Destination Marker (NO dashed line)
+          var destMarker = null;
+          var currentDestName = '';
+          var destIcon = L.divIcon({
+            className: '',
+            html: '<div class="dest-pin-compact">📍</div>',
             iconSize: [24, 24],
             iconAnchor: [12, 12]
           });
-          const commuterMarker = L.marker([${lat}, ${lng}], { icon: commuterIcon }).addTo(map);
-          commuterMarker.bindPopup('<b>Your Live Position</b><br/>Tracking ride...');
 
-          // Keep in view
-          map.panTo([${lat}, ${lng}]);
+          function updateDestinationPin(lat, lng, name) {
+            if (lat == null || lng == null) return;
+            currentDestName = name || 'Drop-Off Point';
+            var popupContent = '<b>📍 Destination</b><br/>' + currentDestName + '<br/><small style="color:#16A34A;font-weight:bold;">Exact fare calculated below</small>';
+            if (!destMarker) {
+              destMarker = L.marker([lat, lng], { icon: destIcon, draggable: true }).addTo(map);
+              destMarker.on('dragend', function() {
+                var p = destMarker.getLatLng();
+                if (!isPointWithinRouteCorridor(p.lat, p.lng, 0.15)) {
+                  clearDestinationPin();
+                  var hintEl = document.getElementById('map-hint');
+                  if (hintEl) {
+                    hintEl.innerHTML = '⚠️ Your destination is not within the route';
+                    hintEl.style.background = 'rgba(220, 38, 38, 0.95)';
+                    setTimeout(function() {
+                      if (hintEl) {
+                        hintEl.innerHTML = '📍 Tap on route to pinpoint destination';
+                        hintEl.style.background = 'rgba(15, 23, 42, 0.88)';
+                      }
+                    }, 3500);
+                  }
+                  postToApp({ type: 'PINPOINT_OUTSIDE_ROUTE', lat: p.lat, lng: p.lng });
+                  return;
+                }
+                var snapped = getClosestPointOnRoute(p.lat, p.lng);
+                updateDestinationPin(snapped.lat, snapped.lng, currentDestName);
+                postToApp({ type: 'PINPOINT_DESTINATION', lat: snapped.lat, lng: snapped.lng, name: currentDestName });
+              });
+            } else {
+              destMarker.setLatLng([lat, lng]);
+            }
+            destMarker.bindPopup(popupContent).openPopup();
+
+            var hintEl = document.getElementById('map-hint');
+            if (hintEl) {
+              hintEl.innerHTML = '📍 Destination: ' + currentDestName;
+              hintEl.style.background = 'rgba(15, 23, 42, 0.88)';
+            }
+          }
+
+          function clearDestinationPin() {
+            if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
+            var hintEl = document.getElementById('map-hint');
+            if (hintEl) {
+              hintEl.innerHTML = '📍 Tap on route to pinpoint destination';
+              hintEl.style.background = 'rgba(15, 23, 42, 0.88)';
+            }
+          }
+
+          map.on('click', function(e) {
+            var lat = e.latlng.lat;
+            var lng = e.latlng.lng;
+            if (!isPointWithinRouteCorridor(lat, lng, 0.15)) {
+              var hintEl = document.getElementById('map-hint');
+              if (hintEl) {
+                hintEl.innerHTML = '⚠️ Your destination is not within the route';
+                hintEl.style.background = 'rgba(220, 38, 38, 0.95)';
+                setTimeout(function() {
+                  if (hintEl) {
+                    hintEl.innerHTML = destMarker ? ('📍 Destination: ' + (currentDestName || 'Drop-Off')) : '📍 Tap on route to pinpoint destination';
+                    hintEl.style.background = 'rgba(15, 23, 42, 0.88)';
+                  }
+                }, 3500);
+              }
+              postToApp({ type: 'PINPOINT_OUTSIDE_ROUTE', lat: lat, lng: lng });
+              return;
+            }
+            var snapped = getClosestPointOnRoute(lat, lng);
+            updateDestinationPin(snapped.lat, snapped.lng, 'Pinpointed Destination');
+            postToApp({ type: 'PINPOINT_DESTINATION', lat: snapped.lat, lng: snapped.lng, name: 'Pinpointed Destination' });
+          });
+
+          window.setDestinationFromApp = function(lat, lng, name) {
+            updateDestinationPin(lat, lng, name);
+            map.panTo([lat, lng], { animate: true, duration: 0.5 });
+          };
+
+          window.clearDestinationFromApp = function() {
+            clearDestinationPin();
+          };
+
+          window.updateCommuterLocation = function(lat, lng, accuracy, heading) {
+            if (lat == null || lng == null) return;
+            if (!commuterMarker) {
+              commuterMarker = L.marker([lat, lng], { icon: commuterIcon }).addTo(map);
+              commuterMarker.bindPopup('<b>Your Live Position</b><br/>Tracking ride...');
+            } else {
+              commuterMarker.setLatLng([lat, lng]);
+            }
+            if (typeof heading === 'number' && !isNaN(heading)) {
+              window.updateHeading(heading);
+            }
+            map.panTo([lat, lng], { animate: true, duration: 0.5 });
+          };
+
+          window.addEventListener('message', function(e) {
+            try {
+              var d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+              if (d && (d.type === 'UPDATE_COMMUTER_LOCATION' || d.type === 'UPDATE_USER_LOCATION')) {
+                window.updateCommuterLocation(d.lat, d.lng, d.accuracy, d.heading);
+              } else if (d && d.type === 'UPDATE_HEADING') {
+                window.updateHeading(d.heading);
+              } else if (d && d.type === 'SET_DESTINATION') {
+                window.setDestinationFromApp(d.lat, d.lng, d.name);
+              } else if (d && d.type === 'CLEAR_DESTINATION') {
+                window.clearDestinationFromApp();
+              }
+            } catch(err) {}
+          });
         </script>
       </body>
       </html>
     `;
   };
+
+  const mapHtml = useMemo(() => {
+    return generateMapHtml();
+  }, [selectedRoute?._id, startLocation?.lat, startLocation?.lng]);
 
   if (loading) {
     return <LoadingSpinner text="Preparing Live Ride Tracker..." />;
@@ -794,16 +1745,40 @@ const RideTrackerScreen = ({ route, navigation }) => {
           <View style={[styles.mapArea, { height: mapHeight }]}>
             {Platform.OS === "web" ? (
               <iframe
-                key={`ride-map-${currentLocation ? "ready" : "waiting"}`}
+                ref={iframeRef}
+                id="ride-tracker-leaflet-map"
+                key={`ride-map-${selectedRoute?._id || "none"}-${startLocation ? "riding" : "idle"}`}
                 title="Live Ride Map"
-                srcDoc={generateMapHtml()}
+                srcDoc={mapHtml}
+                allow="geolocation; accelerometer; gyroscope; magnetometer"
+                onLoad={() => {
+                  pushLocationToMap(currentLocation);
+                  if (destination) sendDestinationToMap(destination);
+                  if (typeof currentHeadingRef.current === "number") {
+                    sendHeadingToMap(currentHeadingRef.current);
+                  }
+                }}
                 style={{ width: "100%", height: "100%", border: "none" }}
               />
             ) : (
               <WebView
                 ref={webViewRef}
+                key={`ride-webview-${selectedRoute?._id || "none"}-${startLocation ? "riding" : "idle"}`}
                 originWhitelist={["*"]}
-                source={{ html: generateMapHtml() }}
+                source={{ html: mapHtml }}
+                onLoadEnd={() => {
+                  pushLocationToMap(currentLocation);
+                  if (destination) sendDestinationToMap(destination);
+                  if (typeof currentHeadingRef.current === "number") {
+                    sendHeadingToMap(currentHeadingRef.current);
+                  }
+                }}
+                onMessage={(e) => {
+                  try {
+                    const data = JSON.parse(e.nativeEvent.data);
+                    handleMapEvent(data);
+                  } catch (_) {}
+                }}
                 style={{ flex: 1, backgroundColor: "#0f172a" }}
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
@@ -1130,7 +2105,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
                         >
                           {vehicleType === "traditional"
                             ? "Traditional Jeepney"
-                            : "Modern PUV (Minibus)"}
+                            : "Modern Jeepney"}
                         </Text>
                         <Text
                           style={[
@@ -1210,9 +2185,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
                                 >
                                   {vt.value === "traditional"
                                     ? "Standard open-air jeepney • ₱14.00 base + ₱2.00/km"
-                                    : vt.value === "modern"
-                                      ? "Air-conditioned modern PUV • ₱17.00 base + ₱2.40/km"
-                                      : "Dagupan Solo Ride / Visitor • ₱15.00 base (1 km) + ₱3.00/km"}
+                                    : "Air-conditioned modern PUV • ₱17.00 base + ₱2.40/km"}
                                 </Text>
                               </View>
                               {isSel && (
@@ -1482,6 +2455,211 @@ const RideTrackerScreen = ({ route, navigation }) => {
                     </TouchableOpacity>
                   )}
 
+                  {/* 4. PINPOINT DESTINATION & FARE TO DRIVER */}
+                  <View style={styles.dropdownSection}>
+                    <Text
+                      style={[
+                        styles.controlLabel,
+                        { color: colors.textPrimary },
+                      ]}
+                    >
+                      4. Pinpoint Drop-Off & Exact Fare
+                    </Text>
+
+                    {destination && destinationFareData ? (
+                      <View
+                        style={[
+                          styles.destFareCard,
+                          {
+                            backgroundColor: colors.background,
+                            borderColor: "#16A34A",
+                          },
+                        ]}
+                      >
+                        <View style={styles.destFareTopRow}>
+                          <View
+                            style={[
+                              styles.destFareIconCircle,
+                              { backgroundColor: "#16A34A18" },
+                            ]}
+                          >
+                            <MaterialCommunityIcons
+                              name="cash-multiple"
+                              size={22}
+                              color="#16A34A"
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.destFareHeaderLabel,
+                                { color: colors.textSecondary },
+                              ]}
+                            >
+                              OFFICIAL FARE TO PAY DRIVER
+                            </Text>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "baseline",
+                                gap: 6,
+                              }}
+                            >
+                              <Text
+                                style={[
+                                  styles.destFareBigPrice,
+                                  { color: "#16A34A" },
+                                ]}
+                              >
+                                {formatPeso(destinationFareData.fare)}
+                              </Text>
+                              {discount === "discounted" && (
+                                <Text
+                                  style={[
+                                    styles.destFareDiscountTag,
+                                    { color: colors.accent },
+                                  ]}
+                                >
+                                  (20% Off Applied)
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                          <TouchableOpacity
+                            style={[
+                              styles.destClearBtn,
+                              { backgroundColor: colors.border + "40" },
+                            ]}
+                            onPress={handleClearDestination}
+                            activeOpacity={0.7}
+                          >
+                            <MaterialCommunityIcons
+                              name="close"
+                              size={16}
+                              color={colors.textSecondary}
+                            />
+                            <Text
+                              style={[
+                                styles.destClearBtnText,
+                                { color: colors.textSecondary },
+                              ]}
+                            >
+                              Remove
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <View
+                          style={[
+                            styles.destDivider,
+                            { backgroundColor: colors.border },
+                          ]}
+                        />
+
+                        <View style={styles.destMetaRow}>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 6,
+                              flex: 1,
+                            }}
+                          >
+                            <MaterialCommunityIcons
+                              name="map-marker"
+                              size={18}
+                              color="#EA580C"
+                            />
+                            <Text
+                              style={[
+                                styles.destTargetName,
+                                { color: colors.textPrimary },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {destination.name || "Drop-Off Location"}
+                            </Text>
+                          </View>
+                          <Text
+                            style={[
+                              styles.destDistanceBadge,
+                              { color: colors.textMuted },
+                            ]}
+                          >
+                            ~{destinationFareData.distanceKm} km route distance • ~
+                            {destinationFareData.estMinutes} mins
+                          </Text>
+                        </View>
+
+                        <View
+                          style={[
+                            styles.destFareNoticeBox,
+                            {
+                              backgroundColor: colors.surface,
+                              borderColor: colors.border,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.destFareNoticeText,
+                              { color: colors.textSecondary },
+                            ]}
+                          >
+                            {destinationFareData.isBase
+                              ? `Covers up to first 4.0 km standard LTFRB base fare.`
+                              : `Base ${formatPeso(destinationFareData.baseFare)} + ${destinationFareData.extraKm.toFixed(1)} km × ₱${destinationFareData.perKmRate}/km`}
+                          </Text>
+                          <Text style={styles.destHandCashText}>
+                            💡 Hand exact {formatPeso(destinationFareData.fare)}{" "}
+                            to your jeepney driver upon boarding.
+                          </Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <View
+                        style={[
+                          styles.destPromptBox,
+                          {
+                            backgroundColor: colors.background,
+                            borderColor: colors.border,
+                          },
+                        ]}
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 8,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <MaterialCommunityIcons
+                            name="map-marker-radius"
+                            size={20}
+                            color={colors.primary}
+                          />
+                          <Text
+                            style={[
+                              styles.destPromptTitle,
+                              { color: colors.textPrimary },
+                            ]}
+                          >
+                            Tap Route on Map to Pinpoint Drop-Off:
+                          </Text>
+                        </View>
+                        <Text
+                          style={[
+                            styles.destPromptSub,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          Tap anywhere directly along your chosen route on the map above to pinpoint your destination and compute the exact fare to hand the driver.
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
                   {/* Big Start Ride Button */}
                   <TouchableOpacity
                     style={styles.startBtn}
@@ -1529,6 +2707,87 @@ const RideTrackerScreen = ({ route, navigation }) => {
                       {vehicleType === "traditional" ? "Traditional" : "Modern"}
                     </Text>
                   </View>
+
+                  {destination && destinationFareData && (
+                    <View
+                      style={[
+                        styles.ridingDestCard,
+                        {
+                          backgroundColor: colors.background,
+                          borderColor: isNearDestination
+                            ? "#16A34A"
+                            : colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={styles.ridingDestTop}>
+                        <MaterialCommunityIcons
+                          name="map-marker"
+                          size={20}
+                          color="#EA580C"
+                        />
+                        <View style={{ flex: 1, marginLeft: 8 }}>
+                          <Text
+                            style={[
+                              styles.ridingDestLabel,
+                              { color: colors.textMuted },
+                            ]}
+                          >
+                            DESTINATION / DROP-OFF
+                          </Text>
+                          <Text
+                            style={[
+                              styles.ridingDestTitle,
+                              { color: colors.textPrimary },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {destination.name}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <Text
+                            style={[
+                              styles.ridingDestFareLabel,
+                              { color: colors.textMuted },
+                            ]}
+                          >
+                            FARE TO DRIVER
+                          </Text>
+                          <Text style={styles.ridingDestFareValue}>
+                            {formatPeso(destinationFareData.fare)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.ridingDestBanner,
+                          {
+                            backgroundColor: isNearDestination
+                              ? "#16A34A18"
+                              : colors.surface,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.ridingDestRemaining,
+                            {
+                              color: isNearDestination
+                                ? "#16A34A"
+                                : colors.textSecondary,
+                              fontWeight: isNearDestination ? "700" : "500",
+                            },
+                          ]}
+                        >
+                          {isNearDestination
+                            ? "🔔 Approaching your destination! Please prepare to alight."
+                            : `~${remainingDistanceToDestKm !== null ? remainingDistanceToDestKm : destinationFareData.distanceKm} km route distance to drop-off`}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
 
                   <Text
                     style={[
@@ -1621,6 +2880,26 @@ const RideTrackerScreen = ({ route, navigation }) => {
                         {selectedRoute?.name}
                       </Text>
                     </View>
+                    {destination && (
+                      <View style={styles.metricRow}>
+                        <Text
+                          style={[
+                            styles.metricRowLabel,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          Destination:
+                        </Text>
+                        <Text
+                          style={[
+                            styles.metricRowValue,
+                            { color: colors.primary, fontWeight: "700" },
+                          ]}
+                        >
+                          {destination.name}
+                        </Text>
+                      </View>
+                    )}
                     <View style={styles.metricRow}>
                       <Text
                         style={[
@@ -2611,6 +3890,137 @@ const styles = StyleSheet.create({
   },
   tripDateText: {
     fontSize: 11,
+  },
+  destFareCard: {
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    padding: SPACING.md,
+    marginTop: 4,
+  },
+  destFareTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  destFareIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  destFareHeaderLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  destFareBigPrice: {
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  destFareDiscountTag: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  destClearBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+  },
+  destClearBtnText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  destDivider: {
+    height: 1,
+    marginVertical: 10,
+  },
+  destMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 8,
+  },
+  destTargetName: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: "700",
+  },
+  destDistanceBadge: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  destFareNoticeBox: {
+    padding: 10,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+  },
+  destFareNoticeText: {
+    fontSize: 11,
+    marginBottom: 4,
+  },
+  destHandCashText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
+  destPromptBox: {
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    padding: SPACING.md,
+    marginTop: 4,
+  },
+  destPromptTitle: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: "700",
+  },
+  destPromptSub: {
+    fontSize: FONTS.sizes.xs,
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+
+  ridingDestCard: {
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  ridingDestTop: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  ridingDestLabel: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  ridingDestTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  ridingDestFareLabel: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  ridingDestFareValue: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#16A34A",
+  },
+  ridingDestBanner: {
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
+  },
+  ridingDestRemaining: {
+    fontSize: 11.5,
   },
 });
 

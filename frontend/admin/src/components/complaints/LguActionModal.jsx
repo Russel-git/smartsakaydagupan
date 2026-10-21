@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ShieldCheck, CheckCircle2, X, AlertCircle, Camera, Upload } from "lucide-react";
 import { complaintsAPI } from "../../api/services";
+import { useTheme } from "../../contexts/theme/ThemeContext";
 
 const LguActionModal = ({
   isOpen,
@@ -10,6 +11,7 @@ const LguActionModal = ({
   onConfirm,
   loading,
 }) => {
+  const { colors } = useTheme();
   const [notes, setNotes] = useState("");
   const [evidencePhotoUrl, setEvidencePhotoUrl] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);

@@ -82,8 +82,29 @@ const DAGUPAN_BUS_TERMINALS = [
 
 const getBusTerminals = async (req, res, next) => {
   try {
-    const { lat, lng } = req.query;
-    let terminals = (await Terminal.find({ isActive: true }).lean()) || [];
+    const { lat, lng, municipality } = req.query;
+    const filter = { isActive: true };
+
+    // Jurisdictional isolation: LGU / POSO / Commuter only see terminals in their municipality
+    let targetMuni = municipality;
+    if (req.user && (req.user.role === 'lgu' || req.user.role === 'poso')) {
+      targetMuni = req.user.municipality || 'Dagupan';
+    } else if (req.user && req.user.role === 'commuter') {
+      targetMuni = req.user.municipality || municipality || 'Dagupan';
+    }
+
+    if (targetMuni && targetMuni !== 'all') {
+      const cleanMuni = targetMuni.trim();
+      if (cleanMuni.toLowerCase() === 'dagupan') {
+        filter.$or = [
+          { municipality: cleanMuni },
+          { municipality: { $exists: false } },
+        ];
+      } else {
+        filter.municipality = cleanMuni;
+      }
+    }
+    let terminals = (await Terminal.find(filter).lean()) || [];
 
     if (lat && lng) {
       const toRad = (deg) => (deg * Math.PI) / 180;
@@ -110,12 +131,34 @@ const getBusTerminals = async (req, res, next) => {
 
 const getAllRoutes = async (req, res, next) => {
   try {
-    const { category, search } = req.query;
+    const { category, search, municipality } = req.query;
     const filter = { isActive: true };
     if (category) filter.category = category;
     if (search && search.trim()) {
       const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.name = { $regex: escaped, $options: 'i' };
+    }
+
+    // Role-based jurisdictional isolation:
+    // If authenticated user is an LGU, POSO, or commuter, strictly scope to their assigned municipality!
+    let targetMuni = municipality;
+    if (req.user && (req.user.role === 'lgu' || req.user.role === 'poso')) {
+      targetMuni = req.user.municipality || 'Dagupan';
+    } else if (req.user && req.user.role === 'commuter') {
+      targetMuni = req.user.municipality || municipality || 'Dagupan';
+    }
+
+    if (targetMuni && targetMuni !== 'all') {
+      const cleanMuni = targetMuni.trim();
+      if (cleanMuni.toLowerCase() === 'dagupan') {
+        filter.$or = [
+          { municipalities: cleanMuni },
+          { municipalities: { $exists: false } },
+          { municipalities: { $size: 0 } },
+        ];
+      } else {
+        filter.municipalities = cleanMuni;
+      }
     }
 
     const routes = await Route.find(filter).sort({ category: 1, name: 1 });
@@ -133,6 +176,15 @@ const getRouteById = async (req, res, next) => {
   try {
     const route = await Route.findById(req.params.id);
     if (!route) return apiResponse.error(res, 'Route not found', 404);
+
+    if (req.user && (req.user.role === 'lgu' || req.user.role === 'poso')) {
+      const userMuni = (req.user.municipality || 'Dagupan').trim();
+      const covers = Array.isArray(route.municipalities) && route.municipalities.includes(userMuni);
+      if (!covers && userMuni.toLowerCase() !== 'dagupan') {
+        return apiResponse.error(res, 'Access denied. Route outside your jurisdiction.', 403);
+      }
+    }
+
     const fareMatrix = await FareMatrix.find({ routeId: route._id, isActive: true });
     return apiResponse.success(res, { ...route.toObject(), fares: fareMatrix }, 'Route retrieved');
   } catch (error) { next(error); }
@@ -169,6 +221,15 @@ const getNearbyRoutes = async (req, res, next) => {
 
 const createRoute = async (req, res, next) => {
   try {
+    if (req.user && req.user.role === 'lgu') {
+      const userMuni = (req.user.municipality || 'Dagupan').trim();
+      if (!req.body.municipalities || !Array.isArray(req.body.municipalities)) {
+        req.body.municipalities = [userMuni];
+      } else if (!req.body.municipalities.includes(userMuni)) {
+        req.body.municipalities.push(userMuni);
+      }
+    }
+
     const route = await Route.create(req.body);
     const activeFares = await Fare.find({ isActive: true });
     for (const fare of activeFares) {
@@ -194,6 +255,16 @@ const createRoute = async (req, res, next) => {
 
 const updateRoute = async (req, res, next) => {
   try {
+    if (req.user && req.user.role === 'lgu') {
+      const existing = await Route.findById(req.params.id);
+      if (!existing) return apiResponse.error(res, 'Route not found', 404);
+      const userMuni = (req.user.municipality || 'Dagupan').trim();
+      const covers = Array.isArray(existing.municipalities) && existing.municipalities.includes(userMuni);
+      if (!covers && userMuni.toLowerCase() !== 'dagupan') {
+        return apiResponse.error(res, 'Access denied. You can only update routes within your jurisdiction.', 403);
+      }
+    }
+
     const route = await Route.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!route) return apiResponse.error(res, 'Route not found', 404);
     if (req.body.distanceKm) {
@@ -223,6 +294,16 @@ const updateRoute = async (req, res, next) => {
 
 const deleteRoute = async (req, res, next) => {
   try {
+    if (req.user && req.user.role === 'lgu') {
+      const existing = await Route.findById(req.params.id);
+      if (!existing) return apiResponse.error(res, 'Route not found', 404);
+      const userMuni = (req.user.municipality || 'Dagupan').trim();
+      const covers = Array.isArray(existing.municipalities) && existing.municipalities.includes(userMuni);
+      if (!covers && userMuni.toLowerCase() !== 'dagupan') {
+        return apiResponse.error(res, 'Access denied. You can only delete routes within your jurisdiction.', 403);
+      }
+    }
+
     const route = await Route.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
     if (!route) return apiResponse.error(res, 'Route not found', 404);
     await FareMatrix.updateMany({ routeId: route._id }, { isActive: false });

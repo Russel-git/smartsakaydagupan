@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,15 @@ import Button from "../../components/common/Button";
 import Input from "../../components/common/Input";
 import { FONTS, SPACING, RADIUS } from "../../utils/constants";
 import { isValidEmail } from "../../utils/helpers";
+import { saveMunicipality, getMunicipality } from "../../utils/storage";
+
+const MUNICIPALITIES = [
+  { id: "Dagupan", name: "Dagupan City", subtitle: "Commercial Center & Coastal Hub" },
+  { id: "Calasiao", name: "Calasiao", subtitle: "Putubongbong Capital & Highway Corridor" },
+  { id: "Binmaley", name: "Binmaley", subtitle: "Seafood Capital & Western Highway" },
+  { id: "Lingayen", name: "Lingayen", subtitle: "Provincial Capital & Historic Gulf" },
+  { id: "Mangaldan", name: "Mangaldan", subtitle: "Agricultural & Northern Gateway" },
+];
 
 const LoginScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
@@ -30,8 +39,17 @@ const LoginScreen = ({ navigation }) => {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [municipality, setMunicipality] = useState("Dagupan");
+  const [showMunicipalityPicker, setShowMunicipalityPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    (async () => {
+      const saved = await getMunicipality();
+      if (saved) setMunicipality(saved);
+    })();
+  }, []);
 
   const topInset =
     Platform.OS === "android"
@@ -52,11 +70,13 @@ const LoginScreen = ({ navigation }) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await login(email.trim(), password);
+      await saveMunicipality(municipality);
+      const res = await login(email.trim(), password, municipality);
       const userName = res?.data?.user?.firstName || "Commuter";
+      const muniName = MUNICIPALITIES.find((m) => m.id === municipality)?.name || municipality;
       showSuccess(
         "Successfully Logged In!",
-        `Welcome back, ${userName}! Ready to navigate Dagupan.`,
+        `Welcome back, ${userName}! Ready to navigate ${muniName}.`,
       );
     } catch (e) {
       showError(
@@ -176,6 +196,125 @@ const LoginScreen = ({ navigation }) => {
             </View>
           ) : null}
 
+          {/* Transit Area / Municipality Dropdown Selector */}
+          <View style={{ marginBottom: 16 }}>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: isDark ? "#93C5FD" : "#2563EB",
+                marginBottom: 6,
+                lineHeight: 18,
+              }}
+            >
+              Choose your LGU to report your complain, ride and keep updated
+            </Text>
+            <Text
+              style={[
+                styles.label,
+                { color: colors.textSecondary, marginBottom: 8, fontSize: 13, fontWeight: "600" },
+              ]}
+            >
+              Transit Area / Municipality
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowMunicipalityPicker(!showMunicipalityPicker)}
+              style={[
+                styles.pickerTrigger,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: showMunicipalityPicker ? colors.primary : colors.border,
+                },
+              ]}
+              activeOpacity={0.8}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 8,
+                    backgroundColor: colors.primary + "15",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name="city-variant-outline"
+                    size={18}
+                    color={colors.primary}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary }}>
+                    {MUNICIPALITIES.find((m) => m.id === municipality)?.name || municipality}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                    {MUNICIPALITIES.find((m) => m.id === municipality)?.subtitle || "Pangasinan Transit Zone"}
+                  </Text>
+                </View>
+              </View>
+              <MaterialCommunityIcons
+                name={showMunicipalityPicker ? "chevron-up" : "chevron-down"}
+                size={22}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+
+            {showMunicipalityPicker && (
+              <View
+                style={[
+                  styles.dropdownList,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                {MUNICIPALITIES.map((item) => {
+                  const isSelected = item.id === municipality;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      onPress={async () => {
+                        setMunicipality(item.id);
+                        setShowMunicipalityPicker(false);
+                        await saveMunicipality(item.id);
+                      }}
+                      style={[
+                        styles.dropdownItem,
+                        isSelected && { backgroundColor: colors.primary + "15" },
+                      ]}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            fontWeight: isSelected ? "700" : "600",
+                            color: isSelected ? colors.primary : colors.textPrimary,
+                          }}
+                        >
+                          {item.name}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                          {item.subtitle}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <MaterialCommunityIcons
+                          name="check-circle"
+                          size={18}
+                          color={colors.primary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
           <Input
             label="Email Address"
             placeholder="you@example.com"
@@ -294,6 +433,35 @@ const styles = StyleSheet.create({
   },
   footerText: { fontSize: FONTS.sizes.md },
   footerLink: { fontSize: FONTS.sizes.md, fontWeight: "700" },
+  pickerTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+  },
+  dropdownList: {
+    marginTop: 6,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    overflow: "hidden",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(150, 150, 150, 0.15)",
+  },
 });
 
 export default LoginScreen;

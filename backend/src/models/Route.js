@@ -38,6 +38,7 @@ const routeSchema = new mongoose.Schema(
       start: { type: String, default: '04:00' },
       end: { type: String, default: '21:00' },
     },
+    municipalities: [{ type: String, trim: true, index: true }],
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

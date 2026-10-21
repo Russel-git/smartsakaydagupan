@@ -19,6 +19,7 @@ import { Card, SectionHeader, Badge } from '../../components/common/SharedCompon
 import AuthPromptModal from '../../components/common/AuthPromptModal';
 import HomeMapWidget from '../../components/common/HomeMapWidget';
 import { faresAPI, weatherAPI, complaintsAPI } from '../../api/services';
+import { getMunicipality } from '../../utils/storage';
 import { FONTS, SPACING, RADIUS, SHADOWS } from '../../utils/constants';
 import { formatPeso, getWeatherIcon } from '../../utils/helpers';
 
@@ -30,6 +31,7 @@ const HomeScreen = ({ navigation }) => {
   const { width, height } = useWindowDimensions();
   const isTablet = Math.min(width, height) >= 600;
 
+  const [activeMuni, setActiveMuni] = useState(user?.municipality || 'Dagupan');
   const [fares, setFares] = useState([]);
   const [weather, setWeather] = useState(null);
   const [activeComplaint, setActiveComplaint] = useState(null);
@@ -56,12 +58,16 @@ const HomeScreen = ({ navigation }) => {
 
   const loadData = useCallback(async () => {
     try {
+      const savedMuni = await getMunicipality();
+      const currentMuni = (savedMuni || user?.municipality || 'Dagupan').trim();
+      setActiveMuni(currentMuni);
+
       const promises = [
         faresAPI.getActiveFares(),
         weatherAPI.getCurrentWeather(),
       ];
       if (!isGuest) {
-        promises.push(complaintsAPI.getMyComplaints());
+        promises.push(complaintsAPI.getMyComplaints({ municipality: currentMuni }));
       }
       const results = await Promise.allSettled(promises);
       const faresRes = results[0];
@@ -78,7 +84,7 @@ const HomeScreen = ({ navigation }) => {
         setActiveComplaint(active || null);
       }
     } catch (e) { /* Silently fail */ }
-  }, [isGuest]);
+  }, [isGuest, user?.municipality]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -124,7 +130,7 @@ const HomeScreen = ({ navigation }) => {
                   {greeting()}{user ? `, ${user.firstName}` : ''}! 👋
                 </Text>
                 <Text style={styles.headerSubtitle}>
-                  {isGuest ? 'Guest Session • Dagupan City' : 'SmartSakay Dagupan'}
+                  {isGuest ? `Guest Session • ${activeMuni}` : `SmartSakay • ${activeMuni}`}
                 </Text>
               </View>
               {isGuest ? (
@@ -164,7 +170,7 @@ const HomeScreen = ({ navigation }) => {
                     {weather.current?.temp_c ?? weather.current?.tempC ?? weather.temp_c ?? '--'}°C
                   </Text>
                   <Text style={styles.weatherDesc} numberOfLines={1}>
-                    {conditionStr} • Dagupan
+                    {conditionStr} • {activeMuni}
                   </Text>
                   <MaterialCommunityIcons name="chevron-right" size={16} color="rgba(255,255,255,0.6)" style={{ marginLeft: 'auto' }} />
                 </TouchableOpacity>
@@ -274,7 +280,7 @@ const HomeScreen = ({ navigation }) => {
                 ]}
                 onPress={() => {
                   if (isGuest) {
-                    openPrompt('File a Complaint', 'Register or sign in to file verified transit complaints with photo evidence to Dagupan LGU.', 'clipboard-alert', 'Verified Report');
+                    openPrompt('File a Complaint', `Register or sign in to file verified transit complaints with photo evidence to ${activeMuni} LGU.`, 'clipboard-alert', 'Verified Report');
                   } else {
                     navigation.navigate('SubmitComplaint');
                   }
@@ -295,7 +301,7 @@ const HomeScreen = ({ navigation }) => {
               actionText="Full View"
               onAction={() => navigation.navigate('RoutesAndFares')}
             />
-            <HomeMapWidget navigation={navigation} height={isTablet ? 320 : 260} />
+            <HomeMapWidget navigation={navigation} height={isTablet ? 320 : 260} municipality={activeMuni} />
 
             {/* Fare Rates Summary */}
             <SectionHeader

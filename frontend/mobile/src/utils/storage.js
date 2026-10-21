@@ -7,6 +7,7 @@ const KEYS = {
   THEME: '@smartsakay_theme',
   GUEST_MODE: '@smartsakay_guest_mode',
   RIDE_HISTORY: '@smartsakay_ride_history',
+  MUNICIPALITY: '@smartsakay_municipality',
 };
 
 // Token storage
@@ -57,6 +58,11 @@ export const clearUser = () => AsyncStorage.removeItem(KEYS.USER);
 // Theme preference
 export const saveTheme = (theme) => AsyncStorage.setItem(KEYS.THEME, theme);
 export const getTheme = () => AsyncStorage.getItem(KEYS.THEME);
+
+// Municipality preference
+export const saveMunicipality = (municipality) => AsyncStorage.setItem(KEYS.MUNICIPALITY, municipality);
+export const getMunicipality = () => AsyncStorage.getItem(KEYS.MUNICIPALITY);
+export const getSavedMunicipality = getMunicipality;
 
 // Guest mode
 export const setGuestMode = (isGuest) =>
@@ -127,5 +133,7 @@ export default {
   getRideHistory,
   saveRideToHistory,
   clearRideHistory,
+  saveMunicipality,
+  getMunicipality,
   clearAllData,
 };

@@ -12,6 +12,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Card, LoadingSpinner } from '../../components/common/SharedComponents';
 import { faresAPI, routesAPI } from '../../api/services';
+import { getMunicipality } from '../../utils/storage';
 import { FONTS, SPACING, RADIUS, VEHICLE_TYPES, DISCOUNT_TYPES } from '../../utils/constants';
 import { formatPeso } from '../../utils/helpers';
 
@@ -41,17 +42,20 @@ const FareCalculatorScreen = () => {
   const [discount, setDiscount] = useState('none');
   const [loading, setLoading] = useState(true);
   const [activeFares, setActiveFares] = useState([]);
+  const [activeMunicipality, setActiveMunicipality] = useState('Dagupan');
 
   // Trip Distance State
   const [tripDistanceKm, setTripDistanceKm] = useState(4.0);
-  const [boardingStopIndex, setBoardingStopIndex] = useState(null);
-  const [dropoffStopIndex, setDropoffStopIndex] = useState(null);
 
   useEffect(() => {
     const loadData = async () => {
       try {
+        const savedMuni = await getMunicipality();
+        const activeMuni = (savedMuni || 'Dagupan').trim();
+        setActiveMunicipality(activeMuni);
+
         const [routesRes, faresRes] = await Promise.allSettled([
-          routesAPI.getAllRoutes(),
+          routesAPI.getAllRoutes({ municipality: activeMuni }),
           faresAPI.getActiveFares(),
         ]);
         if (routesRes.status === 'fulfilled') {
@@ -75,42 +79,7 @@ const FareCalculatorScreen = () => {
 
   const handleSelectRoute = (route) => {
     setSelectedRoute(route);
-    setBoardingStopIndex(null);
-    setDropoffStopIndex(null);
     setTripDistanceKm(Math.min(route.distanceKm || 4, 4.0));
-  };
-
-  // Stop selection distance calculation
-  const handleSelectStop = (index, type) => {
-    if (!selectedRoute?.waypoints || selectedRoute.waypoints.length < 2) return;
-
-    let bIdx = boardingStopIndex;
-    let dIdx = dropoffStopIndex;
-
-    if (type === 'boarding') {
-      bIdx = index;
-      setBoardingStopIndex(index);
-      if (dIdx !== null && dIdx <= index) {
-        dIdx = Math.min(index + 1, selectedRoute.waypoints.length - 1);
-        setDropoffStopIndex(dIdx);
-      }
-    } else {
-      dIdx = index;
-      setDropoffStopIndex(index);
-      if (bIdx !== null && bIdx >= index) {
-        bIdx = Math.max(0, index - 1);
-        setBoardingStopIndex(bIdx);
-      }
-    }
-
-    if (bIdx !== null && dIdx !== null) {
-      const w1 = selectedRoute.waypoints[bIdx];
-      const w2 = selectedRoute.waypoints[dIdx];
-      const dist = calculateDistanceKm(w1.lat, w1.lng, w2.lat, w2.lng);
-      if (dist) {
-        setTripDistanceKm(Number(Math.max(1, dist * 1.3).toFixed(1))); // 1.3 road winding factor
-      }
-    }
   };
 
 
@@ -371,54 +340,7 @@ const FareCalculatorScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Optional: Stop-to-Stop Selector if route has waypoints */}
-        {selectedRoute?.waypoints && selectedRoute.waypoints.length >= 2 && (
-          <View style={styles.stopSelectorWrapper}>
-            <Text style={[styles.stopSelectorHeader, { color: colors.textSecondary }]}>
-              Or Pick Stops Along {selectedRoute.name}:
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: SPACING.md }}>
-              {selectedRoute.waypoints.map((wp, idx) => {
-                const isBoarding = boardingStopIndex === idx;
-                const isDropoff = dropoffStopIndex === idx;
-                return (
-                  <TouchableOpacity
-                    key={wp.order || idx}
-                    style={[
-                      styles.stopChip,
-                      {
-                        backgroundColor: isBoarding ? '#10B981' : isDropoff ? '#EF4444' : colors.surface,
-                        borderColor: isBoarding ? '#10B981' : isDropoff ? '#EF4444' : colors.border,
-                      },
-                    ]}
-                    onPress={() => {
-                      if (boardingStopIndex === null || (boardingStopIndex !== null && dropoffStopIndex !== null)) {
-                        handleSelectStop(idx, 'boarding');
-                      } else {
-                        handleSelectStop(idx, 'dropoff');
-                      }
-                    }}
-                  >
-                    <Text style={{ fontSize: 10, color: isBoarding || isDropoff ? '#FFFFFF' : colors.textMuted }}>
-                      {isBoarding ? '🟢 Boarding' : isDropoff ? '🔴 Alighting' : `Stop #${wp.order || idx + 1}`}
-                    </Text>
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        fontSize: 11,
-                        fontWeight: '700',
-                        color: isBoarding || isDropoff ? '#FFFFFF' : colors.textPrimary,
-                        maxWidth: 120,
-                      }}
-                    >
-                      {wp.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
+
 
         {/* 6. Dynamic Result Card */}
         <Card
@@ -569,7 +491,7 @@ const FareCalculatorScreen = () => {
           </View>
 
           <Text style={[styles.sourceText, { color: colors.textMuted }]}>
-            LTFRB Region 1 Public Utility Jeepney Fare Schedule • Valid for Dagupan City
+            LTFRB Region 1 Public Utility Jeepney Fare Schedule • Valid for {activeMunicipality}
           </Text>
         </Card>
 
@@ -677,21 +599,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
-  stopSelectorWrapper: {
-    marginBottom: SPACING.lg,
-  },
-  stopSelectorHeader: {
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: SPACING.xs,
-  },
-  stopChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    marginRight: 8,
-  },
+
   resultCard: {
     alignItems: 'center',
     paddingVertical: SPACING.xl,

@@ -32,6 +32,7 @@ const createRouteSchema = Joi.object({
     start: Joi.string().pattern(/^\d{2}:\d{2}$/),
     end: Joi.string().pattern(/^\d{2}:\d{2}$/),
   }),
+  municipalities: Joi.array().items(Joi.string().trim()).default(['Dagupan']),
   isActive: Joi.boolean(),
 });
 

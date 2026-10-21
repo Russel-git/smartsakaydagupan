@@ -18,6 +18,7 @@ const complaintSchema = new mongoose.Schema(
       address: { type: String, default: '' },
     },
     attachments: [{ type: String }],
+    municipality: { type: String, trim: true, default: 'Dagupan', index: true },
     status: {
       type: String,
       enum: [

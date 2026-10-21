@@ -13,9 +13,66 @@ const getNotifications = async (req, res, next) => {
       createdAt: { $lt: threeDaysAgo },
     }).exec().catch(() => {});
 
-    const userOrPublic = req.user
-      ? [{ userId: req.user._id }, { userId: null }]
-      : [{ userId: null }];
+    const targetMunicipality = req.query.municipality || (req.user && req.user.municipality) || 'Dagupan';
+
+    let userOrPublic;
+    if (req.user) {
+      if (req.user.role === 'lgu' || req.user.role === 'poso') {
+        const lguMuni = req.user.municipality || 'Dagupan';
+        const lguRegex = new RegExp(`^(all|${lguMuni})$`, 'i');
+        userOrPublic = [
+          { userId: req.user._id },
+          {
+            userId: null,
+            $or: [
+              { municipality: lguRegex },
+              { municipality: { $in: [lguMuni, 'all'] } },
+            ],
+          },
+        ];
+      } else {
+        const muniRegex = new RegExp(`^(all|${targetMunicipality})$`, 'i');
+        const isDagupan = targetMunicipality.toLowerCase() === 'dagupan';
+        const publicMuniCond = isDagupan
+          ? [
+              { municipality: muniRegex },
+              { municipality: { $in: [targetMunicipality, 'all'] } },
+              { municipality: { $exists: false } },
+              { municipality: null },
+            ]
+          : [
+              { municipality: muniRegex },
+              { municipality: { $in: [targetMunicipality, 'all'] } },
+            ];
+        userOrPublic = [
+          { userId: req.user._id },
+          {
+            userId: null,
+            $or: publicMuniCond,
+          },
+        ];
+      }
+    } else {
+      const muniRegex = new RegExp(`^(all|${targetMunicipality})$`, 'i');
+      const isDagupan = targetMunicipality.toLowerCase() === 'dagupan';
+      const publicMuniCond = isDagupan
+        ? [
+            { municipality: muniRegex },
+            { municipality: { $in: [targetMunicipality, 'all'] } },
+            { municipality: { $exists: false } },
+            { municipality: null },
+          ]
+        : [
+            { municipality: muniRegex },
+            { municipality: { $in: [targetMunicipality, 'all'] } },
+          ];
+      userOrPublic = [
+        {
+          userId: null,
+          $or: publicMuniCond,
+        },
+      ];
+    }
 
     const filter = {
       $or: userOrPublic,
@@ -42,6 +99,8 @@ const getNotifications = async (req, res, next) => {
           $or: [
             { category: 'broadcast_by_admin' },
             { type: { $in: ['broadcast', 'system', 'fare_update'] } },
+            { userId: null },
+            { createdByRole: { $in: ['lgu', 'poso', 'admin'] } },
           ],
         }];
       } else {
@@ -99,9 +158,30 @@ const getUnreadCount = async (req, res, next) => {
     }
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
     const userId = req.user._id;
+    const targetMunicipality = req.query.municipality || req.user.municipality || 'Dagupan';
+    const muniRegex = new RegExp(`^(all|${targetMunicipality})$`, 'i');
+
+    const isDagupan = targetMunicipality.toLowerCase() === 'dagupan';
+    const publicMuniCond = isDagupan
+      ? [
+          { municipality: muniRegex },
+          { municipality: { $in: [targetMunicipality, 'all'] } },
+          { municipality: { $exists: false } },
+          { municipality: null },
+        ]
+      : [
+          { municipality: muniRegex },
+          { municipality: { $in: [targetMunicipality, 'all'] } },
+        ];
 
     const unreadCandidates = await Notification.find({
-      $or: [{ userId }, { userId: null }],
+      $or: [
+        { userId },
+        {
+          userId: null,
+          $or: publicMuniCond,
+        },
+      ],
       status: 'published',
       deletedForUsers: { $ne: userId },
       $nor: [
@@ -223,14 +303,28 @@ const deleteAllRead = async (req, res, next) => {
 
 const broadcast = async (req, res, next) => {
   try {
-    const { title, message, type, category, severity = 'info', locationArea = '', photoUrl, evidencePhoto, metadata = {} } = req.body;
+    const { title, message, type, category, severity = 'info', locationArea = '', photoUrl, evidencePhoto, metadata = {}, municipality } = req.body;
     let finalCategory = category;
     let finalType = type || 'broadcast';
 
-    if (!finalCategory) {
+    // Broadcasts and advisories published by LGU, POSO or Admin are official LGU broadcasts
+    if (req.user.role === 'lgu' || req.user.role === 'poso' || finalType === 'broadcast' || finalCategory === 'broadcast_by_admin') {
+      finalCategory = 'broadcast_by_admin';
+      finalType = 'broadcast';
+    } else if (!finalCategory) {
       if (finalType === 'weather_alert') finalCategory = 'weather_updates';
       else if (finalType === 'complaint_update') finalCategory = 'complaint_updates';
       else finalCategory = 'broadcast_by_admin';
+    }
+
+    // Determine target municipality
+    let targetMunicipality = 'Dagupan';
+    if (req.user.role === 'lgu') {
+      targetMunicipality = req.user.municipality || 'Dagupan';
+    } else if (req.user.role === 'admin') {
+      targetMunicipality = municipality || 'all';
+    } else if (municipality) {
+      targetMunicipality = municipality;
     }
 
     const attachedPhoto = photoUrl || evidencePhoto || metadata?.photoUrl || metadata?.evidenceUrl || null;
@@ -244,7 +338,7 @@ const broadcast = async (req, res, next) => {
       ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
       : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    // Save only ONE primary broadcast record (sent to all commuters via userId: null)
+    // Save only ONE primary broadcast record
     const primaryAlert = await Notification.create({
       userId: null,
       title: title.trim(),
@@ -258,6 +352,7 @@ const broadcast = async (req, res, next) => {
       approvedAt: new Date(),
       severity,
       locationArea: locationArea || '',
+      municipality: targetMunicipality,
       metadata: finalMetadata,
       expiresAt,
     });
@@ -270,6 +365,7 @@ const requestRoadAlert = async (req, res, next) => {
   try {
     const { title, message, severity = 'warning', locationArea = '', photoUrl, evidencePhoto } = req.body;
     const attachedPhoto = photoUrl || evidencePhoto || null;
+    const municipality = req.user.municipality || 'Dagupan';
     const alert = await Notification.create({
       userId: null,
       title: title.trim(),
@@ -281,6 +377,7 @@ const requestRoadAlert = async (req, res, next) => {
       authorUser: req.user._id,
       severity,
       locationArea: locationArea?.trim() || '',
+      municipality,
       metadata: {
         submittedBy: `${req.user.firstName} ${req.user.lastName}`,
         badgeNumber: req.user.badgeNumber || 'POSO-ENFORCER',
@@ -300,7 +397,12 @@ const requestRoadAlert = async (req, res, next) => {
 
 const getPendingRoadAlerts = async (req, res, next) => {
   try {
-    const alerts = await Notification.find({ status: 'pending_approval' })
+    const filter = { status: 'pending_approval' };
+    if (req.user.role === 'lgu' || req.user.role === 'poso') {
+      filter.municipality = req.user.municipality || 'Dagupan';
+    }
+
+    const alerts = await Notification.find(filter)
       .populate('authorUser', 'firstName lastName badgeNumber department assignedZone email')
       .sort({ createdAt: -1 });
 
@@ -320,6 +422,9 @@ const getAlertFeed = async (req, res, next) => {
     } else {
       filter.status = { $ne: 'archived' };
     }
+    if (req.user.role === 'lgu' || req.user.role === 'poso') {
+      filter.municipality = req.user.municipality || 'Dagupan';
+    }
 
     const alerts = await Notification.find(filter)
       .populate('authorUser', 'firstName lastName badgeNumber department')
@@ -336,6 +441,10 @@ const archiveAnnouncement = async (req, res, next) => {
     const alert = await Notification.findById(req.params.id);
     if (!alert) return apiResponse.error(res, 'Announcement not found.', 404);
 
+    if (req.user.role === 'lgu' && alert.municipality && alert.municipality !== req.user.municipality) {
+      return apiResponse.error(res, `Forbidden: You can only archive announcements in ${req.user.municipality}.`, 403);
+    }
+
     alert.status = 'archived';
     await alert.save();
 
@@ -348,6 +457,10 @@ const restoreAnnouncement = async (req, res, next) => {
     const alert = await Notification.findById(req.params.id);
     if (!alert) return apiResponse.error(res, 'Announcement not found.', 404);
 
+    if (req.user.role === 'lgu' && alert.municipality && alert.municipality !== req.user.municipality) {
+      return apiResponse.error(res, `Forbidden: You can only restore announcements in ${req.user.municipality}.`, 403);
+    }
+
     alert.status = 'published';
     await alert.save();
 
@@ -359,6 +472,10 @@ const permanentDeleteAnnouncement = async (req, res, next) => {
   try {
     const alert = await Notification.findById(req.params.id);
     if (!alert) return apiResponse.error(res, 'Announcement not found.', 404);
+
+    if (req.user.role === 'lgu' && alert.municipality && alert.municipality !== req.user.municipality) {
+      return apiResponse.error(res, `Forbidden: You can only delete announcements in ${req.user.municipality}.`, 403);
+    }
 
     // Delete primary record
     await Notification.findByIdAndDelete(req.params.id);
@@ -380,12 +497,16 @@ const approveRoadAlert = async (req, res, next) => {
     const alert = await Notification.findById(req.params.id);
     if (!alert) return apiResponse.error(res, 'Road alert not found.', 404);
 
+    if (req.user.role === 'lgu' && alert.municipality && alert.municipality !== req.user.municipality) {
+      return apiResponse.error(res, `Forbidden: You can only approve alerts within ${req.user.municipality}.`, 403);
+    }
+
     alert.status = 'published';
     alert.approvedBy = req.user._id;
     alert.approvedAt = new Date();
     await alert.save();
 
-    return apiResponse.success(res, alert, 'Road alert verified and broadcast to all commuters.');
+    return apiResponse.success(res, alert, 'Road alert verified and broadcast to commuters.');
   } catch (error) { next(error); }
 };
 
@@ -394,6 +515,10 @@ const rejectRoadAlert = async (req, res, next) => {
     const reason = req.body.reason || req.body.rejectionReason || 'Declined by City LGU verification desk.';
     const alert = await Notification.findById(req.params.id);
     if (!alert) return apiResponse.error(res, 'Road alert not found.', 404);
+
+    if (req.user.role === 'lgu' && alert.municipality && alert.municipality !== req.user.municipality) {
+      return apiResponse.error(res, `Forbidden: You can only reject alerts within ${req.user.municipality}.`, 403);
+    }
 
     alert.status = 'rejected';
     alert.rejectionReason = reason;

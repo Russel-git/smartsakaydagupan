@@ -18,6 +18,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useTheme } from "../../contexts/theme/ThemeContext";
+import { formatMunicipalityShort, formatLguJurisdiction } from "../../utils/lguHelpers";
 
 const AdminLayout = () => {
   const { admin, logout, isSuperAdmin, isOperator, isLgu } = useAuth();
@@ -301,7 +302,9 @@ const AdminLayout = () => {
                 color: colors.textMuted,
               }}
             >
-              Dagupan City
+              {admin?.municipality
+                ? formatMunicipalityShort(admin.municipality)
+                : "Dagupan City"}
             </div>
           </div>
         </div>
@@ -461,7 +464,9 @@ const AdminLayout = () => {
                 color: colors.textMuted,
               }}
             >
-              Dagupan City
+              {admin?.municipality
+                ? formatLguJurisdiction(admin.municipality)
+                : "Dagupan City"}
             </span>
 
             <ChevronRight size={14} color={colors.textMuted} />

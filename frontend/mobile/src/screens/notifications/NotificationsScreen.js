@@ -13,7 +13,9 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useFeedback } from '../../contexts/FeedbackContext';
+import { getMunicipality } from '../../utils/storage';
 import { EmptyState } from '../../components/common/SharedComponents';
 import ConfirmDialogModal from '../../components/common/ConfirmDialogModal';
 import { FONTS, SPACING, RADIUS, API_BASE_URL } from '../../utils/constants';
@@ -36,24 +38,64 @@ const getMediaUrl = (url) => {
 
 // Helper to determine notification category
 export const getNotificationCategory = (item) => {
+  if (item?.category === 'complaint_updates' || item?.type === 'complaint_update' || item?.metadata?.complaintId) {
+    return 'complaint_updates';
+  }
+  if (
+    item?.category === 'broadcast_by_admin' ||
+    item?.type === 'broadcast' ||
+    item?.createdByRole === 'lgu' ||
+    item?.createdByRole === 'poso' ||
+    item?.userId == null
+  ) {
+    return 'broadcast_by_admin';
+  }
   if (item?.category === 'weather_updates' || item?.type === 'weather_alert') {
     return 'weather_updates';
-  }
-  if (item?.category === 'complaint_updates' || item?.type === 'complaint_update') {
-    return 'complaint_updates';
   }
   return 'broadcast_by_admin';
 };
 
-// Category UI Configuration
-const CATEGORY_TABS = [
+// Multi-category tab membership helper
+export const isNotificationInTab = (item, tabId) => {
+  if (tabId === 'all') return true;
+  if (tabId === 'complaint_updates') {
+    return (
+      item?.category === 'complaint_updates' ||
+      item?.type === 'complaint_update' ||
+      Boolean(item?.metadata?.complaintId)
+    );
+  }
+  if (tabId === 'broadcast_by_admin') {
+    return (
+      item?.category === 'broadcast_by_admin' ||
+      item?.type === 'broadcast' ||
+      item?.userId == null ||
+      item?.createdByRole === 'lgu' ||
+      item?.createdByRole === 'poso' ||
+      item?.createdByRole === 'admin'
+    );
+  }
+  if (tabId === 'weather_updates') {
+    return (
+      item?.category === 'weather_updates' ||
+      item?.type === 'weather_alert' ||
+      Boolean(item?.metadata?.tempC) ||
+      Boolean(item?.metadata?.source?.includes('Open-Meteo'))
+    );
+  }
+  return true;
+};
+
+// Dynamic Category UI Configuration scoped to town
+export const getCategoryTabs = (muni = 'Dagupan') => [
   {
     id: 'all',
     label: 'All',
     icon: 'bell-outline',
     color: '#0284C7',
     emptyTitle: 'No Notifications',
-    emptyMessage: "You're all caught up with Dagupan transit announcements!",
+    emptyMessage: `You're all caught up with ${muni} transit announcements!`,
   },
   {
     id: 'weather_updates',
@@ -64,7 +106,7 @@ const CATEGORY_TABS = [
     badgeBorder: '#BAE6FD',
     badgeText: '#0369A1',
     emptyTitle: 'No Weather Updates',
-    emptyMessage: 'No weather alerts or rainfall advisories in Dagupan right now.',
+    emptyMessage: `No weather alerts or rainfall advisories in ${muni} right now.`,
   },
   {
     id: 'complaint_updates',
@@ -75,7 +117,7 @@ const CATEGORY_TABS = [
     badgeBorder: '#DDD6FE',
     badgeText: '#6D28D9',
     emptyTitle: 'No Complaint Updates',
-    emptyMessage: 'You will receive status updates here when your filed complaints are reviewed or resolved by Dagupan POSO / LGU.',
+    emptyMessage: `You will receive status updates here when your filed complaints are reviewed or resolved by ${muni} POSO / LGU.`,
   },
   {
     id: 'broadcast_by_admin',
@@ -86,7 +128,7 @@ const CATEGORY_TABS = [
     badgeBorder: '#FED7AA',
     badgeText: '#C2410C',
     emptyTitle: 'No LGU Broadcasts',
-    emptyMessage: 'There are no official transit broadcasts or road advisories from Dagupan LGU at this moment.',
+    emptyMessage: `There are no official transit broadcasts or road advisories from ${muni} LGU at this moment.`,
   },
 ];
 
@@ -164,6 +206,19 @@ const NOTIF_CONFIG = {
 
 const NotificationsScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
+  const { user } = useAuth();
+  const [activeMuni, setActiveMuni] = useState(user?.municipality || 'Dagupan');
+
+  useEffect(() => {
+    (async () => {
+      const saved = await getMunicipality();
+      const current = saved || user?.municipality || 'Dagupan';
+      setActiveMuni(current);
+    })();
+  }, [user?.municipality]);
+
+  const categoryTabs = useMemo(() => getCategoryTabs(activeMuni), [activeMuni]);
+
   const {
     notifications,
     fetchNotifications,
@@ -243,7 +298,15 @@ const NotificationsScreen = ({ navigation }) => {
 
   useEffect(() => {
     fetchNotifications();
-  }, []);
+    const unsubscribe = navigation?.addListener
+      ? navigation.addListener('focus', () => {
+          fetchNotifications();
+        })
+      : null;
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [navigation, fetchNotifications]);
 
   const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
@@ -276,11 +339,16 @@ const NotificationsScreen = ({ navigation }) => {
     };
 
     validNotifications.forEach((n) => {
-      const cat = getNotificationCategory(n);
-      if (counts[cat] !== undefined) counts[cat] += 1;
+      ['weather_updates', 'complaint_updates', 'broadcast_by_admin'].forEach((cat) => {
+        if (isNotificationInTab(n, cat)) {
+          counts[cat] += 1;
+          if (!n.isRead) {
+            unread[cat] += 1;
+          }
+        }
+      });
       if (!n.isRead) {
         unread.all += 1;
-        if (unread[cat] !== undefined) unread[cat] += 1;
       }
     });
 
@@ -289,13 +357,12 @@ const NotificationsScreen = ({ navigation }) => {
 
   // Filter list by selected tab
   const filteredNotifications = useMemo(() => {
-    if (activeTab === 'all') return validNotifications;
-    return validNotifications.filter((n) => getNotificationCategory(n) === activeTab);
+    return validNotifications.filter((n) => isNotificationInTab(n, activeTab));
   }, [validNotifications, activeTab]);
 
   const activeTabMeta = useMemo(() => {
-    return CATEGORY_TABS.find((t) => t.id === activeTab) || CATEGORY_TABS[0];
-  }, [activeTab]);
+    return categoryTabs.find((t) => t.id === activeTab) || categoryTabs[0];
+  }, [activeTab, categoryTabs]);
 
   const handleCardPress = (item) => {
     if (!item.isRead) {
@@ -393,7 +460,7 @@ const NotificationsScreen = ({ navigation }) => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryScroll}
         >
-          {CATEGORY_TABS.map((tab) => {
+          {categoryTabs.map((tab) => {
             const isSelected = activeTab === tab.id;
             const count = categoryCounts.counts[tab.id] || 0;
             const unread = categoryCounts.unread[tab.id] || 0;
@@ -828,7 +895,7 @@ const NotificationsScreen = ({ navigation }) => {
                       </View>
                     ) : null}
 
-                    {/* Dagupan City Transit Advisory Footer Notice */}
+                    {/* Transit Advisory Footer Notice */}
                     <View style={styles.footerNoticeRow}>
                       <MaterialCommunityIcons
                         name="information-outline"
@@ -836,7 +903,7 @@ const NotificationsScreen = ({ navigation }) => {
                         color={colors.textMuted}
                       />
                       <Text style={[styles.footerNoticeText, { color: colors.textMuted }]}>
-                        Official SmartSakay Dagupan notification verified by Dagupan City Transport Authority.
+                        Official SmartSakay notification verified by {selectedNotif?.municipality || activeMuni} Transport Authority.
                       </Text>
                     </View>
                   </ScrollView>

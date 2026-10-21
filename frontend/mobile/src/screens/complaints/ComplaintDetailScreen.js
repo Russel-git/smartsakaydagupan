@@ -89,9 +89,10 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
     if (!complaint) return;
     try {
       const caseRef = complaint.lguCaseNumber || `SMARTSAKAY-${complaint._id.slice(-6).toUpperCase()}`;
+      const muni = complaint.municipality || 'Dagupan';
       await Share.share({
-        title: `Dagupan Transit Case ${caseRef}`,
-        message: `Dagupan City Transit Grievance Tracking\nCase Number: ${caseRef}\nSubject: ${complaint.subject}\nStatus: ${complaint.status}\nSubmitted: ${formatDate(complaint.createdAt)}`,
+        title: `${muni} Transit Case ${caseRef}`,
+        message: `${muni} Transit Grievance Tracking\nCase Number: ${caseRef}\nSubject: ${complaint.subject}\nStatus: ${complaint.status}\nSubmitted: ${formatDate(complaint.createdAt)}`,
       });
     } catch (err) {
       console.log('Share error:', err.message);
@@ -201,17 +202,17 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
     {
       title: 'Operator Review & Verification',
       subtitle: isVerified
-        ? `Verified by ${complaint.verifiedBy ? `${complaint.verifiedBy.firstName} ${complaint.verifiedBy.lastName}` : 'Dagupan Transit Operations'}.`
+        ? `Verified by ${complaint.verifiedBy ? `${complaint.verifiedBy.firstName} ${complaint.verifiedBy.lastName}` : `${complaint.municipality || 'Town'} Transit Operations`}.`
         : 'Under initial review by transport dispatch.',
       date: complaint.lguEndorsedAt || (isVerified ? complaint.updatedAt : null),
       state: isVerified ? 'completed' : 'current',
       icon: isVerified ? 'check-circle' : 'progress-clock',
     },
     {
-      title: 'Escalated to Dagupan LGU / POSO',
+      title: `Escalated to ${complaint.municipality || 'Town'} LGU / POSO`,
       subtitle: isEndorsed
-        ? `Official Case #${complaint.lguCaseNumber || 'Assigned'} endorsed to City POSO.`
-        : 'Awaiting escalation to Dagupan City Public Order & Safety Office.',
+        ? `Official Case #${complaint.lguCaseNumber || 'Assigned'} endorsed to ${complaint.municipality || 'Town'} POSO.`
+        : `Awaiting escalation to ${complaint.municipality || 'Town'} Public Order & Safety Office.`,
       date: complaint.lguEndorsedAt,
       state: isEndorsed ? 'completed' : isVerified ? 'current' : 'pending',
       icon: isEndorsed ? 'check-circle' : 'shield-alert-outline',
@@ -514,7 +515,7 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.actionBannerTitle, { color: isDark ? '#6EE7B7' : '#047857' }]}>
-                  Official Action Taken by Dagupan LGU
+                  Official Action Taken by {complaint.municipality || 'LGU'}
                 </Text>
                 {Boolean(complaint.lguActionTakenAt) ? (
                   <Text style={[styles.actionBannerDate, { color: isDark ? '#A7F3D0' : '#065F46' }]}>
@@ -663,10 +664,10 @@ const ComplaintDetailScreen = ({ route: navRoute, navigation }) => {
           <MaterialCommunityIcons name="information" size={20} color="#0284C7" />
           <View style={{ flex: 1 }}>
             <Text style={[styles.rightsTitle, { color: '#0284C7' }]}>
-              Official Dagupan POSO Case Record
+              Official {complaint.municipality || 'LGU'} POSO Case Record
             </Text>
             <Text style={[styles.rightsBody, { color: isDark ? '#BAE6FD' : '#0369A1' }]}>
-              Dagupan City Ordinance and LTFRB regulations strictly mandate compliance with approved fare matrices and the 20% discount for Students, Senior Citizens, and PWDs. If you need follow-up in person, present this Case Tracking Number at Dagupan POSO / City Hall.
+              {complaint.municipality || 'Local'} Ordinance and LTFRB regulations strictly mandate compliance with approved fare matrices and the 20% discount for Students, Senior Citizens, and PWDs. If you need follow-up in person, present this Case Tracking Number at {complaint.municipality || 'Local'} POSO / Municipal Hall.
             </Text>
           </View>
         </View>

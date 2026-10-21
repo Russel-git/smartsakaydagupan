@@ -316,6 +316,45 @@ const ProfileScreen = ({ navigation }) => {
                   Email verified
                 </Text>
               </View>
+              <View style={styles.infoRow}>
+                <MaterialCommunityIcons
+                  name="map-marker-radius"
+                  size={20}
+                  color={colors.primary}
+                />
+                <View
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={[styles.infoText, { color: colors.textPrimary, flex: 0 }]}>
+                    Active LGU
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor: `${colors.primary}18`,
+                      paddingHorizontal: 10,
+                      paddingVertical: 3,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: `${colors.primary}40`,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontWeight: "700",
+                        fontSize: FONTS.sizes.xs,
+                      }}
+                    >
+                      {user?.municipality || "Dagupan"}
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </>
           )}
         </Card>

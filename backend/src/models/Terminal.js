@@ -58,6 +58,12 @@ const terminalSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    municipality: {
+      type: String,
+      trim: true,
+      default: 'Dagupan',
+      index: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
