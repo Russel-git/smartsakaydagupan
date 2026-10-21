@@ -249,7 +249,7 @@ const LocationSharingModal = ({ visible, onClose, onRefreshPeers }) => {
               <MaterialCommunityIcons name="account-group" size={24} color={colors.primary} />
               <View>
                 <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-                  Peer Location Sharing
+                  SakayCircle Location Sharing
                 </Text>
                 <Text style={[styles.modalSub, { color: colors.textSecondary }]}>
                   Live tracking with authorized commuters ({activeCount}/10 used)
@@ -266,7 +266,7 @@ const LocationSharingModal = ({ visible, onClose, onRefreshPeers }) => {
             <View style={[styles.myIdCard, { backgroundColor: isDark ? "rgba(37,99,235,0.15)" : "#EFF6FF", borderColor: "#93C5FD" }]}>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-                  <Text style={styles.myIdLabel}>YOUR COMMUTER SHARE ID</Text>
+                  <Text style={styles.myIdLabel}>YOUR SAKAYCIRCLE COMMUTER ID</Text>
                   <TouchableOpacity onPress={handleCopyId} style={styles.copyIdBtn} activeOpacity={0.7}>
                     <MaterialCommunityIcons name="content-copy" size={13} color={colors.primary} />
                     <Text style={[styles.copyIdText, { color: colors.primary }]}>Copy</Text>
@@ -275,7 +275,7 @@ const LocationSharingModal = ({ visible, onClose, onRefreshPeers }) => {
                 <Text style={[styles.myIdValue, { color: colors.textPrimary }]} numberOfLines={1} selectable>
                   {user?._id || user?.email}
                 </Text>
-                <Text style={styles.myIdHint}>Share this ID, name, or email with peers so they can request access.</Text>
+                <Text style={styles.myIdHint}>Share this ID, name, or email with members so they can request access.</Text>
               </View>
               <View style={[styles.quotaBadge, { backgroundColor: activeCount >= 10 ? "#EF4444" : colors.primary }]}>
                 <Text style={styles.quotaText}>{activeCount}/10</Text>
@@ -438,7 +438,7 @@ const LocationSharingModal = ({ visible, onClose, onRefreshPeers }) => {
             {/* Connected Peers Section */}
             <View style={styles.sectionWrap}>
               <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
-                Connected Peers on Map
+                Connected Members on Map
               </Text>
 
               {loading ? (
