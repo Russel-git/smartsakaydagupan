@@ -1,31 +1,40 @@
-const nodemailer = require('nodemailer');
-const config = require('../config/env');
+const nodemailer = require("nodemailer");
+const config = require("../config/env");
 
 const createGmailTransporter = () => {
-  const cleanPass = config.gmail.appPassword ? config.gmail.appPassword.replace(/\s+/g, '') : '';
-  const user = config.gmail.user || config.smtp.user || 'flamease.config@gmail.com';
-  const pass = cleanPass || config.smtp.pass || 'oeadbyahwffquxou';
+  const cleanPass = config.gmail.appPassword
+    ? config.gmail.appPassword.replace(/\s+/g, "")
+    : "";
+  const user =
+    config.gmail.user || config.smtp.user || "flamease.config@gmail.com";
+  const pass = cleanPass || config.smtp.pass || "oeadbyahwffquxou";
 
   return nodemailer.createTransport({
-    service: 'gmail',
+    service: "gmail",
     auth: {
       user,
       pass,
     },
     family: 4,
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
-    socketTimeout: 8000,
+    connectionTimeout: 50000,
+    greetingTimeout: 50000,
+    socketTimeout: 55000,
   });
 };
 
 const createSmtpTransporter = (port = 465, secure = true) => {
-  const cleanPass = config.gmail.appPassword ? config.gmail.appPassword.replace(/\s+/g, '') : '';
-  const user = config.smtp.user || config.gmail.user || 'flamease.config@gmail.com';
-  const pass = (config.smtp.pass ? config.smtp.pass.replace(/\s+/g, '') : '') || cleanPass || 'oeadbyahwffquxou';
+  const cleanPass = config.gmail.appPassword
+    ? config.gmail.appPassword.replace(/\s+/g, "")
+    : "";
+  const user =
+    config.smtp.user || config.gmail.user || "flamease.config@gmail.com";
+  const pass =
+    (config.smtp.pass ? config.smtp.pass.replace(/\s+/g, "") : "") ||
+    cleanPass ||
+    "oeadbyahwffquxou";
 
   return nodemailer.createTransport({
-    host: config.smtp.host || 'smtp.gmail.com',
+    host: config.smtp.host || "smtp.gmail.com",
     port,
     secure,
     auth: {
@@ -33,24 +42,24 @@ const createSmtpTransporter = (port = 465, secure = true) => {
       pass,
     },
     family: 4,
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
-    socketTimeout: 8000,
+    connectionTimeout: 50000,
+    greetingTimeout: 50000,
+    socketTimeout: 55000,
     tls: {
       rejectUnauthorized: false,
     },
   });
 };
 
-const sendOtp = async (email, code, type = 'registration') => {
+const sendOtp = async (email, code, type = "registration") => {
   const subjects = {
-    registration: 'SmartSakay Dagupan - Email Verification Code',
-    password_reset: 'SmartSakay Dagupan - Password Reset Code',
-    login: 'SmartSakay Dagupan - Login Verification Code',
+    registration: "SmartSakay Dagupan - Email Verification Code",
+    password_reset: "SmartSakay Dagupan - Password Reset Code",
+    login: "SmartSakay Dagupan - Login Verification Code",
   };
 
   const mailOptions = {
-    from: `"SmartSakay Dagupan" <${config.gmail.user || config.smtp.user || 'flamease.config@gmail.com'}>`,
+    from: `"SmartSakay Dagupan" <${config.gmail.user || config.smtp.user || "flamease.config@gmail.com"}>`,
     to: email,
     subject: subjects[type] || subjects.registration,
     html: `
@@ -74,25 +83,35 @@ const sendOtp = async (email, code, type = 'registration') => {
   try {
     const transporter = createGmailTransporter();
     const info = await transporter.sendMail(mailOptions);
-    console.log(`✉️ [EMAIL SENT via Gmail Service] Successfully dispatched to ${email} (MessageId: ${info.messageId})`);
+    console.log(
+      `✉️ [EMAIL SENT via Gmail Service] Successfully dispatched to ${email} (MessageId: ${info.messageId})`,
+    );
     return true;
   } catch (error1) {
-    console.warn(`⚠️ [GMAIL SERVICE FAILED] ${error1.message}. Trying port 465 SSL...`);
+    console.warn(
+      `⚠️ [GMAIL SERVICE FAILED] ${error1.message}. Trying port 465 SSL...`,
+    );
 
     // Try 2: Port 465 SSL with IPv4
     try {
       const transporter465 = createSmtpTransporter(465, true);
       const info2 = await transporter465.sendMail(mailOptions);
-      console.log(`✉️ [EMAIL SENT via 465 SSL] Successfully dispatched to ${email} (MessageId: ${info2.messageId})`);
+      console.log(
+        `✉️ [EMAIL SENT via 465 SSL] Successfully dispatched to ${email} (MessageId: ${info2.messageId})`,
+      );
       return true;
     } catch (error2) {
-      console.warn(`⚠️ [PORT 465 FAILED] ${error2.message}. Trying port 587 STARTTLS...`);
+      console.warn(
+        `⚠️ [PORT 465 FAILED] ${error2.message}. Trying port 587 STARTTLS...`,
+      );
 
       // Try 3: Port 587 STARTTLS with IPv4
       try {
         const transporter587 = createSmtpTransporter(587, false);
         const info3 = await transporter587.sendMail(mailOptions);
-        console.log(`✉️ [EMAIL SENT via 587 TLS] Successfully dispatched to ${email} (MessageId: ${info3.messageId})`);
+        console.log(
+          `✉️ [EMAIL SENT via 587 TLS] Successfully dispatched to ${email} (MessageId: ${info3.messageId})`,
+        );
         return true;
       } catch (error3) {
         console.error(`⚠️ [ALL SMTP TRANSPORTS FAILED]:`, error3.message);
