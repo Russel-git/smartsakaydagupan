@@ -483,7 +483,7 @@ const RegisterScreen = ({ navigation }) => {
               Already have an account?{" "}
             </Text>
             <TouchableOpacity
-              onPress={() => navigation.navigate("Login")}
+              onPress={() => navigation.navigate("Login - SmartSakay")}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.8}
             >

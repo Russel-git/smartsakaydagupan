@@ -13,9 +13,9 @@ const createGmailTransporter = () => {
       pass,
     },
     family: 4,
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 8000,
   });
 };
 
@@ -33,9 +33,9 @@ const createSmtpTransporter = (port = 465, secure = true) => {
       pass,
     },
     family: 4,
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 8000,
     tls: {
       rejectUnauthorized: false,
     },
