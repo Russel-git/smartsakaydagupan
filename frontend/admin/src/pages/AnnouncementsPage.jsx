@@ -150,6 +150,7 @@ const AnnouncementsPage = () => {
     const matchesSearch =
       item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.message?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.route?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.locationArea?.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesSeverity =
@@ -206,7 +207,8 @@ const AnnouncementsPage = () => {
                   color: colors.textMuted,
                 }}
               >
-                Official Dagupan City public transit advisories, rerouting notices, and emergency broadcasts.
+                Official Dagupan City public transit advisories, rerouting
+                notices, and emergency broadcasts.
               </p>
             </div>
           </div>
@@ -301,10 +303,25 @@ const AnnouncementsPage = () => {
           )}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            flexWrap: "wrap",
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <Filter size={14} color={colors.textMuted} />
-            <span style={{ fontSize: "12px", color: colors.textMuted, fontWeight: "600" }}>Severity:</span>
+            <span
+              style={{
+                fontSize: "12px",
+                color: colors.textMuted,
+                fontWeight: "600",
+              }}
+            >
+              Severity:
+            </span>
           </div>
 
           {["all", "critical", "warning", "info"].map((sev) => (
@@ -320,8 +337,11 @@ const AnnouncementsPage = () => {
                 cursor: "pointer",
                 textTransform: "capitalize",
                 backgroundColor:
-                  severityFilter === sev ? colors.primary : colors.surfaceElevated,
-                color: severityFilter === sev ? "#FFFFFF" : colors.textSecondary,
+                  severityFilter === sev
+                    ? colors.primary
+                    : colors.surfaceElevated,
+                color:
+                  severityFilter === sev ? "#FFFFFF" : colors.textSecondary,
                 transition: "all 150ms ease",
               }}
             >
@@ -368,22 +388,46 @@ const AnnouncementsPage = () => {
                 <th style={{ padding: "14px 16px" }}>Evidence</th>
                 <th style={{ padding: "14px 20px" }}>Message Preview</th>
                 <th style={{ padding: "14px 20px" }}>Date</th>
-                <th style={{ padding: "14px 20px", textAlign: "right" }}>Actions</th>
+                <th style={{ padding: "14px 20px", textAlign: "right" }}>
+                  Actions
+                </th>
               </tr>
             </thead>
 
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "48px 20px", textAlign: "center", color: colors.textMuted }}>
-                    <RefreshCw size={24} className="animate-spin" style={{ margin: "0 auto 8px auto", display: "block" }} />
+                  <td
+                    colSpan={6}
+                    style={{
+                      padding: "48px 20px",
+                      textAlign: "center",
+                      color: colors.textMuted,
+                    }}
+                  >
+                    <RefreshCw
+                      size={24}
+                      className="animate-spin"
+                      style={{ margin: "0 auto 8px auto", display: "block" }}
+                    />
                     Loading official announcements...
                   </td>
                 </tr>
               ) : filteredAnnouncements.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "48px 20px", textAlign: "center", color: colors.textMuted }}>
-                    <CheckCircle2 size={32} color="#10B981" style={{ margin: "0 auto 10px auto", display: "block" }} />
+                  <td
+                    colSpan={6}
+                    style={{
+                      padding: "48px 20px",
+                      textAlign: "center",
+                      color: colors.textMuted,
+                    }}
+                  >
+                    <CheckCircle2
+                      size={32}
+                      color="#10B981"
+                      style={{ margin: "0 auto 10px auto", display: "block" }}
+                    />
                     No city announcements found matching your criteria.
                   </td>
                 </tr>
@@ -407,10 +451,15 @@ const AnnouncementsPage = () => {
                     >
                       {/* Title */}
                       <td style={{ padding: "14px 20px" }}>
-                        <div style={{ fontWeight: "700", color: colors.textPrimary }}>
+                        <div
+                          style={{
+                            fontWeight: "700",
+                            color: colors.textPrimary,
+                          }}
+                        >
                           {item.title}
                         </div>
-                        {item.locationArea && (
+                        {(item.route || item.locationArea) && (
                           <div
                             style={{
                               display: "inline-flex",
@@ -422,7 +471,7 @@ const AnnouncementsPage = () => {
                             }}
                           >
                             <MapPin size={11} color="#D97706" />
-                            {item.locationArea}
+                            {item.route || item.locationArea}
                           </div>
                         )}
                       </td>
@@ -435,7 +484,13 @@ const AnnouncementsPage = () => {
                       {/* Evidence Photo */}
                       <td style={{ padding: "14px 16px" }}>
                         {photo ? (
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                          <div
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                          >
                             <div
                               onClick={() => setLightboxImage(photo)}
                               style={{
@@ -453,7 +508,11 @@ const AnnouncementsPage = () => {
                               <img
                                 src={photo}
                                 alt="Evidence"
-                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }}
                               />
                             </div>
                             <button
@@ -477,7 +536,14 @@ const AnnouncementsPage = () => {
                             </button>
                           </div>
                         ) : (
-                          <span style={{ fontSize: "12px", color: colors.textMuted }}>None</span>
+                          <span
+                            style={{
+                              fontSize: "12px",
+                              color: colors.textMuted,
+                            }}
+                          >
+                            None
+                          </span>
                         )}
                       </td>
 
@@ -510,18 +576,39 @@ const AnnouncementsPage = () => {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px",
+                          }}
+                        >
                           <Calendar size={13} />
                           {new Date(item.createdAt).toLocaleDateString()}
                         </div>
-                        <div style={{ fontSize: "11px", color: colors.textMuted, marginTop: "2px" }}>
-                          {new Date(item.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: colors.textMuted,
+                            marginTop: "2px",
+                          }}
+                        >
+                          {new Date(item.createdAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </div>
                       </td>
 
                       {/* Actions */}
                       <td style={{ padding: "14px 20px", textAlign: "right" }}>
-                        <div style={{ display: "inline-flex", gap: "8px", alignItems: "center" }}>
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            gap: "8px",
+                            alignItems: "center",
+                          }}
+                        >
                           <button
                             type="button"
                             onClick={() => setSelectedAnnouncement(item)}
@@ -615,7 +702,14 @@ const AnnouncementsPage = () => {
               }}
             >
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginBottom: "6px",
+                  }}
+                >
                   {getSeverityBadge(selectedAnnouncement.severity)}
                   <span
                     style={{
@@ -628,7 +722,8 @@ const AnnouncementsPage = () => {
                       textTransform: "uppercase",
                     }}
                   >
-                    {selectedAnnouncement.category?.replace(/_/g, " ") || "Broadcast"}
+                    {selectedAnnouncement.category?.replace(/_/g, " ") ||
+                      "Broadcast"}
                   </span>
                 </div>
                 <h3
@@ -687,8 +782,8 @@ const AnnouncementsPage = () => {
                         getEvidenceImageUrl(
                           selectedAnnouncement.metadata?.photoUrl ||
                             selectedAnnouncement.metadata?.evidencePhoto ||
-                            selectedAnnouncement.photoUrl
-                        )
+                            selectedAnnouncement.photoUrl,
+                        ),
                       )
                     }
                     style={{
@@ -706,10 +801,14 @@ const AnnouncementsPage = () => {
                       src={getEvidenceImageUrl(
                         selectedAnnouncement.metadata?.photoUrl ||
                           selectedAnnouncement.metadata?.evidencePhoto ||
-                          selectedAnnouncement.photoUrl
+                          selectedAnnouncement.photoUrl,
                       )}
                       alt="Verified Evidence"
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
                     />
                     <div
                       style={{
@@ -735,7 +834,14 @@ const AnnouncementsPage = () => {
 
               {/* Message Content */}
               <div style={{ marginBottom: "20px" }}>
-                <div style={{ fontSize: "12px", fontWeight: "700", color: colors.textMuted, marginBottom: "6px" }}>
+                <div
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    color: colors.textMuted,
+                    marginBottom: "6px",
+                  }}
+                >
                   ADVISORY MESSAGE
                 </div>
                 <div
@@ -770,8 +876,16 @@ const AnnouncementsPage = () => {
                     border: `1px solid ${colors.border}`,
                   }}
                 >
-                  <div style={{ color: colors.textMuted, marginBottom: "2px" }}>Dispatched By</div>
-                  <div style={{ fontWeight: "700", color: colors.textPrimary, textTransform: "uppercase" }}>
+                  <div style={{ color: colors.textMuted, marginBottom: "2px" }}>
+                    Dispatched By
+                  </div>
+                  <div
+                    style={{
+                      fontWeight: "700",
+                      color: colors.textPrimary,
+                      textTransform: "uppercase",
+                    }}
+                  >
                     {selectedAnnouncement.createdByRole || "City Authority"}
                   </div>
                 </div>
@@ -784,7 +898,9 @@ const AnnouncementsPage = () => {
                     border: `1px solid ${colors.border}`,
                   }}
                 >
-                  <div style={{ color: colors.textMuted, marginBottom: "2px" }}>Time Dispatched</div>
+                  <div style={{ color: colors.textMuted, marginBottom: "2px" }}>
+                    Time Dispatched
+                  </div>
                   <div style={{ fontWeight: "700", color: colors.textPrimary }}>
                     {new Date(selectedAnnouncement.createdAt).toLocaleString()}
                   </div>
@@ -931,7 +1047,14 @@ const AnnouncementsPage = () => {
                 alignItems: "center",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", color: colors.textPrimary }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  color: colors.textPrimary,
+                }}
+              >
                 <div
                   style={{
                     width: "36px",
@@ -946,13 +1069,20 @@ const AnnouncementsPage = () => {
                 >
                   <Archive size={20} />
                 </div>
-                <h3 style={{ margin: 0, fontSize: "17px", fontWeight: "700" }}>Archive Announcement</h3>
+                <h3 style={{ margin: 0, fontSize: "17px", fontWeight: "700" }}>
+                  Archive Announcement
+                </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setArchiveTarget(null)}
                 disabled={archiveLoading}
-                style={{ background: "none", border: "none", color: colors.textMuted, cursor: "pointer" }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: colors.textMuted,
+                  cursor: "pointer",
+                }}
               >
                 <X size={18} />
               </button>
@@ -968,18 +1098,35 @@ const AnnouncementsPage = () => {
                   marginBottom: "16px",
                 }}
               >
-                <div style={{ fontSize: "14px", fontWeight: "700", color: colors.textPrimary, marginBottom: "4px" }}>
+                <div
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "700",
+                    color: colors.textPrimary,
+                    marginBottom: "4px",
+                  }}
+                >
                   "{archiveTarget.title}"
                 </div>
-                {archiveTarget.locationArea && (
+                {(archiveTarget.route || archiveTarget.locationArea) && (
                   <div style={{ fontSize: "12px", color: colors.textMuted }}>
-                    📍 {archiveTarget.locationArea}
+                    📍 {archiveTarget.route || archiveTarget.locationArea}
                   </div>
                 )}
               </div>
 
-              <p style={{ margin: 0, fontSize: "13px", color: colors.textSecondary, lineHeight: "1.5" }}>
-                Are you sure you want to move this announcement to the <strong>Archives Hub</strong>? It will be safely removed from active commuter feeds and stored in Archives, where you can restore or permanently delete it.
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "13px",
+                  color: colors.textSecondary,
+                  lineHeight: "1.5",
+                }}
+              >
+                Are you sure you want to move this announcement to the{" "}
+                <strong>Archives Hub</strong>? It will be safely removed from
+                active commuter feeds and stored in Archives, where you can
+                restore or permanently delete it.
               </p>
             </div>
 
@@ -1005,10 +1152,16 @@ const AnnouncementsPage = () => {
                 className="btn btn-primary"
                 disabled={archiveLoading}
                 onClick={handleConfirmArchive}
-                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
               >
                 <Archive size={14} />
-                <span>{archiveLoading ? "Archiving..." : "Confirm Archive"}</span>
+                <span>
+                  {archiveLoading ? "Archiving..." : "Confirm Archive"}
+                </span>
               </button>
             </div>
           </div>

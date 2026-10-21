@@ -169,6 +169,7 @@ const ArchivesPage = () => {
     return (
       a.title?.toLowerCase().includes(q) ||
       a.message?.toLowerCase().includes(q) ||
+      a.route?.toLowerCase().includes(q) ||
       a.locationArea?.toLowerCase().includes(q)
     );
   });
@@ -248,7 +249,9 @@ const ArchivesPage = () => {
   };
 
   return (
-    <div style={{ maxWidth: "1280px", margin: "0 auto", paddingBottom: "40px" }}>
+    <div
+      style={{ maxWidth: "1280px", margin: "0 auto", paddingBottom: "40px" }}
+    >
       {/* Page Header */}
       <div
         style={{
@@ -261,7 +264,14 @@ const ArchivesPage = () => {
         }}
       >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              marginBottom: "6px",
+            }}
+          >
             <div
               style={{
                 width: "40px",
@@ -288,8 +298,11 @@ const ArchivesPage = () => {
               >
                 Archives Hub
               </h1>
-              <p style={{ margin: 0, fontSize: "13px", color: colors.textMuted }}>
-                Manage archived City Announcements and soft-deleted Citizen Complaints with permanent purge or restore controls.
+              <p
+                style={{ margin: 0, fontSize: "13px", color: colors.textMuted }}
+              >
+                Manage archived City Announcements and soft-deleted Citizen
+                Complaints with permanent purge or restore controls.
               </p>
             </div>
           </div>
@@ -331,7 +344,8 @@ const ArchivesPage = () => {
           style={{
             backgroundColor:
               activeTab === "announcements" ? colors.primary : colors.surface,
-            color: activeTab === "announcements" ? "#FFFFFF" : colors.textPrimary,
+            color:
+              activeTab === "announcements" ? "#FFFFFF" : colors.textPrimary,
             border: `1px solid ${
               activeTab === "announcements" ? colors.primary : colors.border
             }`,
@@ -496,7 +510,9 @@ const ArchivesPage = () => {
                   <th style={{ padding: "14px 16px" }}>Evidence</th>
                   <th style={{ padding: "14px 20px" }}>Message</th>
                   <th style={{ padding: "14px 20px" }}>Original Date</th>
-                  <th style={{ padding: "14px 20px", textAlign: "right" }}>Actions</th>
+                  <th style={{ padding: "14px 20px", textAlign: "right" }}>
+                    Actions
+                  </th>
                 </tr>
               </thead>
 
@@ -505,7 +521,11 @@ const ArchivesPage = () => {
                   <tr>
                     <td
                       colSpan={6}
-                      style={{ textAlign: "center", padding: "40px", color: colors.textMuted }}
+                      style={{
+                        textAlign: "center",
+                        padding: "40px",
+                        color: colors.textMuted,
+                      }}
                     >
                       Loading archived announcements...
                     </td>
@@ -514,7 +534,11 @@ const ArchivesPage = () => {
                   <tr>
                     <td
                       colSpan={6}
-                      style={{ textAlign: "center", padding: "40px", color: colors.textMuted }}
+                      style={{
+                        textAlign: "center",
+                        padding: "40px",
+                        color: colors.textMuted,
+                      }}
                     >
                       {searchQuery
                         ? "No archived announcements matched your search."
@@ -548,7 +572,7 @@ const ArchivesPage = () => {
                           >
                             {item.title}
                           </div>
-                          {item.locationArea && (
+                          {(item.route || item.locationArea) && (
                             <span
                               style={{
                                 fontSize: "11px",
@@ -557,7 +581,7 @@ const ArchivesPage = () => {
                                 marginTop: "3px",
                               }}
                             >
-                              📍 {item.locationArea}
+                              📍 {item.route || item.locationArea}
                             </span>
                           )}
                         </td>
@@ -583,10 +607,21 @@ const ArchivesPage = () => {
                               title="Zoom evidence"
                             >
                               <ImageIcon size={13} color={colors.primary} />
-                              <span style={{ fontSize: "11px", fontWeight: "600" }}>View Photo</span>
+                              <span
+                                style={{ fontSize: "11px", fontWeight: "600" }}
+                              >
+                                View Photo
+                              </span>
                             </button>
                           ) : (
-                            <span style={{ fontSize: "12px", color: colors.textMuted }}>None</span>
+                            <span
+                              style={{
+                                fontSize: "12px",
+                                color: colors.textMuted,
+                              }}
+                            >
+                              None
+                            </span>
                           )}
                         </td>
 
@@ -621,14 +656,22 @@ const ArchivesPage = () => {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px",
+                            }}
+                          >
                             <Calendar size={13} />
                             {new Date(item.createdAt).toLocaleDateString()}
                           </div>
                         </td>
 
                         {/* Actions (Restore & Delete Permanently) */}
-                        <td style={{ padding: "14px 20px", textAlign: "right" }}>
+                        <td
+                          style={{ padding: "14px 20px", textAlign: "right" }}
+                        >
                           <div
                             style={{
                               display: "inline-flex",
@@ -637,7 +680,9 @@ const ArchivesPage = () => {
                             }}
                           >
                             <button
-                              onClick={() => handleOpenRestore(item, "announcement")}
+                              onClick={() =>
+                                handleOpenRestore(item, "announcement")
+                              }
                               className="btn btn-sm"
                               style={{
                                 backgroundColor: "rgba(16, 185, 129, 0.12)",
@@ -657,7 +702,9 @@ const ArchivesPage = () => {
                             </button>
 
                             <button
-                              onClick={() => handleOpenPermanentDelete(item, "announcement")}
+                              onClick={() =>
+                                handleOpenPermanentDelete(item, "announcement")
+                              }
                               className="btn btn-sm"
                               style={{
                                 backgroundColor: "rgba(239, 68, 68, 0.12)",
@@ -725,10 +772,14 @@ const ArchivesPage = () => {
                   <th style={{ padding: "14px 20px" }}>Case / Subject</th>
                   <th style={{ padding: "14px 16px" }}>Category</th>
                   <th style={{ padding: "14px 16px" }}>Vehicle Plate</th>
-                  <th style={{ padding: "14px 20px" }}>Deletion Reason & Notes</th>
+                  <th style={{ padding: "14px 20px" }}>
+                    Deletion Reason & Notes
+                  </th>
                   <th style={{ padding: "14px 16px" }}>Evidence</th>
                   <th style={{ padding: "14px 20px" }}>Deleted Date</th>
-                  <th style={{ padding: "14px 20px", textAlign: "right" }}>Actions</th>
+                  <th style={{ padding: "14px 20px", textAlign: "right" }}>
+                    Actions
+                  </th>
                 </tr>
               </thead>
 
@@ -737,7 +788,11 @@ const ArchivesPage = () => {
                   <tr>
                     <td
                       colSpan={7}
-                      style={{ textAlign: "center", padding: "40px", color: colors.textMuted }}
+                      style={{
+                        textAlign: "center",
+                        padding: "40px",
+                        color: colors.textMuted,
+                      }}
                     >
                       Loading deleted complaints...
                     </td>
@@ -746,7 +801,11 @@ const ArchivesPage = () => {
                   <tr>
                     <td
                       colSpan={7}
-                      style={{ textAlign: "center", padding: "40px", color: colors.textMuted }}
+                      style={{
+                        textAlign: "center",
+                        padding: "40px",
+                        color: colors.textMuted,
+                      }}
                     >
                       {searchQuery
                         ? "No deleted complaints matched your search."
@@ -756,7 +815,9 @@ const ArchivesPage = () => {
                 ) : (
                   filteredComplaints.map((c) => {
                     const hasPhotos = c.attachments && c.attachments.length > 0;
-                    const firstPhoto = hasPhotos ? getEvidenceImageUrl(c.attachments[0]) : null;
+                    const firstPhoto = hasPhotos
+                      ? getEvidenceImageUrl(c.attachments[0])
+                      : null;
 
                     return (
                       <tr
@@ -871,12 +932,22 @@ const ArchivesPage = () => {
                               title="Zoom evidence"
                             >
                               <ImageIcon size={13} color={colors.primary} />
-                              <span style={{ fontSize: "11px", fontWeight: "600" }}>
-                                {c.attachments.length} Photo{c.attachments.length !== 1 ? "s" : ""}
+                              <span
+                                style={{ fontSize: "11px", fontWeight: "600" }}
+                              >
+                                {c.attachments.length} Photo
+                                {c.attachments.length !== 1 ? "s" : ""}
                               </span>
                             </button>
                           ) : (
-                            <span style={{ fontSize: "12px", color: colors.textMuted }}>None</span>
+                            <span
+                              style={{
+                                fontSize: "12px",
+                                color: colors.textMuted,
+                              }}
+                            >
+                              None
+                            </span>
                           )}
                         </td>
 
@@ -889,14 +960,24 @@ const ArchivesPage = () => {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px",
+                            }}
+                          >
                             <Calendar size={13} />
-                            {new Date(c.deletedAt || c.updatedAt).toLocaleDateString()}
+                            {new Date(
+                              c.deletedAt || c.updatedAt,
+                            ).toLocaleDateString()}
                           </div>
                         </td>
 
                         {/* Actions (Restore & Delete Permanently) */}
-                        <td style={{ padding: "14px 20px", textAlign: "right" }}>
+                        <td
+                          style={{ padding: "14px 20px", textAlign: "right" }}
+                        >
                           <div
                             style={{
                               display: "inline-flex",
@@ -925,7 +1006,9 @@ const ArchivesPage = () => {
                             </button>
 
                             <button
-                              onClick={() => handleOpenPermanentDelete(c, "complaint")}
+                              onClick={() =>
+                                handleOpenPermanentDelete(c, "complaint")
+                              }
                               className="btn btn-sm"
                               style={{
                                 backgroundColor: "rgba(239, 68, 68, 0.12)",
@@ -967,7 +1050,8 @@ const ArchivesPage = () => {
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
-                  color: confirmModal.type === "restore" ? "#059669" : "#DC2626",
+                  color:
+                    confirmModal.type === "restore" ? "#059669" : "#DC2626",
                 }}
               >
                 {confirmModal.type === "restore" ? (
@@ -975,7 +1059,13 @@ const ArchivesPage = () => {
                 ) : (
                   <Trash2 size={20} />
                 )}
-                <h3 style={{ margin: 0, fontSize: "18px", color: colors.textPrimary }}>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "18px",
+                    color: colors.textPrimary,
+                  }}
+                >
                   {confirmModal.type === "restore"
                     ? `Restore Archived ${confirmModal.category === "announcement" ? "Announcement" : "Complaint"}`
                     : `Permanently Delete ${confirmModal.category === "announcement" ? "Announcement" : "Complaint"}`}
@@ -1020,33 +1110,60 @@ const ArchivesPage = () => {
                 }}
               >
                 {confirmModal.type === "restore" ? (
-                  <CheckCircle2 size={18} color="#059669" style={{ flexShrink: 0, marginTop: "2px" }} />
+                  <CheckCircle2
+                    size={18}
+                    color="#059669"
+                    style={{ flexShrink: 0, marginTop: "2px" }}
+                  />
                 ) : (
-                  <AlertTriangle size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: "2px" }} />
+                  <AlertTriangle
+                    size={18}
+                    color="#DC2626"
+                    style={{ flexShrink: 0, marginTop: "2px" }}
+                  />
                 )}
-                <div style={{ fontSize: "13px", lineHeight: "1.4", color: colors.textPrimary }}>
+                <div
+                  style={{
+                    fontSize: "13px",
+                    lineHeight: "1.4",
+                    color: colors.textPrimary,
+                  }}
+                >
                   {confirmModal.type === "restore" ? (
                     <>
                       Restoring{" "}
                       <strong>
-                        "{confirmModal.item?.title || confirmModal.item?.subject}"
+                        "
+                        {confirmModal.item?.title || confirmModal.item?.subject}
+                        "
                       </strong>
                       . This will return the record to the active workspace.
                     </>
                   ) : (
                     <>
-                      <strong>Warning: Irreversible Action!</strong> You are about to permanently delete{" "}
+                      <strong>Warning: Irreversible Action!</strong> You are
+                      about to permanently delete{" "}
                       <strong>
-                        "{confirmModal.item?.title || confirmModal.item?.subject}"
+                        "
+                        {confirmModal.item?.title || confirmModal.item?.subject}
+                        "
                       </strong>{" "}
-                      from the MongoDB database. This record cannot be recovered.
+                      from the MongoDB database. This record cannot be
+                      recovered.
                     </>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+            <div
+              className="modal-footer"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+              }}
+            >
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -1079,8 +1196,8 @@ const ArchivesPage = () => {
                 {confirmModal.loading
                   ? "Processing..."
                   : confirmModal.type === "restore"
-                  ? "Confirm Restore"
-                  : "Delete Permanently"}
+                    ? "Confirm Restore"
+                    : "Delete Permanently"}
               </button>
             </div>
           </div>
