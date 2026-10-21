@@ -45,6 +45,59 @@ export const getNotificationCategory = (item) => {
   return 'broadcast_by_admin';
 };
 
+// Helper to get alert severity configuration
+export const getSeverityConfig = (severity) => {
+  if (!severity) return null;
+  const sev = String(severity).trim().toLowerCase();
+  switch (sev) {
+    case 'critical':
+      return {
+        label: 'CRITICAL',
+        color: '#DC2626',
+        bg: '#FEE2E2',
+        border: '#FCA5A5',
+        darkBg: 'rgba(220, 38, 38, 0.2)',
+        icon: 'alert-octagon',
+      };
+    case 'warning':
+    case 'severe':
+      return {
+        label: 'WARNING',
+        color: '#D97706',
+        bg: '#FEF3C7',
+        border: '#FCD34D',
+        darkBg: 'rgba(217, 119, 6, 0.2)',
+        icon: 'alert-circle',
+      };
+    case 'info':
+    case 'advisory':
+      return {
+        label: 'ADVISORY',
+        color: '#2563EB',
+        bg: '#DBEAFE',
+        border: '#93C5FD',
+        darkBg: 'rgba(37, 99, 235, 0.2)',
+        icon: 'information-outline',
+      };
+    default:
+      return null;
+  }
+};
+
+// Helper to extract transit route from notification
+export const getNotificationRoute = (item) => {
+  if (!item) return '';
+  return (
+    item.route ||
+    item.locationArea ||
+    item.location ||
+    item.metadata?.route ||
+    item.metadata?.locationArea ||
+    item.metadata?.location ||
+    ''
+  ).trim();
+};
+
 // Category UI Configuration
 const CATEGORY_TABS = [
   {
@@ -490,6 +543,8 @@ const NotificationsScreen = ({ navigation }) => {
         renderItem={({ item }) => {
           const cat = getNotificationCategory(item);
           const cfg = NOTIF_CONFIG[item.type] || NOTIF_CONFIG[cat] || NOTIF_CONFIG.broadcast;
+          const sevConfig = getSeverityConfig(item.severity);
+          const itemRoute = getNotificationRoute(item);
           const isCategorySelected = activeTab !== 'all';
 
           return (
@@ -550,6 +605,29 @@ const NotificationsScreen = ({ navigation }) => {
                     </Text>
                   </View>
 
+                  {/* Alert Severity Badge */}
+                  {sevConfig ? (
+                    <View
+                      style={[
+                        styles.cardSeverityBadge,
+                        {
+                          backgroundColor: isDark ? sevConfig.darkBg : sevConfig.bg,
+                          borderColor: sevConfig.border,
+                        },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name={sevConfig.icon}
+                        size={11}
+                        color={sevConfig.color}
+                        style={{ marginRight: 3 }}
+                      />
+                      <Text style={[styles.cardSeverityText, { color: sevConfig.color }]}>
+                        {sevConfig.label}
+                      </Text>
+                    </View>
+                  ) : null}
+
                   {cfg.subLabel ? (
                     <View
                       style={[
@@ -579,6 +657,38 @@ const NotificationsScreen = ({ navigation }) => {
                 >
                   {item.title}
                 </Text>
+
+                {/* Route Indicator Chip */}
+                {itemRoute ? (
+                  <View
+                    style={[
+                      styles.cardRouteTag,
+                      {
+                        backgroundColor: isDark ? 'rgba(37, 99, 235, 0.12)' : '#EFF6FF',
+                        borderColor: isDark ? 'rgba(37, 99, 235, 0.28)' : '#BFDBFE',
+                      },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="routes"
+                      size={12}
+                      color="#2563EB"
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text style={[styles.cardRouteLabel, { color: colors.textMuted }]}>
+                      Route:{' '}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.cardRouteValue,
+                        { color: isDark ? '#93C5FD' : '#1D4ED8' },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {itemRoute}
+                    </Text>
+                  </View>
+                ) : null}
 
                 {/* Notification Message */}
                 <Text
@@ -629,6 +739,8 @@ const NotificationsScreen = ({ navigation }) => {
       {Boolean(selectedNotif) ? (() => {
         const cat = getNotificationCategory(selectedNotif);
         const cfg = NOTIF_CONFIG[selectedNotif.type] || NOTIF_CONFIG[cat] || NOTIF_CONFIG.broadcast;
+        const modalSevConfig = getSeverityConfig(selectedNotif.severity);
+        const modalRoute = getNotificationRoute(selectedNotif);
 
         return (
           <Modal
@@ -723,6 +835,105 @@ const NotificationsScreen = ({ navigation }) => {
                     <Text style={[styles.modalFullTitle, { color: colors.textPrimary }]}>
                       {selectedNotif.title}
                     </Text>
+
+                    {/* Meta Row: Severity & Route Badges */}
+                    {(modalSevConfig || modalRoute) ? (
+                      <View style={styles.modalMetaRow}>
+                        {modalSevConfig ? (
+                          <View
+                            style={[
+                              styles.modalSeverityBadge,
+                              {
+                                backgroundColor: isDark ? modalSevConfig.darkBg : modalSevConfig.bg,
+                                borderColor: modalSevConfig.border,
+                              },
+                            ]}
+                          >
+                            <MaterialCommunityIcons
+                              name={modalSevConfig.icon}
+                              size={13}
+                              color={modalSevConfig.color}
+                              style={{ marginRight: 5 }}
+                            />
+                            <Text style={[styles.modalSeverityText, { color: modalSevConfig.color }]}>
+                              {modalSevConfig.label} SEVERITY
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {modalRoute ? (
+                          <View
+                            style={[
+                              styles.modalRouteTag,
+                              {
+                                backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF',
+                                borderColor: isDark ? 'rgba(37, 99, 235, 0.3)' : '#BFDBFE',
+                              },
+                            ]}
+                          >
+                            <MaterialCommunityIcons
+                              name="routes"
+                              size={13}
+                              color="#2563EB"
+                              style={{ marginRight: 5 }}
+                            />
+                            <Text style={[styles.modalRouteTagLabel, { color: colors.textMuted }]}>
+                              Route:{' '}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.modalRouteTagValue,
+                                { color: isDark ? '#93C5FD' : '#1D4ED8' },
+                              ]}
+                            >
+                              {modalRoute}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+
+                    {/* Designated Transit Route Banner Card */}
+                    {modalRoute ? (
+                      <View
+                        style={[
+                          styles.modalRouteBox,
+                          {
+                            backgroundColor: isDark ? 'rgba(37, 99, 235, 0.1)' : '#F0F9FF',
+                            borderColor: isDark ? 'rgba(37, 99, 235, 0.25)' : '#BAE6FD',
+                          },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.modalRouteIconWrapper,
+                            {
+                              backgroundColor: isDark ? 'rgba(37, 99, 235, 0.25)' : '#DBEAFE',
+                            },
+                          ]}
+                        >
+                          <MaterialCommunityIcons name="routes" size={20} color="#0284C7" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.modalRouteHeader,
+                              { color: isDark ? '#7DD3FC' : '#0369A1' },
+                            ]}
+                          >
+                            AFFECTED TRANSIT ROUTE
+                          </Text>
+                          <Text
+                            style={[
+                              styles.modalRouteTitle,
+                              { color: colors.textPrimary },
+                            ]}
+                          >
+                            {modalRoute}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : null}
 
                     {/* Reference tag if complaint update */}
                     {Boolean(
@@ -1231,6 +1442,102 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontWeight: '700',
     fontSize: FONTS.sizes.sm,
+  },
+  cardSeverityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  cardSeverityText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  cardRouteTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+    marginBottom: 5,
+    marginTop: 2,
+    maxWidth: '100%',
+  },
+  cardRouteLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  cardRouteValue: {
+    fontSize: 11,
+    fontWeight: '800',
+    flexShrink: 1,
+  },
+  modalMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: SPACING.md,
+  },
+  modalSeverityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  modalSeverityText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  modalRouteTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  modalRouteTagLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  modalRouteTagValue: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  modalRouteBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    marginBottom: SPACING.md,
+  },
+  modalRouteIconWrapper: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalRouteHeader: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  modalRouteTitle: {
+    fontSize: 14,
+    fontWeight: '800',
   },
 });
 

@@ -169,7 +169,7 @@ const ArchivesPage = () => {
     return (
       a.title?.toLowerCase().includes(q) ||
       a.message?.toLowerCase().includes(q) ||
-      a.locationArea?.toLowerCase().includes(q)
+      (a.route?.toLowerCase().includes(q) || a.locationArea?.toLowerCase().includes(q))
     );
   });
 
@@ -548,7 +548,7 @@ const ArchivesPage = () => {
                           >
                             {item.title}
                           </div>
-                          {item.locationArea && (
+                          {(item.route || item.locationArea) && (
                             <span
                               style={{
                                 fontSize: "11px",
@@ -557,7 +557,7 @@ const ArchivesPage = () => {
                                 marginTop: "3px",
                               }}
                             >
-                              📍 {item.locationArea}
+                              📍 {item.route || item.locationArea}
                             </span>
                           )}
                         </td>

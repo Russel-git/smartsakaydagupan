@@ -223,7 +223,8 @@ const deleteAllRead = async (req, res, next) => {
 
 const broadcast = async (req, res, next) => {
   try {
-    const { title, message, type, category, severity = 'info', locationArea = '', photoUrl, evidencePhoto, metadata = {} } = req.body;
+    const { title, message, type, category, severity = 'info', locationArea = '', route = '', photoUrl, evidencePhoto, metadata = {} } = req.body;
+    const finalRoute = (route || locationArea || '').trim();
     let finalCategory = category;
     let finalType = type || 'broadcast';
 
@@ -237,6 +238,7 @@ const broadcast = async (req, res, next) => {
     const finalMetadata = {
       ...metadata,
       ...(attachedPhoto ? { photoUrl: attachedPhoto, evidencePhoto: attachedPhoto } : {}),
+      ...(finalRoute ? { route: finalRoute, locationArea: finalRoute } : {}),
     };
 
     const isWeather = finalCategory === 'weather_updates' || finalType === 'weather_alert';
@@ -257,7 +259,8 @@ const broadcast = async (req, res, next) => {
       approvedBy: req.user._id,
       approvedAt: new Date(),
       severity,
-      locationArea: locationArea || '',
+      locationArea: finalRoute,
+      route: finalRoute,
       metadata: finalMetadata,
       expiresAt,
     });
@@ -268,7 +271,8 @@ const broadcast = async (req, res, next) => {
 
 const requestRoadAlert = async (req, res, next) => {
   try {
-    const { title, message, severity = 'warning', locationArea = '', photoUrl, evidencePhoto } = req.body;
+    const { title, message, severity = 'warning', locationArea = '', route = '', photoUrl, evidencePhoto } = req.body;
+    const finalRoute = (route || locationArea || '').trim();
     const attachedPhoto = photoUrl || evidencePhoto || null;
     const alert = await Notification.create({
       userId: null,
@@ -280,11 +284,13 @@ const requestRoadAlert = async (req, res, next) => {
       createdByRole: 'poso',
       authorUser: req.user._id,
       severity,
-      locationArea: locationArea?.trim() || '',
+      locationArea: finalRoute,
+      route: finalRoute,
       metadata: {
         submittedBy: `${req.user.firstName} ${req.user.lastName}`,
         badgeNumber: req.user.badgeNumber || 'POSO-ENFORCER',
         zone: req.user.assignedZone || '',
+        ...(finalRoute ? { route: finalRoute, locationArea: finalRoute } : {}),
         ...(attachedPhoto ? { photoUrl: attachedPhoto, evidencePhoto: attachedPhoto } : {}),
       },
     });
