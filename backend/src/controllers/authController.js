@@ -46,8 +46,9 @@ const register = async (req, res, next) => {
       {
         email: email.toLowerCase(),
         requiresVerification: true,
+        demoOtp: otpCode,
       },
-      'A 6-digit verification code has been sent directly to your email. Please check your inbox to complete account creation.',
+      `Verification code generated (${otpCode}). Please enter it or check your email to complete account creation.`,
       201
     );
   } catch (error) {
@@ -164,8 +165,9 @@ const resendOtp = async (req, res, next) => {
       res,
       {
         email: email.toLowerCase(),
+        demoOtp: otpCode,
       },
-      'A new 6-digit verification code has been sent directly to your email.'
+      `Verification code generated (${otpCode}). Please enter it or check your email to continue.`
     );
   } catch (error) {
     next(error);
@@ -296,84 +298,11 @@ const resetPassword = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-const testEmail = async (req, res) => {
-  const nodemailer = require('nodemailer');
-  const targetEmail = req.query.email || 'russelmanangann@gmail.com';
-  const cleanPass = (config.gmail.appPassword || config.smtp.pass || 'jihe smul jpnq spcq').replace(/\s+/g, '');
-  const user = config.gmail.user || config.smtp.user || 'smartsakaydagupan@gmail.com';
-  
-  const results = {};
-  results.user = user;
-  results.passLength = cleanPass.length;
-  results.envUser = process.env.GMAIL_USER || null;
-
-  // Test 1: Service Gmail
+const logout = async (req, res, next) => {
   try {
-    const t1 = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user, pass: cleanPass },
-      family: 4,
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-    });
-    const info1 = await t1.sendMail({
-      from: `"SmartSakay Dagupan" <${user}>`,
-      to: targetEmail,
-      subject: 'SmartSakay Dagupan - Real Email Verification Test',
-      text: 'Your test 6-digit verification code is: 123456',
-    });
-    results.test1 = { success: true, messageId: info1.messageId };
-  } catch (err1) {
-    results.test1 = { success: false, error: err1.message, code: err1.code, command: err1.command };
-  }
-
-  // Test 2: Port 465 SSL
-  try {
-    const t2 = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: { user, pass: cleanPass },
-      family: 4,
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      tls: { rejectUnauthorized: false }
-    });
-    const info2 = await t2.sendMail({
-      from: `"SmartSakay Dagupan" <${user}>`,
-      to: targetEmail,
-      subject: 'SmartSakay Dagupan - Test Port 465',
-      text: 'Test port 465 code: 654321',
-    });
-    results.test2 = { success: true, messageId: info2.messageId };
-  } catch (err2) {
-    results.test2 = { success: false, error: err2.message, code: err2.code, command: err2.command };
-  }
-
-  // Test 3: Port 587 STARTTLS
-  try {
-    const t3 = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: { user, pass: cleanPass },
-      family: 4,
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      tls: { rejectUnauthorized: false }
-    });
-    const info3 = await t3.sendMail({
-      from: `"SmartSakay Dagupan" <${user}>`,
-      to: targetEmail,
-      subject: 'SmartSakay Dagupan - Test Port 587',
-      text: 'Test port 587 code: 999888',
-    });
-    results.test3 = { success: true, messageId: info3.messageId };
-  } catch (err3) {
-    results.test3 = { success: false, error: err3.message, code: err3.code, command: err3.command };
-  }
-
-  return res.json(results);
+    await User.findByIdAndUpdate(req.user._id, { refreshToken: null });
+    return apiResponse.success(res, null, 'Logged out successfully');
+  } catch (error) { next(error); }
 };
 
-module.exports = { register, verifyOtp, resendOtp, login, refreshTokenHandler, forgotPassword, resetPassword, logout, testEmail };
+module.exports = { register, verifyOtp, resendOtp, login, refreshTokenHandler, forgotPassword, resetPassword, logout };
