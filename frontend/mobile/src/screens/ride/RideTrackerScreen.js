@@ -690,7 +690,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
   useEffect(() => () => stopTracking(), []);
 
   // Start Ride handler
-  const handleStartRide = () => {
+  const handleStartRide = async () => {
     if (!gpsReady || !currentLocation || !currentLocation.isReal) {
       showWarning(
         "Actual GPS Required",
