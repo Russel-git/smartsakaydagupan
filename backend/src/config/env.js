@@ -42,8 +42,8 @@ const config = {
   },
   brevo: {
     apiKey: process.env.BREVO_API_KEY || "",
-    senderEmail: process.env.BREVO_SENDER_EMAIL || process.env.GMAIL_USER || "smartsakaydagupan@gmail.com",
-    senderName: process.env.BREVO_SENDER_NAME || "SmartSakay Dagupan",
+    senderEmail: process.env.BREVO_SENDER_EMAIL || "russellmanangann@gmail.com",
+    senderName: process.env.BREVO_SENDER_NAME || "SmartSakay1",
     smtpUser: process.env.BREVO_SMTP_USER || "",
     smtpKey: process.env.BREVO_SMTP_KEY || "",
   },
