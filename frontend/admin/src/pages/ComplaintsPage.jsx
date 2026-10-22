@@ -1288,23 +1288,22 @@ const ComplaintsPage = () => {
                               </>
                             )}
 
-                                  <button
-                                    onClick={() => handleOpenDelete(c)}
-                                    className="btn btn-sm"
-                                    style={{
-                                      cursor: "pointer",
-                                      backgroundColor: "#EF44441F",
-                                      color: "#DC2626",
-                                      fontSize: "11px",
-                                      padding: "5px 9px",
-                                    }}
-                                  >
-                                    <Trash2 size={14} />
-                                    <span>Remove Complaint</span>
-                                  </button>
-                                </>
-                              )}
-                            </>
+                          {/* REMOVE / ARCHIVE ACTION DESK BUTTON */}
+                          {(isLgu || isAdmin) && c.status !== "deleted" && (
+                            <button
+                              onClick={() => handleOpenDelete(c)}
+                              className="btn btn-sm"
+                              style={{
+                                cursor: "pointer",
+                                backgroundColor: "#EF44441F",
+                                color: "#DC2626",
+                                fontSize: "11px",
+                                padding: "5px 9px",
+                              }}
+                            >
+                              <Trash2 size={14} />
+                              <span>Remove Complaint</span>
+                            </button>
                           )}
                         </div>
                       </td>
