@@ -114,8 +114,21 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const payload = { email, password };
-      if (municipality) payload.municipality = municipality;
-      const { data } = await authAPI.login(payload);
+      let data;
+      try {
+        const fullPayload = municipality ? { ...payload, municipality } : payload;
+        const res = await authAPI.login(fullPayload);
+        data = res.data;
+      } catch (err) {
+        const errStr = JSON.stringify(err.response?.data || '').toLowerCase();
+        if (err.response?.status === 400 && errStr.includes('municipality')) {
+          const res = await authAPI.login(payload);
+          data = res.data;
+        } else {
+          throw err;
+        }
+      }
+
       const { user: userData, accessToken, refreshToken } = data.data;
       await saveTokens(accessToken, refreshToken);
       await saveUser(userData);
