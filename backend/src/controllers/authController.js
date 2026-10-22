@@ -34,21 +34,20 @@ const register = async (req, res, next) => {
       },
     });
 
-    // Dispatch code to user's email asynchronously (non-blocking for instant UI response)
-    emailService.sendOtp(email, otpCode, 'registration').then(() => {
-      console.log(`✉️ [REGISTRATION] OTP email dispatched to ${email}`);
-    }).catch((mailErr) => {
+    // Dispatch OTP code to user's email via Brevo
+    try {
+      await emailService.sendOtp(email, otpCode, 'registration');
+    } catch (mailErr) {
       console.warn(`⚠️ [REGISTRATION] Outbound email note (${mailErr.message}).`);
-    });
+    }
 
     return apiResponse.success(
       res,
       {
         email: email.toLowerCase(),
         requiresVerification: true,
-        demoOtp: otpCode,
       },
-      `Verification code generated (${otpCode}). Please enter it or check your email to complete account creation.`,
+      'Verification code sent to your email. Please check your inbox to complete account creation.',
       201
     );
   } catch (error) {
@@ -154,20 +153,19 @@ const resendOtp = async (req, res, next) => {
       registrationData,
     });
 
-    // Dispatch email asynchronously (non-blocking)
-    emailService.sendOtp(email, otpCode, type).then(() => {
-      console.log(`✉️ [RESEND OTP] Email dispatched to ${email}`);
-    }).catch((mailErr) => {
+    // Dispatch email via Brevo
+    try {
+      await emailService.sendOtp(email, otpCode, type);
+    } catch (mailErr) {
       console.warn(`⚠️ [RESEND OTP] Outbound email note (${mailErr.message}).`);
-    });
+    }
 
     return apiResponse.success(
       res,
       {
         email: email.toLowerCase(),
-        demoOtp: otpCode,
       },
-      `Verification code generated (${otpCode}). Please enter it or check your email to continue.`
+      'OTP sent successfully to your email. Please check your inbox to continue.'
     );
   } catch (error) {
     next(error);

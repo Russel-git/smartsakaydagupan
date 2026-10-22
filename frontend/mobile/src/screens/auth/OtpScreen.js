@@ -19,7 +19,7 @@ import Button from '../../components/common/Button';
 import { FONTS, SPACING, RADIUS } from '../../utils/constants';
 
 const OtpScreen = ({ navigation, route }) => {
-  const { email, type = 'registration', demoOtp } = route.params || {};
+  const { email, type = 'registration' } = route.params || {};
   const { colors, isDark } = useTheme();
   const { verifyOtp, resendOtp } = useAuth();
   const { showSuccess, showError, showInfo } = useFeedback();

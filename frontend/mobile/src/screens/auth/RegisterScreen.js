@@ -161,7 +161,6 @@ const RegisterScreen = ({ navigation }) => {
         navigation.navigate("OTP - SmartSakay", {
           email: form.email.trim(),
           type: "registration",
-          demoOtp: res?.data?.demoOtp,
         });
       }
     } catch (e) {
@@ -483,7 +482,7 @@ const RegisterScreen = ({ navigation }) => {
               Already have an account?{" "}
             </Text>
             <TouchableOpacity
-              onPress={() => navigation.navigate("Login - SmartSakay")}
+              onPress={() => navigation.navigate("Login")}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.8}
             >
