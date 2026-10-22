@@ -27,12 +27,7 @@ const OtpScreen = ({ navigation, route }) => {
   const { width, height } = useWindowDimensions();
   const isTablet = Math.min(width, height) >= 600;
 
-  const [otp, setOtp] = useState(() => {
-    if (demoOtp && typeof demoOtp === 'string' && demoOtp.length === 6) {
-      return demoOtp.split('');
-    }
-    return ['', '', '', '', '', ''];
-  });
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(60);
   const [error, setError] = useState(null);
@@ -98,12 +93,9 @@ const OtpScreen = ({ navigation, route }) => {
 
   const handleResend = async () => {
     try {
-      const res = await resendOtp(email, type);
+      await resendOtp(email, type);
       setResendTimer(60);
       setError(null);
-      if (res?.data?.demoOtp && typeof res.data.demoOtp === 'string' && res.data.demoOtp.length === 6) {
-        setOtp(res.data.demoOtp.split(''));
-      }
       showInfo('Code Resent', `A new 6-digit verification code was dispatched to ${email}.`);
     } catch (e) {
       setError(e.message);
