@@ -161,7 +161,6 @@ const RegisterScreen = ({ navigation }) => {
         navigation.navigate("OTP - SmartSakay", {
           email: form.email.trim(),
           type: "registration",
-          demoOtp: res?.data?.demoOtp,
         });
       }
     } catch (e) {
