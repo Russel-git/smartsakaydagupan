@@ -34,25 +34,21 @@ const register = async (req, res, next) => {
       },
     });
 
-    // Dispatch code to user's email via emailService
-    let emailSent = false;
-    try {
-      await emailService.sendOtp(email, otpCode, 'registration');
-      emailSent = true;
-    } catch (mailErr) {
-      console.warn(`⚠️ [REGISTRATION] Email dispatch issue (${mailErr.message}).`);
-    }
+    // Dispatch code to user's email asynchronously (non-blocking for instant UI response)
+    emailService.sendOtp(email, otpCode, 'registration').then(() => {
+      console.log(`✉️ [REGISTRATION] OTP email dispatched to ${email}`);
+    }).catch((mailErr) => {
+      console.warn(`⚠️ [REGISTRATION] Outbound email note (${mailErr.message}).`);
+    });
 
     return apiResponse.success(
       res,
       {
         email: email.toLowerCase(),
         requiresVerification: true,
-        demoOtp: !emailSent ? otpCode : undefined,
+        demoOtp: otpCode,
       },
-      emailSent
-        ? 'Verification code sent to your email. Please check your inbox to complete account creation.'
-        : `Verification code generated (${otpCode}). Please enter it to complete account creation.`,
+      `Verification code generated (${otpCode}). Please enter it or check your email to complete account creation.`,
       201
     );
   } catch (error) {
@@ -158,23 +154,20 @@ const resendOtp = async (req, res, next) => {
       registrationData,
     });
 
-    let emailSent = false;
-    try {
-      await emailService.sendOtp(email, otpCode, type);
-      emailSent = true;
-    } catch (mailErr) {
-      console.warn(`⚠️ [RESEND OTP] Email dispatch issue (${mailErr.message}).`);
-    }
+    // Dispatch email asynchronously (non-blocking)
+    emailService.sendOtp(email, otpCode, type).then(() => {
+      console.log(`✉️ [RESEND OTP] Email dispatched to ${email}`);
+    }).catch((mailErr) => {
+      console.warn(`⚠️ [RESEND OTP] Outbound email note (${mailErr.message}).`);
+    });
 
     return apiResponse.success(
       res,
       {
         email: email.toLowerCase(),
-        demoOtp: !emailSent ? otpCode : undefined,
+        demoOtp: otpCode,
       },
-      emailSent
-        ? 'OTP sent successfully to your email.'
-        : `Verification code generated (${otpCode}). Please enter it to continue.`
+      `Verification code generated (${otpCode}). Please enter it or check your email to continue.`
     );
   } catch (error) {
     next(error);
