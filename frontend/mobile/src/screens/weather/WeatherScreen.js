@@ -180,7 +180,7 @@ const WeatherScreen = () => {
   const lat = current?.current?.coordinates?.latitude ?? userCoords?.latitude;
   const lng = current?.current?.coordinates?.longitude ?? userCoords?.longitude;
   const coordStr =
-    hasLocation && lat && lng
+    hasLocation && lat && lng && !locationStr.includes('° N') && !locationStr.includes('° E')
       ? `(${Number(lat).toFixed(2)}° N, ${Number(lng).toFixed(2)}° E)`
       : "";
 

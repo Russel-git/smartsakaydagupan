@@ -2,7 +2,14 @@ const axios = require("axios");
 const NodeCache = require("node-cache");
 const config = require("../config/env");
 
-const weatherCache = new NodeCache({ stdTTL: 900 }); // 15 minutes TTL
+const weatherCache = new NodeCache({ stdTTL: 900 });
+
+const COMMON_HEADERS = {
+  "User-Agent":
+    "SmartSakay/1.0 (https://smartsakaydagupan-mobilev1.vercel.app/; smartsakaydagupan1@gmail.com)",
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+};
 
 const DEFAULT_LAT = 16.0433;
 const DEFAULT_LNG = 120.3397;
@@ -107,7 +114,10 @@ const reverseGeocode = async (latitude, longitude) => {
   try {
     const response = await axios.get(
       `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
-      { timeout: 4000 },
+      {
+        timeout: 6000,
+        headers: COMMON_HEADERS,
+      },
     );
     const data = response.data;
     if (data) {
@@ -132,10 +142,8 @@ const reverseGeocode = async (latitude, longitude) => {
           zoom: 10,
           "accept-language": "en",
         },
-        headers: {
-          "User-Agent": "SmartSakayApp/1.0 (smartsakay.transit@gmail.com)",
-        },
-        timeout: 3500,
+        headers: COMMON_HEADERS,
+        timeout: 5000,
       },
     );
     const addr = response.data?.address;
@@ -262,7 +270,10 @@ const fetchFromOpenMeteo = async (
 ) => {
   const targetUrl = buildOpenMeteoUrl(latitude, longitude);
 
-  const response = await axios.get(targetUrl, { timeout: 8000 });
+  const response = await axios.get(targetUrl, {
+    timeout: 10000,
+    headers: COMMON_HEADERS,
+  });
   const cur = response.data.current || {};
   const daily = response.data.daily || {};
   const hourly = response.data.hourly || {};
@@ -438,11 +449,27 @@ const fetchWeather = async (
     forecastDays: [
       {
         date: todayStr,
-        maxTempC: 33,
-        minTempC: 26,
+        maxTempC: 32,
+        minTempC: 25,
         conditionText: "Partly Cloudy",
         icon: "//cdn.weatherapi.com/weather/64x64/day/116.png",
         chanceOfRain: 25,
+      },
+      {
+        date: new Date(Date.now() + 86400000).toISOString().split("T")[0],
+        maxTempC: 31,
+        minTempC: 25,
+        conditionText: "Partly Cloudy",
+        icon: "//cdn.weatherapi.com/weather/64x64/day/116.png",
+        chanceOfRain: 30,
+      },
+      {
+        date: new Date(Date.now() + 172800000).toISOString().split("T")[0],
+        maxTempC: 32,
+        minTempC: 26,
+        conditionText: "Mainly Clear",
+        icon: "//cdn.weatherapi.com/weather/64x64/day/113.png",
+        chanceOfRain: 20,
       },
     ],
   });
