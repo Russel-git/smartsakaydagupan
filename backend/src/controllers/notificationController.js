@@ -399,7 +399,6 @@ const broadcast = async (req, res, next) => {
     } else if (municipality) {
       targetMunicipality = municipality;
     }
-    }
 
     const attachedPhoto =
       photoUrl ||

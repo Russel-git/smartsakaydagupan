@@ -59,6 +59,7 @@ const notificationSchema = new mongoose.Schema(
     approvedAt: { type: Date, default: null },
     rejectionReason: { type: String, default: "", trim: true },
     severity: {
+      type: String,
       enum: ['info', 'warning', 'critical', 'advisory'],
       default: 'info',
     },
