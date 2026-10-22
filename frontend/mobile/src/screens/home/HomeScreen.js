@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -9,20 +9,26 @@ import {
   StatusBar,
   Platform,
   useWindowDimensions,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useTheme } from '../../contexts/ThemeContext';
-import { useAuth } from '../../contexts/AuthContext';
-import { useNotifications } from '../../contexts/NotificationContext';
-import { useSharedLocation } from '../../contexts/LocationContext';
-import { Card, SectionHeader, Badge } from '../../components/common/SharedComponents';
-import AuthPromptModal from '../../components/common/AuthPromptModal';
-import HomeMapWidget from '../../components/common/HomeMapWidget';
-import { faresAPI, weatherAPI, complaintsAPI } from '../../api/services';
-import { getMunicipality } from '../../utils/storage';
-import { FONTS, SPACING, RADIUS, SHADOWS } from '../../utils/constants';
-import { formatPeso, getWeatherIcon } from '../../utils/helpers';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useAuth } from "../../contexts/AuthContext";
+import { useNotifications } from "../../contexts/NotificationContext";
+import { useSharedLocation } from "../../contexts/LocationContext";
+import {
+  Card,
+  SectionHeader,
+  Badge,
+} from "../../components/common/SharedComponents";
+import AuthPromptModal from "../../components/common/AuthPromptModal";
+import { LocationPermissionModal } from "../../components/common/LocationPermissionPrompt";
+import HomeMapWidget from "../../components/common/HomeMapWidget";
+import { faresAPI, weatherAPI, complaintsAPI } from "../../api/services";
+import { getMunicipality } from "../../utils/storage";
+import { FONTS, SPACING, RADIUS, SHADOWS } from "../../utils/constants";
+import { formatPeso, getWeatherIcon } from "../../utils/helpers";
 
 const HomeScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
@@ -40,15 +46,18 @@ const HomeScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [promptModal, setPromptModal] = useState({
     visible: false,
-    title: '',
-    message: '',
-    icon: 'account-lock',
-    tag: '',
+    title: "",
+    message: "",
+    icon: "account-lock",
+    tag: "",
   });
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const userCoordsRef = useRef(null);
 
-  const topInset = Platform.OS === 'android'
-    ? Math.max(insets.top, StatusBar.currentHeight || 28)
-    : insets.top;
+  const topInset =
+    Platform.OS === "android"
+      ? Math.max(insets.top, StatusBar.currentHeight || 28)
+      : insets.top;
 
   const openPrompt = (title, message, icon, tag) => {
     setPromptModal({ visible: true, title, message, icon, tag });
@@ -58,16 +67,89 @@ const HomeScreen = ({ navigation }) => {
     setPromptModal((prev) => ({ ...prev, visible: false }));
   };
 
+  const getUserLocation = async () => {
+    try {
+      if (Platform.OS === "web") {
+        if (typeof navigator !== "undefined" && navigator.geolocation) {
+          return new Promise((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+              (pos) =>
+                resolve({
+                  latitude: pos.coords.latitude,
+                  longitude: pos.coords.longitude,
+                }),
+              () => resolve(null),
+              { timeout: 8000, maximumAge: 300000 },
+            );
+          });
+        }
+        return null;
+      }
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return null;
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        timeout: 8000,
+      });
+
+      let locationName = null;
+      try {
+        const geocoded = await Location.reverseGeocodeAsync({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
+        if (geocoded && geocoded.length > 0) {
+          const g = geocoded[0];
+          const city = g.city || g.subregion || g.district || g.name || "";
+          const region = g.region || g.country || "";
+          if (city && region && city !== region) {
+            locationName = `${city}, ${region}`;
+          } else {
+            locationName = city || region || null;
+          }
+        }
+      } catch (_) {}
+
+      return {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        locationName,
+      };
+    } catch (_) {
+      return null;
+    }
+  };
+
   const loadData = useCallback(async () => {
     try {
       const savedMuni = await getMunicipality();
-      const currentMuni = (savedMuni || user?.municipality || 'Dagupan').trim();
+      const currentMuni = (savedMuni || user?.municipality || "Dagupan").trim();
       setActiveMuni(currentMuni);
 
-      const weatherParams = location?.lat && location?.lng ? {
-        lat: location.lat,
-        lon: location.lng,
-      } : undefined;
+      let coords = userCoordsRef.current;
+      if (!coords && location?.lat && location?.lng) {
+        coords = {
+          latitude: location.lat,
+          longitude: location.lng,
+          locationName: null,
+        };
+      }
+      if (!coords) {
+        coords = await getUserLocation();
+        if (coords) userCoordsRef.current = coords;
+      }
+
+      const weatherParams = coords
+        ? {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            lat: coords.latitude,
+            lon: coords.longitude,
+            ...(coords.locationName
+              ? { locationName: coords.locationName }
+              : {}),
+          }
+        : undefined;
 
       const promises = [
         faresAPI.getActiveFares(),
@@ -81,31 +163,47 @@ const HomeScreen = ({ navigation }) => {
       const weatherRes = results[1];
       const complaintsRes = results[2];
 
-      if (faresRes?.status === 'fulfilled') setFares(faresRes.value.data.data || []);
-      if (weatherRes?.status === 'fulfilled') setWeather(weatherRes.value.data.data || null);
-      if (complaintsRes?.status === 'fulfilled') {
-        const list = complaintsRes.value.data?.data || complaintsRes.value.data?.complaints || [];
+      if (faresRes?.status === "fulfilled")
+        setFares(faresRes.value.data.data || []);
+      if (weatherRes?.status === "fulfilled")
+        setWeather(weatherRes.value.data.data || null);
+      if (complaintsRes?.status === "fulfilled") {
+        const list =
+          complaintsRes.value.data?.data ||
+          complaintsRes.value.data?.complaints ||
+          [];
         const active = list.find((c) =>
-          ['pending', 'under_review', 'endorsed_to_lgu', 'action_taken'].includes(c.status)
+          [
+            "pending",
+            "under_review",
+            "endorsed_to_lgu",
+            "action_taken",
+          ].includes(c.status),
         );
         setActiveComplaint(active || null);
       }
-    } catch (e) { /* Silently fail */ }
+    } catch (e) {
+      /* Silently fail */
+    }
   }, [isGuest, user?.municipality, location?.lat, location?.lng]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
+    const coords = await getUserLocation();
+    if (coords) userCoordsRef.current = coords;
     await loadData();
     setRefreshing(false);
   };
 
   const greeting = () => {
     const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
   };
 
   return (
@@ -113,7 +211,7 @@ const HomeScreen = ({ navigation }) => {
       <StatusBar
         barStyle="light-content"
         backgroundColor={colors.primary}
-        translucent={Platform.OS === 'android'}
+        translucent={Platform.OS === "android"}
       />
       <AuthPromptModal
         visible={promptModal.visible}
@@ -123,18 +221,44 @@ const HomeScreen = ({ navigation }) => {
         icon={promptModal.icon}
         featureTag={promptModal.tag}
       />
+      <LocationPermissionModal
+        visible={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
+        onRetry={async () => {
+          setShowLocationModal(false);
+          await onRefresh();
+        }}
+      />
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
         {/* Header with dynamic safe inset */}
-        <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: topInset + 12 }]}>
-          <View style={[styles.headerInner, { maxWidth: isTablet ? 780 : '100%' }]}>
+        <View
+          style={[
+            styles.header,
+            { backgroundColor: colors.primary, paddingTop: topInset + 12 },
+          ]}
+        >
+          <View
+            style={[styles.headerInner, { maxWidth: isTablet ? 780 : "100%" }]}
+          >
             <View style={styles.headerTop}>
               <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={styles.greeting} numberOfLines={1} adjustsFontSizeToFit>
-                  {greeting()}{user ? `, ${user.firstName}` : ''}! 👋
+                <Text
+                  style={styles.greeting}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {greeting()}
+                  {user ? `, ${user.firstName}` : ""}! 👋
                 </Text>
                 <Text style={styles.headerSubtitle}>
                   {isGuest ? `Guest Session • ${activeMuni}` : `SmartSakay • ${activeMuni}`}
@@ -142,67 +266,191 @@ const HomeScreen = ({ navigation }) => {
               </View>
               {isGuest ? (
                 <TouchableOpacity
-                  onPress={() => openPrompt('Transit Notifications', 'Sign up to receive personalized route detours, fare revisions, and severe weather advisories.', 'bell-ring-outline', 'Alerts')}
+                  onPress={() =>
+                    openPrompt(
+                      "Transit Notifications",
+                      "Sign up to receive personalized route detours, fare revisions, and severe weather advisories.",
+                      "bell-ring-outline",
+                      "Alerts",
+                    )
+                  }
                   style={styles.notifBtn}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <MaterialCommunityIcons name="bell-badge-outline" size={24} color="#FBBF24" />
+                  <MaterialCommunityIcons
+                    name="bell-badge-outline"
+                    size={24}
+                    color="#FBBF24"
+                  />
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
-                  onPress={() => navigation.navigate('Notifications')}
+                  onPress={() => navigation.navigate("Notifications")}
                   style={styles.notifBtn}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <MaterialCommunityIcons name="bell-outline" size={24} color="#FFFFFF" />
+                  <MaterialCommunityIcons
+                    name="bell-outline"
+                    size={24}
+                    color="#FFFFFF"
+                  />
                   <Badge count={unreadCount} />
                 </TouchableOpacity>
               )}
             </View>
 
             {/* Weather mini card */}
-            {Boolean(weather) ? (() => {
-              const conditionStr = weather.current?.condition?.text || (typeof weather.current?.condition === 'string' ? weather.current?.condition : null) || weather.conditionText || 'Dagupan City';
-              const iconName = getWeatherIcon(conditionStr);
-              const isWarning = conditionStr.toLowerCase().includes('rain') || conditionStr.toLowerCase().includes('thunder');
+            {Boolean(weather)
+              ? (() => {
+                  const hasLocation =
+                    weather.current?.hasLocation !== false &&
+                    userCoordsRef.current !== null;
+                  if (!hasLocation) {
+                    return (
+                      <TouchableOpacity
+                        style={[
+                          styles.weatherMini,
+                          { backgroundColor: "rgba(255, 255, 255, 0.15)" },
+                        ]}
+                        activeOpacity={0.8}
+                        onPress={() => setShowLocationModal(true)}
+                      >
+                        <MaterialCommunityIcons
+                          name="map-marker-alert-outline"
+                          size={20}
+                          color="#FBBF24"
+                        />
+                        <Text style={styles.weatherDesc} numberOfLines={1}>
+                          Please turn on your location permission
+                        </Text>
+                        <MaterialCommunityIcons
+                          name="chevron-right"
+                          size={16}
+                          color="rgba(255,255,255,0.6)"
+                          style={{ marginLeft: "auto" }}
+                        />
+                      </TouchableOpacity>
+                    );
+                  }
 
-              return (
-                <TouchableOpacity
-                  style={[styles.weatherMini, isWarning && { backgroundColor: 'rgba(239, 68, 68, 0.25)', borderColor: 'rgba(239, 68, 68, 0.4)', borderWidth: 1 }]}
-                  activeOpacity={0.8}
-                  onPress={() => navigation.navigate('Weather')}
-                >
-                  <MaterialCommunityIcons name={iconName} size={22} color={isWarning ? "#FCA5A5" : "#FBBF24"} />
-                  <Text style={styles.weatherTemp}>
-                    {weather.current?.temp_c ?? weather.current?.tempC ?? weather.temp_c ?? '--'}°C
-                  </Text>
-                  <Text style={styles.weatherDesc} numberOfLines={1}>
-                    {conditionStr} • {weather?.current?.coordinates?.location ? (weather.current.coordinates.location.split(',')[0].replace(/^Coordinates\s*\(|\)$/g, '').trim() || activeMuni) : activeMuni}
-                  </Text>
-                  <MaterialCommunityIcons name="chevron-right" size={16} color="rgba(255,255,255,0.6)" style={{ marginLeft: 'auto' }} />
-                </TouchableOpacity>
-              );
-            })() : null}
+                  const conditionStr =
+                    weather.current?.condition?.text ||
+                    (typeof weather.current?.condition === "string"
+                      ? weather.current?.condition
+                      : null) ||
+                    weather.conditionText ||
+                    "Partly Cloudy";
+                  const iconName = getWeatherIcon(conditionStr);
+                  const isWarning =
+                    conditionStr.toLowerCase().includes("rain") ||
+                    conditionStr.toLowerCase().includes("thunder");
+                  const weatherLocation =
+                    weather.current?.coordinates?.location || activeMuni;
+                  const shortLocation =
+                    weatherLocation.split(",")[0].replace(/^Coordinates\s*\(|\)$/g, "").trim() || activeMuni;
+
+                  return (
+                    <TouchableOpacity
+                      style={[
+                        styles.weatherMini,
+                        isWarning && {
+                          backgroundColor: "rgba(239, 68, 68, 0.25)",
+                          borderColor: "rgba(239, 68, 68, 0.4)",
+                          borderWidth: 1,
+                        },
+                      ]}
+                      activeOpacity={0.8}
+                      onPress={() => navigation.navigate("Weather")}
+                    >
+                      <MaterialCommunityIcons
+                        name={iconName}
+                        size={22}
+                        color={isWarning ? "#FCA5A5" : "#FBBF24"}
+                      />
+                      <Text style={styles.weatherTemp}>
+                        {weather.current?.temp_c ??
+                          weather.current?.tempC ??
+                          weather.temp_c ??
+                          "--"}
+                        °C
+                      </Text>
+                      <Text style={styles.weatherDesc} numberOfLines={1}>
+                        {conditionStr} • {shortLocation}
+                      </Text>
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={16}
+                        color="rgba(255,255,255,0.6)"
+                        style={{ marginLeft: "auto" }}
+                      />
+                    </TouchableOpacity>
+                  );
+                })()
+              : null}
           </View>
         </View>
 
         {/* Content wrapper with tablet centering */}
-        <View style={[styles.mainWrapper, { maxWidth: isTablet ? 780 : '100%' }]}>
+        <View
+          style={[styles.mainWrapper, { maxWidth: isTablet ? 780 : "100%" }]}
+        >
           {/* Guest Mode Banner */}
           {isGuest && (
-            <View style={[styles.guestBanner, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '35' }]}>
+            <View
+              style={[
+                styles.guestBanner,
+                {
+                  backgroundColor: colors.primary + "15",
+                  borderColor: colors.primary + "35",
+                },
+              ]}
+            >
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                  <MaterialCommunityIcons name="shield-outline" size={16} color={colors.primary} />
-                  <Text style={[styles.guestBannerTitle, { color: colors.textPrimary }]}>Browsing in Guest Mode</Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    marginBottom: 2,
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name="shield-outline"
+                    size={16}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.guestBannerTitle,
+                      { color: colors.textPrimary },
+                    ]}
+                  >
+                    Browsing in Guest Mode
+                  </Text>
                 </View>
-                <Text style={[styles.guestBannerDesc, { color: colors.textSecondary }]}>
-                  Sign up to file verified complaints & chat with the AI assistant.
+                <Text
+                  style={[
+                    styles.guestBannerDesc,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  Sign up to file verified complaints & chat with the AI
+                  assistant.
                 </Text>
               </View>
               <TouchableOpacity
-                style={[styles.guestBannerBtn, { backgroundColor: colors.primary }]}
-                onPress={() => openPrompt('Join SmartSakay Dagupan', 'Register your free account to access AI transit assistance, file commuter complaints, and bookmark routes.', 'account-plus', 'Free Account')}
+                style={[
+                  styles.guestBannerBtn,
+                  { backgroundColor: colors.primary },
+                ]}
+                onPress={() =>
+                  openPrompt(
+                    "Join SmartSakay Dagupan",
+                    "Register your free account to access AI transit assistance, file commuter complaints, and bookmark routes.",
+                    "account-plus",
+                    "Free Account",
+                  )
+                }
                 activeOpacity={0.8}
               >
                 <Text style={styles.guestBannerBtnText}>Sign Up</Text>
@@ -217,88 +465,180 @@ const HomeScreen = ({ navigation }) => {
                 style={[
                   styles.quickCard,
                   {
-                    width: isTablet ? '23.5%' : '48.5%',
+                    width: isTablet ? "23.5%" : "48.5%",
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
                   },
                 ]}
-                onPress={() => navigation.navigate('RoutesAndFares', { initialTab: 'routes' })}
+                onPress={() =>
+                  navigation.navigate("RoutesAndFares", {
+                    initialTab: "routes",
+                  })
+                }
                 activeOpacity={0.8}
               >
-                <View style={[styles.quickIconCircle, { backgroundColor: 'rgba(14, 165, 233, 0.12)' }]}>
-                  <MaterialCommunityIcons name="routes" size={24} color="#0EA5E9" />
+                <View
+                  style={[
+                    styles.quickIconCircle,
+                    { backgroundColor: "rgba(14, 165, 233, 0.12)" },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name="routes"
+                    size={24}
+                    color="#0EA5E9"
+                  />
                 </View>
-                <Text style={[styles.quickTitle, { color: colors.textPrimary }]} numberOfLines={1}>Jeepney Routes</Text>
-                <Text style={[styles.quickSubtitle, { color: colors.textMuted }]} numberOfLines={1}>View routes</Text>
+                <Text
+                  style={[styles.quickTitle, { color: colors.textPrimary }]}
+                  numberOfLines={1}
+                >
+                  Jeepney Routes
+                </Text>
+                <Text
+                  style={[styles.quickSubtitle, { color: colors.textMuted }]}
+                  numberOfLines={1}
+                >
+                  View routes
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.quickCard,
                   {
-                    width: isTablet ? '23.5%' : '48.5%',
+                    width: isTablet ? "23.5%" : "48.5%",
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
                   },
                 ]}
                 onPress={() => {
                   if (isGuest) {
-                    openPrompt('My Complaints', 'Sign in to monitor investigations, official LGU summons, and resolution notes.', 'clipboard-text', 'Complaint Tracker');
+                    openPrompt(
+                      "My Complaints",
+                      "Sign in to monitor investigations, official LGU summons, and resolution notes.",
+                      "clipboard-text",
+                      "Complaint Tracker",
+                    );
                   } else {
-                    navigation.navigate('ComplaintsList');
+                    navigation.navigate("ComplaintsList");
                   }
                 }}
                 activeOpacity={0.8}
               >
-                <View style={[styles.quickIconCircle, { backgroundColor: colors.primary + '15' }]}>
-                  <MaterialCommunityIcons name="clipboard-text-clock-outline" size={24} color={colors.primary} />
+                <View
+                  style={[
+                    styles.quickIconCircle,
+                    { backgroundColor: colors.primary + "15" },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name="clipboard-text-clock-outline"
+                    size={24}
+                    color={colors.primary}
+                  />
                 </View>
-                <Text style={[styles.quickTitle, { color: colors.textPrimary }]} numberOfLines={1}>My Reports</Text>
-                <Text style={[styles.quickSubtitle, { color: colors.textMuted }]} numberOfLines={1}>Track status</Text>
+                <Text
+                  style={[styles.quickTitle, { color: colors.textPrimary }]}
+                  numberOfLines={1}
+                >
+                  My Reports
+                </Text>
+                <Text
+                  style={[styles.quickSubtitle, { color: colors.textMuted }]}
+                  numberOfLines={1}
+                >
+                  Track status
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.quickCard,
                   {
-                    width: isTablet ? '23.5%' : '48.5%',
+                    width: isTablet ? "23.5%" : "48.5%",
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
                   },
                 ]}
-                onPress={() => navigation.navigate('RoutesAndFares', { initialTab: 'fares' })}
+                onPress={() =>
+                  navigation.navigate("RoutesAndFares", { initialTab: "fares" })
+                }
                 activeOpacity={0.8}
               >
-                <View style={[styles.quickIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
-                  <MaterialCommunityIcons name="calculator-variant" size={24} color="#10B981" />
+                <View
+                  style={[
+                    styles.quickIconCircle,
+                    { backgroundColor: "rgba(16, 185, 129, 0.12)" },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name="calculator-variant"
+                    size={24}
+                    color="#10B981"
+                  />
                 </View>
-                <Text style={[styles.quickTitle, { color: colors.textPrimary }]} numberOfLines={1}>Fare Matrix</Text>
-                <Text style={[styles.quickSubtitle, { color: colors.textMuted }]} numberOfLines={1}>Check rates</Text>
+                <Text
+                  style={[styles.quickTitle, { color: colors.textPrimary }]}
+                  numberOfLines={1}
+                >
+                  Fare Matrix
+                </Text>
+                <Text
+                  style={[styles.quickSubtitle, { color: colors.textMuted }]}
+                  numberOfLines={1}
+                >
+                  Check rates
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.quickCard,
                   {
-                    width: isTablet ? '23.5%' : '48.5%',
+                    width: isTablet ? "23.5%" : "48.5%",
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
                   },
                 ]}
                 onPress={() => {
                   if (isGuest) {
-                    openPrompt('File a Complaint', `Register or sign in to file verified transit complaints with photo evidence to ${activeMuni} LGU.`, 'clipboard-alert', 'Verified Report');
+                    openPrompt(
+                      "File a Complaint",
+                      `Register or sign in to file verified transit complaints with photo evidence to ${activeMuni} LGU.`,
+                      "clipboard-alert",
+                      "Verified Report",
+                    );
                   } else {
-                    navigation.navigate('SubmitComplaint');
+                    navigation.navigate("SubmitComplaint");
                   }
                 }}
                 activeOpacity={0.8}
               >
-                <View style={[styles.quickIconCircle, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
-                  <MaterialCommunityIcons name="clipboard-alert-outline" size={24} color="#EF4444" />
+                <View
+                  style={[
+                    styles.quickIconCircle,
+                    { backgroundColor: "rgba(239, 68, 68, 0.12)" },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name="clipboard-alert-outline"
+                    size={24}
+                    color="#EF4444"
+                  />
                 </View>
-                <Text style={[styles.quickTitle, { color: colors.textPrimary }]} numberOfLines={1}>File Complaint</Text>
-                <Text style={[styles.quickSubtitle, { color: colors.textMuted }]} numberOfLines={1}>Report violation</Text>
+                <Text
+                  style={[styles.quickTitle, { color: colors.textPrimary }]}
+                  numberOfLines={1}
+                >
+                  File Complaint
+                </Text>
+                <Text
+                  style={[styles.quickSubtitle, { color: colors.textMuted }]}
+                  numberOfLines={1}
+                >
+                  Report violation
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -306,60 +646,117 @@ const HomeScreen = ({ navigation }) => {
             <SectionHeader
               title="Live Transit Map"
               actionText="Full View"
-              onAction={() => navigation.navigate('RoutesAndFares')}
+              onAction={() => navigation.navigate("RoutesAndFares")}
             />
-            <HomeMapWidget navigation={navigation} height={isTablet ? 320 : 260} municipality={activeMuni} />
+            <HomeMapWidget
+              navigation={navigation}
+              height={isTablet ? 320 : 260}
+              municipality={activeMuni}
+            />
 
             {/* Fare Rates Summary */}
             <SectionHeader
               title="Current Fare Rates"
               actionText="View Matrix"
-              onAction={() => navigation.navigate('RoutesAndFares', { initialTab: 'fares' })}
+              onAction={() =>
+                navigation.navigate("RoutesAndFares", { initialTab: "fares" })
+              }
             />
             {fares
-              .filter((fare) => fare.vehicleType !== 'tricycle')
+              .filter((fare) => fare.vehicleType !== "tricycle")
               .map((fare) => (
-              <Card key={fare._id} style={{ borderLeftWidth: 3.5, borderLeftColor: fare.vehicleType === 'traditional' ? '#f97316' : '#3b82f6', marginBottom: SPACING.md }}>
-                <View style={styles.fareRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.fareType, { color: colors.textPrimary }]}>
-                      {fare.vehicleType === 'traditional' ? '🚐 Traditional' : '🚌 Modern'} Jeepney
-                    </Text>
-                    <Text style={[styles.fareDetail, { color: colors.textSecondary }]}>
-                      Base: {formatPeso(fare.baseFare)} (first {fare.baseDistanceKm} km)
-                    </Text>
-                    {fare.effectiveDate && (
-                      <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
-                        Effective: {new Date(fare.effectiveDate).toLocaleDateString()}
+                <Card
+                  key={fare._id}
+                  style={{
+                    borderLeftWidth: 3.5,
+                    borderLeftColor:
+                      fare.vehicleType === "traditional"
+                        ? "#f97316"
+                        : "#3b82f6",
+                    marginBottom: SPACING.md,
+                  }}
+                >
+                  <View style={styles.fareRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[styles.fareType, { color: colors.textPrimary }]}
+                      >
+                        {fare.vehicleType === "traditional"
+                          ? "🚐 Traditional"
+                          : "🚌 Modern"}{" "}
+                        Jeepney
                       </Text>
-                    )}
+                      <Text
+                        style={[
+                          styles.fareDetail,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Base: {formatPeso(fare.baseFare)} (first{" "}
+                        {fare.baseDistanceKm} km)
+                      </Text>
+                      {fare.effectiveDate && (
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: colors.textMuted,
+                            marginTop: 2,
+                          }}
+                        >
+                          Effective:{" "}
+                          {new Date(fare.effectiveDate).toLocaleDateString()}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.fareRight}>
+                      <Text
+                        style={[styles.fareRate, { color: colors.primary }]}
+                      >
+                        {formatPeso(fare.perKmRate)}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.fareRateLabel,
+                          { color: colors.textMuted },
+                        ]}
+                      >
+                        per km
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.fareRight}>
-                    <Text style={[styles.fareRate, { color: colors.primary }]}>
-                      {formatPeso(fare.perKmRate)}
-                    </Text>
-                    <Text style={[styles.fareRateLabel, { color: colors.textMuted }]}>per km</Text>
-                  </View>
-                </View>
-              </Card>
-            ))}
+                </Card>
+              ))}
 
             {/* Commuter Rights */}
             <SectionHeader title="Know Your Rights" />
             <Card style={{ marginBottom: SPACING.xl }}>
               <TouchableOpacity
                 style={styles.rightsCard}
-                onPress={() => navigation.navigate('CommuterRights')}
+                onPress={() => navigation.navigate("CommuterRights")}
                 activeOpacity={0.8}
               >
-                <MaterialCommunityIcons name="scale-balance" size={28} color={colors.primary} />
+                <MaterialCommunityIcons
+                  name="scale-balance"
+                  size={28}
+                  color={colors.primary}
+                />
                 <View style={styles.rightsText}>
-                  <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Commuter Rights</Text>
-                  <Text style={[styles.rightsDesc, { color: colors.textSecondary }]}>
+                  <Text
+                    style={[styles.rightsTitle, { color: colors.textPrimary }]}
+                  >
+                    Commuter Rights
+                  </Text>
+                  <Text
+                    style={[styles.rightsDesc, { color: colors.textSecondary }]}
+                  >
                     Know your rights as a commuter. LTFRB hotline: 1342
                   </Text>
                 </View>
-                <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textMuted} />
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={24}
+                  color={colors.textMuted}
+                />
               </TouchableOpacity>
             </Card>
 
@@ -378,52 +775,72 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
-    alignItems: 'center',
+    alignItems: "center",
   },
   headerInner: {
-    width: '100%',
-    alignSelf: 'center',
+    width: "100%",
+    alignSelf: "center",
   },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  greeting: { fontSize: FONTS.sizes.xxl, fontWeight: '800', color: '#FFFFFF' },
-  headerSubtitle: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  greeting: { fontSize: FONTS.sizes.xxl, fontWeight: "800", color: "#FFFFFF" },
+  headerSubtitle: {
+    fontSize: FONTS.sizes.sm,
+    color: "rgba(255,255,255,0.7)",
+    marginTop: 2,
+  },
   notifBtn: {
     padding: 8,
     minWidth: 40,
     minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   weatherMini: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: SPACING.sm,
     marginTop: SPACING.lg,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: "rgba(255,255,255,0.12)",
     padding: SPACING.sm + 2,
     borderRadius: RADIUS.full,
     paddingHorizontal: SPACING.lg,
     minHeight: 40,
   },
-  weatherTemp: { fontSize: FONTS.sizes.md, fontWeight: '700', color: '#FFFFFF' },
-  weatherDesc: { fontSize: FONTS.sizes.sm, color: 'rgba(255,255,255,0.8)', flex: 1 },
+  weatherTemp: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  weatherDesc: {
+    fontSize: FONTS.sizes.sm,
+    color: "rgba(255,255,255,0.8)",
+    flex: 1,
+  },
   mainWrapper: {
-    width: '100%',
-    alignSelf: 'center',
+    width: "100%",
+    alignSelf: "center",
   },
   content: {
     paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
   },
-  fareRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  fareType: { fontSize: FONTS.sizes.md, fontWeight: '700', marginBottom: 2 },
+  fareRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  fareType: { fontSize: FONTS.sizes.md, fontWeight: "700", marginBottom: 2 },
   fareDetail: { fontSize: FONTS.sizes.sm },
-  fareRight: { alignItems: 'flex-end', marginLeft: 12 },
-  fareRate: { fontSize: FONTS.sizes.xl, fontWeight: '800' },
+  fareRight: { alignItems: "flex-end", marginLeft: 12 },
+  fareRate: { fontSize: FONTS.sizes.xl, fontWeight: "800" },
   fareRateLabel: { fontSize: FONTS.sizes.xs },
-  rightsCard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  rightsCard: { flexDirection: "row", alignItems: "center", gap: SPACING.md },
   rightsText: { flex: 1 },
-  rightsTitle: { fontSize: FONTS.sizes.md, fontWeight: '700' },
+  rightsTitle: { fontSize: FONTS.sizes.md, fontWeight: "700" },
   rightsDesc: { fontSize: FONTS.sizes.sm, marginTop: 2 },
   guestBanner: {
     marginHorizontal: SPACING.xl,
@@ -432,15 +849,15 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
     ...SHADOWS.sm,
   },
   guestBannerTitle: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   guestBannerDesc: {
     fontSize: 11,
@@ -451,26 +868,26 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: RADIUS.md,
     minHeight: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   guestBannerBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
     fontSize: 12,
   },
   quickGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
     marginBottom: SPACING.lg,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   quickCard: {
     padding: 14,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
     minHeight: 104,
     ...SHADOWS.sm,
   },
@@ -478,13 +895,13 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 8,
   },
   quickTitle: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   quickSubtitle: {
     fontSize: 10.5,

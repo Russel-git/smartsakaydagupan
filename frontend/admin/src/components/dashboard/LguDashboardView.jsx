@@ -196,7 +196,7 @@ const LguDashboardView = () => {
     {
       title: "Terminal Hubs",
       value: stats?.terminals?.total ?? 0,
-      subtitle: `${stats?.terminals?.total || 0} local terminals & hubs`,
+      subtitle: `${stats?.terminals?.total || 0} transit & terminal hubs`,
       icon: Compass,
       to: "/terminals",
       color: "#7C3AED",

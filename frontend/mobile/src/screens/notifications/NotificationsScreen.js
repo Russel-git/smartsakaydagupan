@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,30 +9,30 @@ import {
   ScrollView,
   SafeAreaView,
   Image,
-} from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useTheme } from '../../contexts/ThemeContext';
-import { useNotifications } from '../../contexts/NotificationContext';
-import { useAuth } from '../../contexts/AuthContext';
-import { useFeedback } from '../../contexts/FeedbackContext';
-import { getMunicipality } from '../../utils/storage';
-import { EmptyState } from '../../components/common/SharedComponents';
-import ConfirmDialogModal from '../../components/common/ConfirmDialogModal';
-import { FONTS, SPACING, RADIUS, API_BASE_URL } from '../../utils/constants';
-import { formatDate, formatDateTime } from '../../utils/helpers';
+} from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useNotifications } from "../../contexts/NotificationContext";
+import { useAuth } from "../../contexts/AuthContext";
+import { useFeedback } from "../../contexts/FeedbackContext";
+import { getMunicipality } from "../../utils/storage";
+import { EmptyState } from "../../components/common/SharedComponents";
+import ConfirmDialogModal from "../../components/common/ConfirmDialogModal";
+import { FONTS, SPACING, RADIUS, API_BASE_URL } from "../../utils/constants";
+import { formatDate, formatDateTime } from "../../utils/helpers";
 
 const getMediaUrl = (url) => {
   if (!url) return null;
   if (
-    url.startsWith('http://') ||
-    url.startsWith('https://') ||
-    url.startsWith('data:') ||
-    url.startsWith('file:')
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("data:") ||
+    url.startsWith("file:")
   ) {
     return url;
   }
-  const baseUrl = (API_BASE_URL || '').replace(/\/api\/?$/, '');
-  const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+  const baseUrl = (API_BASE_URL || "").replace(/\/api\/?$/, "");
+  const cleanUrl = url.startsWith("/") ? url : `/${url}`;
   return `${baseUrl}${cleanUrl}`;
 };
 
@@ -40,23 +40,76 @@ const getMediaUrl = (url) => {
 export const getNotificationCategory = (item) => {
   // 1. Complaint Updates (Highest priority: grievance filing, POSO review, endorsement, action taken, resolution)
   if (
-    item?.category === 'complaint_updates' ||
-    item?.type === 'complaint_update' ||
+    item?.category === "complaint_updates" ||
+    item?.type === "complaint_update" ||
     Boolean(item?.metadata?.complaintId)
   ) {
-    return 'complaint_updates';
+    return "complaint_updates";
   }
   // 2. Weather Updates (Rain advisories, weather alerts)
   if (
-    item?.category === 'weather_updates' ||
-    item?.type === 'weather_alert' ||
+    item?.category === "weather_updates" ||
+    item?.type === "weather_alert" ||
     Boolean(item?.metadata?.tempC) ||
-    Boolean(item?.metadata?.source?.includes('Open-Meteo'))
+    Boolean(item?.metadata?.source?.includes("Open-Meteo"))
   ) {
-    return 'weather_updates';
+    return "weather_updates";
   }
   // 3. Official LGU/POSO/Admin Broadcasts (Road advisories, rerouting, transit notices, fare updates)
-  return 'broadcast_by_admin';
+  return "broadcast_by_admin";
+};
+
+// Helper to get alert severity configuration
+export const getSeverityConfig = (severity) => {
+  if (!severity) return null;
+  const sev = String(severity).trim().toLowerCase();
+  switch (sev) {
+    case "critical":
+      return {
+        label: "CRITICAL",
+        color: "#DC2626",
+        bg: "#FEE2E2",
+        border: "#FCA5A5",
+        darkBg: "rgba(220, 38, 38, 0.2)",
+        icon: "alert-octagon",
+      };
+    case "warning":
+    case "severe":
+      return {
+        label: "WARNING",
+        color: "#D97706",
+        bg: "#FEF3C7",
+        border: "#FCD34D",
+        darkBg: "rgba(217, 119, 6, 0.2)",
+        icon: "alert-circle",
+      };
+    case "info":
+    case "advisory":
+      return {
+        label: "ADVISORY",
+        color: "#2563EB",
+        bg: "#DBEAFE",
+        border: "#93C5FD",
+        darkBg: "rgba(37, 99, 235, 0.2)",
+        icon: "information-outline",
+      };
+    default:
+      return null;
+  }
+};
+
+// Helper to extract transit route from notification
+export const getNotificationRoute = (item) => {
+  if (!item) return "";
+  return (
+    item.route ||
+    item.locationArea ||
+    item.location ||
+    item.metadata?.route ||
+    item.metadata?.locationArea ||
+    item.metadata?.location ||
+    ""
+  ).trim();
 };
 
 // Strict category tab membership helper (each notification belongs to its exact category, and 'all')
@@ -68,44 +121,44 @@ export const isNotificationInTab = (item, tabId) => {
 // Dynamic Category UI Configuration scoped to town
 export const getCategoryTabs = (muni = 'Dagupan') => [
   {
-    id: 'all',
-    label: 'All',
-    icon: 'bell-outline',
-    color: '#0284C7',
-    emptyTitle: 'No Notifications',
+    id: "all",
+    label: "All",
+    icon: "bell-outline",
+    color: "#0284C7",
+    emptyTitle: "No Notifications",
     emptyMessage: `You're all caught up with ${muni} transit announcements!`,
   },
   {
-    id: 'weather_updates',
-    label: 'Weather Updates',
-    icon: 'weather-partly-rainy',
-    color: '#0284C7',
-    badgeBg: '#E0F2FE',
-    badgeBorder: '#BAE6FD',
-    badgeText: '#0369A1',
-    emptyTitle: 'No Weather Updates',
+    id: "weather_updates",
+    label: "Weather Updates",
+    icon: "weather-partly-rainy",
+    color: "#0284C7",
+    badgeBg: "#E0F2FE",
+    badgeBorder: "#BAE6FD",
+    badgeText: "#0369A1",
+    emptyTitle: "No Weather Updates",
     emptyMessage: `No weather alerts or rainfall advisories in ${muni} right now.`,
   },
   {
-    id: 'complaint_updates',
-    label: 'Complaint Updates',
-    icon: 'scale-balance',
-    color: '#7C3AED',
-    badgeBg: '#EDE9FE',
-    badgeBorder: '#DDD6FE',
-    badgeText: '#6D28D9',
-    emptyTitle: 'No Complaint Updates',
+    id: "complaint_updates",
+    label: "Complaint Updates",
+    icon: "scale-balance",
+    color: "#7C3AED",
+    badgeBg: "#EDE9FE",
+    badgeBorder: "#DDD6FE",
+    badgeText: "#6D28D9",
+    emptyTitle: "No Complaint Updates",
     emptyMessage: `You will receive status updates here when your filed complaints are reviewed or resolved by ${muni} POSO / LGU.`,
   },
   {
-    id: 'broadcast_by_admin',
-    label: 'Broadcast by LGU',
-    icon: 'bullhorn-variant',
-    color: '#EA580C',
-    badgeBg: '#FFEDD5',
-    badgeBorder: '#FED7AA',
-    badgeText: '#C2410C',
-    emptyTitle: 'No LGU Broadcasts',
+    id: "broadcast_by_admin",
+    label: "Broadcast by LGU",
+    icon: "bullhorn-variant",
+    color: "#EA580C",
+    badgeBg: "#FFEDD5",
+    badgeBorder: "#FED7AA",
+    badgeText: "#C2410C",
+    emptyTitle: "No LGU Broadcasts",
     emptyMessage: `There are no official transit broadcasts or road advisories from ${muni} LGU at this moment.`,
   },
 ];
@@ -113,72 +166,72 @@ export const getCategoryTabs = (muni = 'Dagupan') => [
 // Per-type and category styling details
 const NOTIF_CONFIG = {
   weather_alert: {
-    categoryKey: 'weather_updates',
-    categoryLabel: 'Weather Updates',
-    icon: 'weather-partly-rainy',
-    color: '#0284C7',
-    bg: '#E0F2FE',
-    actionText: 'Check Weather & Flood Advisory',
-    actionScreen: 'Weather',
+    categoryKey: "weather_updates",
+    categoryLabel: "Weather Updates",
+    icon: "weather-partly-rainy",
+    color: "#0284C7",
+    bg: "#E0F2FE",
+    actionText: "Check Weather & Flood Advisory",
+    actionScreen: "Weather",
   },
   weather_updates: {
-    categoryKey: 'weather_updates',
-    categoryLabel: 'Weather Updates',
-    icon: 'weather-partly-rainy',
-    color: '#0284C7',
-    bg: '#E0F2FE',
-    actionText: 'Check Weather & Flood Advisory',
-    actionScreen: 'Weather',
+    categoryKey: "weather_updates",
+    categoryLabel: "Weather Updates",
+    icon: "weather-partly-rainy",
+    color: "#0284C7",
+    bg: "#E0F2FE",
+    actionText: "Check Weather & Flood Advisory",
+    actionScreen: "Weather",
   },
   complaint_update: {
-    categoryKey: 'complaint_updates',
-    categoryLabel: 'Complaint Updates',
-    icon: 'scale-balance',
-    color: '#7C3AED',
-    bg: '#EDE9FE',
-    actionText: 'Track Case Investigation',
-    actionScreen: 'ComplaintsList',
+    categoryKey: "complaint_updates",
+    categoryLabel: "Complaint Updates",
+    icon: "scale-balance",
+    color: "#7C3AED",
+    bg: "#EDE9FE",
+    actionText: "Track Case Investigation",
+    actionScreen: "ComplaintsList",
   },
   complaint_updates: {
-    categoryKey: 'complaint_updates',
-    categoryLabel: 'Complaint Updates',
-    icon: 'scale-balance',
-    color: '#7C3AED',
-    bg: '#EDE9FE',
-    actionText: 'Track Case Investigation',
-    actionScreen: 'ComplaintsList',
+    categoryKey: "complaint_updates",
+    categoryLabel: "Complaint Updates",
+    icon: "scale-balance",
+    color: "#7C3AED",
+    bg: "#EDE9FE",
+    actionText: "Track Case Investigation",
+    actionScreen: "ComplaintsList",
   },
   broadcast: {
-    categoryKey: 'broadcast_by_admin',
-    categoryLabel: 'Broadcast by LGU',
-    icon: 'bullhorn-variant',
-    color: '#EA580C',
-    bg: '#FFEDD5',
+    categoryKey: "broadcast_by_admin",
+    categoryLabel: "Broadcast by LGU",
+    icon: "bullhorn-variant",
+    color: "#EA580C",
+    bg: "#FFEDD5",
   },
   broadcast_by_admin: {
-    categoryKey: 'broadcast_by_admin',
-    categoryLabel: 'Broadcast by LGU',
-    icon: 'bullhorn-variant',
-    color: '#EA580C',
-    bg: '#FFEDD5',
+    categoryKey: "broadcast_by_admin",
+    categoryLabel: "Broadcast by LGU",
+    icon: "bullhorn-variant",
+    color: "#EA580C",
+    bg: "#FFEDD5",
   },
   fare_update: {
-    categoryKey: 'broadcast_by_admin',
-    categoryLabel: 'Broadcast by LGU',
-    subLabel: 'LTFRB Fare Revision',
-    icon: 'cash-multiple',
-    color: '#D97706',
-    bg: '#FEF3C7',
-    actionText: 'View Fare Matrix',
-    actionScreen: 'RoutesAndFares',
-    actionParams: { initialTab: 'fares' },
+    categoryKey: "broadcast_by_admin",
+    categoryLabel: "Broadcast by LGU",
+    subLabel: "LTFRB Fare Revision",
+    icon: "cash-multiple",
+    color: "#D97706",
+    bg: "#FEF3C7",
+    actionText: "View Fare Matrix",
+    actionScreen: "RoutesAndFares",
+    actionParams: { initialTab: "fares" },
   },
   system: {
-    categoryKey: 'broadcast_by_admin',
-    categoryLabel: 'Broadcast by LGU',
-    icon: 'shield-account',
-    color: '#4B5563',
-    bg: '#F3F4F6',
+    categoryKey: "broadcast_by_admin",
+    categoryLabel: "Broadcast by LGU",
+    icon: "shield-account",
+    color: "#4B5563",
+    bg: "#F3F4F6",
   },
 };
 
@@ -208,38 +261,38 @@ const NotificationsScreen = ({ navigation }) => {
   } = useNotifications();
   const { showSuccess } = useFeedback();
 
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState("all");
   const [selectedNotif, setSelectedNotif] = useState(null);
   const [confirmModalConfig, setConfirmModalConfig] = useState({
     visible: false,
-    title: '',
-    message: '',
-    confirmText: 'Confirm',
-    cancelText: 'Cancel',
-    type: 'danger',
-    icon: 'trash-can-outline',
+    title: "",
+    message: "",
+    confirmText: "Confirm",
+    cancelText: "Cancel",
+    type: "danger",
+    icon: "trash-can-outline",
     onConfirm: () => {},
   });
 
   const handleDeleteNotification = (notif) => {
     if (!notif?._id) return;
-    const title = notif.title || 'Notification';
+    const title = notif.title || "Notification";
 
     setConfirmModalConfig({
       visible: true,
-      title: 'Delete Notification',
+      title: "Delete Notification",
       message: `Are you sure you want to remove this notification?\n\n"${title}"`,
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
-      type: 'danger',
-      icon: 'trash-can-outline',
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      type: "danger",
+      icon: "trash-can-outline",
       onConfirm: async () => {
         setConfirmModalConfig((prev) => ({ ...prev, visible: false }));
         if (selectedNotif?._id === notif._id) {
           setSelectedNotif(null);
         }
         await deleteNotification(notif._id);
-        showSuccess('Notification Deleted', `"${title}" has been removed.`);
+        showSuccess("Notification Deleted", `"${title}" has been removed.`);
       },
     });
   };
@@ -250,14 +303,14 @@ const NotificationsScreen = ({ navigation }) => {
 
     setConfirmModalConfig({
       visible: true,
-      title: 'Delete Read Notifications',
+      title: "Delete Read Notifications",
       message: `Are you sure you want to delete all ${readItems.length} read notification${
-        readItems.length > 1 ? 's' : ''
+        readItems.length > 1 ? "s" : ""
       }? Unread notifications will remain in your inbox.`,
-      confirmText: 'Delete All Read',
-      cancelText: 'Cancel',
-      type: 'danger',
-      icon: 'delete-sweep-outline',
+      confirmText: "Delete All Read",
+      cancelText: "Cancel",
+      type: "danger",
+      icon: "delete-sweep-outline",
       onConfirm: async () => {
         setConfirmModalConfig((prev) => ({ ...prev, visible: false }));
         if (selectedNotif?.isRead) {
@@ -265,10 +318,10 @@ const NotificationsScreen = ({ navigation }) => {
         }
         await deleteAllRead();
         showSuccess(
-          'Notifications Cleared',
+          "Notifications Cleared",
           `Successfully removed ${readItems.length} read notification${
-            readItems.length > 1 ? 's' : ''
-          }.`
+            readItems.length > 1 ? "s" : ""
+          }.`,
         );
       },
     });
@@ -293,7 +346,7 @@ const NotificationsScreen = ({ navigation }) => {
     const now = Date.now();
     return notifications.filter((n) => {
       const cat = getNotificationCategory(n);
-      if (cat === 'weather_updates') {
+      if (cat === "weather_updates") {
         const created = new Date(n.createdAt).getTime();
         if (now - created > THREE_DAYS_MS) return false;
       }
@@ -355,7 +408,7 @@ const NotificationsScreen = ({ navigation }) => {
     if (!cfg?.actionScreen) return;
     try {
       if (currentNotif?.metadata?.complaintId) {
-        navigation.navigate('ComplaintDetail', {
+        navigation.navigate("ComplaintDetail", {
           complaintId: currentNotif.metadata.complaintId,
         });
         return;
@@ -366,7 +419,7 @@ const NotificationsScreen = ({ navigation }) => {
         navigation.navigate(cfg.actionScreen);
       }
     } catch (err) {
-      console.log('Navigation fallback:', err.message);
+      console.log("Navigation fallback:", err.message);
     }
   };
 
@@ -379,7 +432,9 @@ const NotificationsScreen = ({ navigation }) => {
       {/* Header Bar */}
       <View style={styles.headerRow}>
         <View style={{ flex: 1, minWidth: 160 }}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Notifications</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
+            Notifications
+          </Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Weather advisories, complaint updates & admin broadcasts
           </Text>
@@ -389,7 +444,10 @@ const NotificationsScreen = ({ navigation }) => {
           {unreadCount > 0 && (
             <TouchableOpacity
               onPress={markAllAsRead}
-              style={[styles.headerActionBtn, { backgroundColor: colors.primary + '18' }]}
+              style={[
+                styles.headerActionBtn,
+                { backgroundColor: colors.primary + "18" },
+              ]}
               activeOpacity={0.7}
             >
               <MaterialCommunityIcons
@@ -398,7 +456,9 @@ const NotificationsScreen = ({ navigation }) => {
                 color={colors.primary}
                 style={{ marginRight: 4 }}
               />
-              <Text style={[styles.headerActionText, { color: colors.primary }]}>
+              <Text
+                style={[styles.headerActionText, { color: colors.primary }]}
+              >
                 Mark all read
               </Text>
             </TouchableOpacity>
@@ -410,8 +470,10 @@ const NotificationsScreen = ({ navigation }) => {
               style={[
                 styles.headerActionBtn,
                 {
-                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2',
-                  borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#FEE2E2',
+                  backgroundColor: isDark
+                    ? "rgba(239, 68, 68, 0.15)"
+                    : "#FEF2F2",
+                  borderColor: isDark ? "rgba(239, 68, 68, 0.3)" : "#FEE2E2",
                   borderWidth: 1,
                 },
               ]}
@@ -423,7 +485,7 @@ const NotificationsScreen = ({ navigation }) => {
                 color="#EF4444"
                 style={{ marginRight: 4 }}
               />
-              <Text style={[styles.headerActionText, { color: '#EF4444' }]}>
+              <Text style={[styles.headerActionText, { color: "#EF4444" }]}>
                 Delete all read
               </Text>
             </TouchableOpacity>
@@ -454,28 +516,28 @@ const NotificationsScreen = ({ navigation }) => {
                     backgroundColor: isSelected
                       ? tab.color
                       : isDark
-                      ? 'rgba(255, 255, 255, 0.06)'
-                      : '#FFFFFF',
+                        ? "rgba(255, 255, 255, 0.06)"
+                        : "#FFFFFF",
                     borderColor: isSelected
                       ? tab.color
                       : isDark
-                      ? 'rgba(255, 255, 255, 0.12)'
-                      : colors.border,
+                        ? "rgba(255, 255, 255, 0.12)"
+                        : colors.border,
                   },
                 ]}
               >
                 <MaterialCommunityIcons
                   name={tab.icon}
                   size={16}
-                  color={isSelected ? '#FFFFFF' : tab.color}
+                  color={isSelected ? "#FFFFFF" : tab.color}
                   style={{ marginRight: 6 }}
                 />
                 <Text
                   style={[
                     styles.tabChipText,
                     {
-                      color: isSelected ? '#FFFFFF' : colors.textPrimary,
-                      fontWeight: isSelected ? '800' : '600',
+                      color: isSelected ? "#FFFFFF" : colors.textPrimary,
+                      fontWeight: isSelected ? "800" : "600",
                     },
                   ]}
                 >
@@ -486,12 +548,12 @@ const NotificationsScreen = ({ navigation }) => {
                     styles.tabBadge,
                     {
                       backgroundColor: isSelected
-                        ? 'rgba(255, 255, 255, 0.28)'
+                        ? "rgba(255, 255, 255, 0.28)"
                         : unread > 0
-                        ? tab.color + '22'
-                        : isDark
-                        ? 'rgba(255, 255, 255, 0.12)'
-                        : '#F1F5F9',
+                          ? tab.color + "22"
+                          : isDark
+                            ? "rgba(255, 255, 255, 0.12)"
+                            : "#F1F5F9",
                     },
                   ]}
                 >
@@ -500,11 +562,11 @@ const NotificationsScreen = ({ navigation }) => {
                       styles.tabBadgeText,
                       {
                         color: isSelected
-                          ? '#FFFFFF'
+                          ? "#FFFFFF"
                           : unread > 0
-                          ? tab.color
-                          : colors.textSecondary,
-                        fontWeight: unread > 0 || isSelected ? '800' : '600',
+                            ? tab.color
+                            : colors.textSecondary,
+                        fontWeight: unread > 0 || isSelected ? "800" : "600",
                       },
                     ]}
                   >
@@ -512,7 +574,12 @@ const NotificationsScreen = ({ navigation }) => {
                   </Text>
                 </View>
                 {unread > 0 && !isSelected && (
-                  <View style={[styles.tabUnreadDot, { backgroundColor: tab.color }]} />
+                  <View
+                    style={[
+                      styles.tabUnreadDot,
+                      { backgroundColor: tab.color },
+                    ]}
+                  />
                 )}
               </TouchableOpacity>
             );
@@ -534,12 +601,17 @@ const NotificationsScreen = ({ navigation }) => {
         }
         renderItem={({ item }) => {
           const cat = getNotificationCategory(item);
-          const cfg = (cat === 'complaint_updates')
-            ? (NOTIF_CONFIG.complaint_updates || NOTIF_CONFIG.complaint_update)
-            : (cat === 'weather_updates')
-            ? (NOTIF_CONFIG.weather_updates || NOTIF_CONFIG.weather_alert)
-            : (NOTIF_CONFIG[item.type] || NOTIF_CONFIG[cat] || NOTIF_CONFIG.broadcast);
-          const isCategorySelected = activeTab !== 'all';
+          const cfg =
+            cat === "complaint_updates"
+              ? NOTIF_CONFIG.complaint_updates || NOTIF_CONFIG.complaint_update
+              : cat === "weather_updates"
+                ? NOTIF_CONFIG.weather_updates || NOTIF_CONFIG.weather_alert
+                : NOTIF_CONFIG[item.type] ||
+                  NOTIF_CONFIG[cat] ||
+                  NOTIF_CONFIG.broadcast;
+          const sevConfig = getSeverityConfig(item.severity);
+          const itemRoute = getNotificationRoute(item);
+          const isCategorySelected = activeTab !== "all";
 
           return (
             <TouchableOpacity
@@ -549,15 +621,15 @@ const NotificationsScreen = ({ navigation }) => {
                   backgroundColor: item.isRead
                     ? isDark
                       ? colors.surface
-                      : '#FFFFFF'
+                      : "#FFFFFF"
                     : isDark
-                    ? 'rgba(2, 132, 199, 0.08)'
-                    : '#F0F9FF',
+                      ? "rgba(2, 132, 199, 0.08)"
+                      : "#F0F9FF",
                   borderColor: item.isRead
                     ? colors.border
                     : isDark
-                    ? 'rgba(2, 132, 199, 0.35)'
-                    : '#BAE6FD',
+                      ? "rgba(2, 132, 199, 0.35)"
+                      : "#BAE6FD",
                 },
               ]}
               onPress={() => handleCardPress(item)}
@@ -568,13 +640,17 @@ const NotificationsScreen = ({ navigation }) => {
                 style={[
                   styles.iconCircle,
                   {
-                    backgroundColor: isDark ? cfg.color + '22' : cfg.bg,
-                    borderColor: cfg.color + '40',
+                    backgroundColor: isDark ? cfg.color + "22" : cfg.bg,
+                    borderColor: cfg.color + "40",
                     borderWidth: 1,
                   },
                 ]}
               >
-                <MaterialCommunityIcons name={cfg.icon} size={22} color={cfg.color} />
+                <MaterialCommunityIcons
+                  name={cfg.icon}
+                  size={22}
+                  color={cfg.color}
+                />
               </View>
 
               <View style={styles.notifContent}>
@@ -584,26 +660,60 @@ const NotificationsScreen = ({ navigation }) => {
                     style={[
                       styles.categoryTag,
                       {
-                        backgroundColor: isDark ? cfg.color + '25' : cfg.bg,
-                        borderColor: cfg.color + '55',
+                        backgroundColor: isDark ? cfg.color + "25" : cfg.bg,
+                        borderColor: cfg.color + "55",
                       },
                     ]}
                   >
                     <Text
                       style={[
                         styles.categoryTagText,
-                        { color: isDark ? '#FFFFFF' : cfg.color },
+                        { color: isDark ? "#FFFFFF" : cfg.color },
                       ]}
                     >
                       {cfg.categoryLabel}
                     </Text>
                   </View>
 
+                  {/* Alert Severity Badge */}
+                  {sevConfig ? (
+                    <View
+                      style={[
+                        styles.cardSeverityBadge,
+                        {
+                          backgroundColor: isDark
+                            ? sevConfig.darkBg
+                            : sevConfig.bg,
+                          borderColor: sevConfig.border,
+                        },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name={sevConfig.icon}
+                        size={11}
+                        color={sevConfig.color}
+                        style={{ marginRight: 3 }}
+                      />
+                      <Text
+                        style={[
+                          styles.cardSeverityText,
+                          { color: sevConfig.color },
+                        ]}
+                      >
+                        {sevConfig.label}
+                      </Text>
+                    </View>
+                  ) : null}
+
                   {cfg.subLabel ? (
                     <View
                       style={[
                         styles.subTag,
-                        { backgroundColor: isDark ? 'rgba(217, 119, 6, 0.2)' : '#FEF3C7' },
+                        {
+                          backgroundColor: isDark
+                            ? "rgba(217, 119, 6, 0.2)"
+                            : "#FEF3C7",
+                        },
                       ]}
                     >
                       <Text style={styles.subTagText}>{cfg.subLabel}</Text>
@@ -621,13 +731,54 @@ const NotificationsScreen = ({ navigation }) => {
                     styles.notifTitle,
                     {
                       color: colors.textPrimary,
-                      fontWeight: item.isRead ? '700' : '900',
+                      fontWeight: item.isRead ? "700" : "900",
                     },
                   ]}
                   numberOfLines={2}
                 >
                   {item.title}
                 </Text>
+
+                {/* Route Indicator Chip */}
+                {itemRoute ? (
+                  <View
+                    style={[
+                      styles.cardRouteTag,
+                      {
+                        backgroundColor: isDark
+                          ? "rgba(37, 99, 235, 0.12)"
+                          : "#EFF6FF",
+                        borderColor: isDark
+                          ? "rgba(37, 99, 235, 0.28)"
+                          : "#BFDBFE",
+                      },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="routes"
+                      size={12}
+                      color="#2563EB"
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.cardRouteLabel,
+                        { color: colors.textMuted },
+                      ]}
+                    >
+                      Route:{" "}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.cardRouteValue,
+                        { color: isDark ? "#93C5FD" : "#1D4ED8" },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {itemRoute}
+                    </Text>
+                  </View>
+                ) : null}
 
                 {/* Notification Message */}
                 <Text
@@ -639,7 +790,14 @@ const NotificationsScreen = ({ navigation }) => {
 
                 {/* Bottom Action Prompt with Delete Action */}
                 <View style={styles.viewFullRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flex: 1 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 2,
+                      flex: 1,
+                    }}
+                  >
                     <Text style={[styles.viewFullText, { color: cfg.color }]}>
                       {cat === 'complaint_updates'
                         ? 'Tap to view case details'
@@ -647,7 +805,11 @@ const NotificationsScreen = ({ navigation }) => {
                         ? 'Tap to view weather advisory'
                         : 'Tap to view announcement'}
                     </Text>
-                    <MaterialCommunityIcons name="chevron-right" size={15} color={cfg.color} />
+                    <MaterialCommunityIcons
+                      name="chevron-right"
+                      size={15}
+                      color={cfg.color}
+                    />
                   </View>
 
                   <TouchableOpacity
@@ -658,20 +820,30 @@ const NotificationsScreen = ({ navigation }) => {
                     style={[
                       styles.cardDeleteBtn,
                       {
-                        backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#FEF2F2',
-                        borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#FEE2E2',
+                        backgroundColor: isDark
+                          ? "rgba(239, 68, 68, 0.12)"
+                          : "#FEF2F2",
+                        borderColor: isDark
+                          ? "rgba(239, 68, 68, 0.3)"
+                          : "#FEE2E2",
                       },
                     ]}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     activeOpacity={0.7}
                   >
-                    <MaterialCommunityIcons name="trash-can-outline" size={16} color="#EF4444" />
+                    <MaterialCommunityIcons
+                      name="trash-can-outline"
+                      size={16}
+                      color="#EF4444"
+                    />
                   </TouchableOpacity>
                 </View>
               </View>
 
               {!item.isRead && (
-                <View style={[styles.unreadDot, { backgroundColor: cfg.color }]} />
+                <View
+                  style={[styles.unreadDot, { backgroundColor: cfg.color }]}
+                />
               )}
             </TouchableOpacity>
           );
@@ -679,288 +851,512 @@ const NotificationsScreen = ({ navigation }) => {
       />
 
       {/* Full-Context Announcement Detail Modal */}
-      {Boolean(selectedNotif) ? (() => {
-        const cat = getNotificationCategory(selectedNotif);
-        const cfg = (cat === 'complaint_updates')
-          ? (NOTIF_CONFIG.complaint_updates || NOTIF_CONFIG.complaint_update)
-          : (cat === 'weather_updates')
-          ? (NOTIF_CONFIG.weather_updates || NOTIF_CONFIG.weather_alert)
-          : (NOTIF_CONFIG[selectedNotif.type] || NOTIF_CONFIG[cat] || NOTIF_CONFIG.broadcast);
+      {Boolean(selectedNotif)
+        ? (() => {
+            const cat = getNotificationCategory(selectedNotif);
+            const cfg =
+              cat === "complaint_updates"
+                ? NOTIF_CONFIG.complaint_updates || NOTIF_CONFIG.complaint_update
+                : cat === "weather_updates"
+                  ? NOTIF_CONFIG.weather_updates || NOTIF_CONFIG.weather_alert
+                  : NOTIF_CONFIG[selectedNotif.type] ||
+                    NOTIF_CONFIG[cat] ||
+                    NOTIF_CONFIG.broadcast;
+            const modalSevConfig = getSeverityConfig(selectedNotif.severity);
+            const modalRoute = getNotificationRoute(selectedNotif);
 
-        return (
-          <Modal
-            visible={!!selectedNotif}
-            transparent={true}
-            animationType="fade"
-            onRequestClose={() => setSelectedNotif(null)}
-          >
-            <View style={styles.modalBackdrop}>
-              <SafeAreaView
-                style={{
-                  flex: 1,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  width: '100%',
-                  padding: SPACING.md,
-                }}
+            return (
+              <Modal
+                visible={!!selectedNotif}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setSelectedNotif(null)}
               >
-                <View
-                  style={[
-                    styles.modalContainer,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
-                  ]}
-                >
-                  {/* Modal Header */}
-                  <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 10,
-                        flex: 1,
-                      }}
-                    >
-                      <View
-                        style={[
-                          styles.modalIconBox,
-                          { backgroundColor: isDark ? cfg.color + '25' : cfg.bg },
-                        ]}
-                      >
-                        <MaterialCommunityIcons name={cfg.icon} size={22} color={cfg.color} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.modalBadgeText, { color: cfg.color }]}>
-                          {cfg.categoryLabel}
-                        </Text>
-                        <Text style={[styles.modalTimeText, { color: colors.textMuted }]}>
-                          {formatDateTime(selectedNotif.createdAt)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <TouchableOpacity
-                        onPress={() => handleDeleteNotification(selectedNotif)}
-                        style={[
-                          styles.headerTrashBtn,
-                          {
-                            backgroundColor: isDark
-                              ? 'rgba(239, 68, 68, 0.15)'
-                              : '#FEE2E2',
-                          },
-                        ]}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        activeOpacity={0.7}
-                      >
-                        <MaterialCommunityIcons name="trash-can-outline" size={18} color="#EF4444" />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={() => setSelectedNotif(null)}
-                        style={[
-                          styles.closeBtn,
-                          {
-                            backgroundColor: isDark
-                              ? 'rgba(255, 255, 255, 0.08)'
-                              : colors.background,
-                          },
-                        ]}
-                      >
-                        <MaterialCommunityIcons name="close" size={20} color={colors.textPrimary} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Modal Body / Full Message */}
-                  <ScrollView
-                    style={styles.modalScroll}
-                    contentContainerStyle={{ padding: SPACING.lg }}
-                    showsVerticalScrollIndicator={true}
+                <View style={styles.modalBackdrop}>
+                  <SafeAreaView
+                    style={{
+                      flex: 1,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      width: "100%",
+                      padding: SPACING.md,
+                    }}
                   >
-                    <Text style={[styles.modalFullTitle, { color: colors.textPrimary }]}>
-                      {selectedNotif.title}
-                    </Text>
-
-                    {/* Reference tag if complaint update */}
-                    {Boolean(
-                      selectedNotif.metadata?.lguCaseNumber ||
-                        selectedNotif.metadata?.ltfrbCaseNumber
-                    ) ? (
-                      <View
-                        style={[
-                          styles.refBox,
-                          {
-                            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#EDE9FE',
-                            borderColor: isDark ? '#7C3AED' : '#C4B5FD',
-                          },
-                        ]}
-                      >
-                        <MaterialCommunityIcons name="shield-check" size={18} color="#7C3AED" />
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={{
-                              fontSize: 10,
-                              fontWeight: '800',
-                              color: isDark ? '#DDD6FE' : '#6D28D9',
-                              letterSpacing: 0.5,
-                            }}
-                          >
-                            OFFICIAL CASE TRACKING NUMBER
-                          </Text>
-                          <Text
-                            style={{
-                              fontSize: 13,
-                              fontWeight: '800',
-                              color: isDark ? '#FFFFFF' : '#5B21B6',
-                              fontFamily: 'monospace',
-                            }}
-                          >
-                            {selectedNotif.metadata.lguCaseNumber ||
-                              selectedNotif.metadata.ltfrbCaseNumber}
-                          </Text>
-                        </View>
-                      </View>
-                    ) : null}
-
-                    {/* Unabridged Announcement Content Box */}
                     <View
                       style={[
-                        styles.messageContainer,
+                        styles.modalContainer,
                         {
-                          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#F8FAFC',
+                          backgroundColor: colors.surface,
                           borderColor: colors.border,
                         },
                       ]}
                     >
-                      <Text style={[styles.modalFullMessage, { color: colors.textPrimary }]}>
-                        {selectedNotif.message}
-                      </Text>
-                    </View>
-
-                    {/* Official Evidence Photo attached by LGU */}
-                    {Boolean(
-                      selectedNotif.metadata?.photoUrl ||
-                        selectedNotif.photoUrl ||
-                        selectedNotif.metadata?.lguEvidencePhoto ||
-                        selectedNotif.metadata?.evidencePhoto
-                    ) ? (
-                      <View style={{ marginBottom: 16 }}>
+                      {/* Modal Header */}
+                      <View
+                        style={[
+                          styles.modalHeader,
+                          { borderBottomColor: colors.border },
+                        ]}
+                      >
                         <View
                           style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            marginBottom: 8,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 10,
+                            flex: 1,
                           }}
                         >
-                          <MaterialCommunityIcons name="image-check" size={16} color="#10B981" />
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              fontWeight: '700',
-                              color: '#10B981',
-                              letterSpacing: 0.5,
-                            }}
+                          <View
+                            style={[
+                              styles.modalIconBox,
+                              {
+                                backgroundColor: isDark
+                                  ? cfg.color + "25"
+                                  : cfg.bg,
+                              },
+                            ]}
                           >
-                            OFFICIAL VERIFIED EVIDENCE PHOTO
+                            <MaterialCommunityIcons
+                              name={cfg.icon}
+                              size={22}
+                              color={cfg.color}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.modalBadgeText,
+                                { color: cfg.color },
+                              ]}
+                            >
+                              {cfg.categoryLabel}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.modalTimeText,
+                                { color: colors.textMuted },
+                              ]}
+                            >
+                              {formatDateTime(selectedNotif.createdAt)}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <TouchableOpacity
+                            onPress={() =>
+                              handleDeleteNotification(selectedNotif)
+                            }
+                            style={[
+                              styles.headerTrashBtn,
+                              {
+                                backgroundColor: isDark
+                                  ? "rgba(239, 68, 68, 0.15)"
+                                  : "#FEE2E2",
+                              },
+                            ]}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            activeOpacity={0.7}
+                          >
+                            <MaterialCommunityIcons
+                              name="trash-can-outline"
+                              size={18}
+                              color="#EF4444"
+                            />
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() => setSelectedNotif(null)}
+                            style={[
+                              styles.closeBtn,
+                              {
+                                backgroundColor: isDark
+                                  ? "rgba(255, 255, 255, 0.08)"
+                                  : colors.background,
+                              },
+                            ]}
+                          >
+                            <MaterialCommunityIcons
+                              name="close"
+                              size={20}
+                              color={colors.textPrimary}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* Modal Body / Full Message */}
+                      <ScrollView
+                        style={styles.modalScroll}
+                        contentContainerStyle={{ padding: SPACING.lg }}
+                        showsVerticalScrollIndicator={true}
+                      >
+                        <Text
+                          style={[
+                            styles.modalFullTitle,
+                            { color: colors.textPrimary },
+                          ]}
+                        >
+                          {selectedNotif.title}
+                        </Text>
+
+                        {/* Meta Row: Severity & Route Badges */}
+                        {modalSevConfig || modalRoute ? (
+                          <View style={styles.modalMetaRow}>
+                            {modalSevConfig ? (
+                              <View
+                                style={[
+                                  styles.modalSeverityBadge,
+                                  {
+                                    backgroundColor: isDark
+                                      ? modalSevConfig.darkBg
+                                      : modalSevConfig.bg,
+                                    borderColor: modalSevConfig.border,
+                                  },
+                                ]}
+                              >
+                                <MaterialCommunityIcons
+                                  name={modalSevConfig.icon}
+                                  size={13}
+                                  color={modalSevConfig.color}
+                                  style={{ marginRight: 5 }}
+                                />
+                                <Text
+                                  style={[
+                                    styles.modalSeverityText,
+                                    { color: modalSevConfig.color },
+                                  ]}
+                                >
+                                  {modalSevConfig.label} SEVERITY
+                                </Text>
+                              </View>
+                            ) : null}
+
+                            {modalRoute ? (
+                              <View
+                                style={[
+                                  styles.modalRouteTag,
+                                  {
+                                    backgroundColor: isDark
+                                      ? "rgba(37, 99, 235, 0.15)"
+                                      : "#EFF6FF",
+                                    borderColor: isDark
+                                      ? "rgba(37, 99, 235, 0.3)"
+                                      : "#BFDBFE",
+                                  },
+                                ]}
+                              >
+                                <MaterialCommunityIcons
+                                  name="routes"
+                                  size={13}
+                                  color="#2563EB"
+                                  style={{ marginRight: 5 }}
+                                />
+                                <Text
+                                  style={[
+                                    styles.modalRouteTagLabel,
+                                    { color: colors.textMuted },
+                                  ]}
+                                >
+                                  Route:{" "}
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.modalRouteTagValue,
+                                    { color: isDark ? "#93C5FD" : "#1D4ED8" },
+                                  ]}
+                                >
+                                  {modalRoute}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
+
+                        {/* Designated Transit Route Banner Card */}
+                        {modalRoute ? (
+                          <View
+                            style={[
+                              styles.modalRouteBox,
+                              {
+                                backgroundColor: isDark
+                                  ? "rgba(37, 99, 235, 0.1)"
+                                  : "#F0F9FF",
+                                borderColor: isDark
+                                  ? "rgba(37, 99, 235, 0.25)"
+                                  : "#BAE6FD",
+                              },
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.modalRouteIconWrapper,
+                                {
+                                  backgroundColor: isDark
+                                    ? "rgba(37, 99, 235, 0.25)"
+                                    : "#DBEAFE",
+                                },
+                              ]}
+                            >
+                              <MaterialCommunityIcons
+                                name="routes"
+                                size={20}
+                                color="#0284C7"
+                              />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={[
+                                  styles.modalRouteHeader,
+                                  { color: isDark ? "#7DD3FC" : "#0369A1" },
+                                ]}
+                              >
+                                AFFECTED TRANSIT ROUTE
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.modalRouteTitle,
+                                  { color: colors.textPrimary },
+                                ]}
+                              >
+                                {modalRoute}
+                              </Text>
+                            </View>
+                          </View>
+                        ) : null}
+
+                        {/* Reference tag if complaint update */}
+                        {Boolean(
+                          selectedNotif.metadata?.lguCaseNumber ||
+                          selectedNotif.metadata?.ltfrbCaseNumber,
+                        ) ? (
+                          <View
+                            style={[
+                              styles.refBox,
+                              {
+                                backgroundColor: isDark
+                                  ? "rgba(124, 58, 237, 0.15)"
+                                  : "#EDE9FE",
+                                borderColor: isDark ? "#7C3AED" : "#C4B5FD",
+                              },
+                            ]}
+                          >
+                            <MaterialCommunityIcons
+                              name="shield-check"
+                              size={18}
+                              color="#7C3AED"
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: "800",
+                                  color: isDark ? "#DDD6FE" : "#6D28D9",
+                                  letterSpacing: 0.5,
+                                }}
+                              >
+                                OFFICIAL CASE TRACKING NUMBER
+                              </Text>
+                              <Text
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: "800",
+                                  color: isDark ? "#FFFFFF" : "#5B21B6",
+                                  fontFamily: "monospace",
+                                }}
+                              >
+                                {selectedNotif.metadata.lguCaseNumber ||
+                                  selectedNotif.metadata.ltfrbCaseNumber}
+                              </Text>
+                            </View>
+                          </View>
+                        ) : null}
+
+                        {/* Unabridged Announcement Content Box */}
+                        <View
+                          style={[
+                            styles.messageContainer,
+                            {
+                              backgroundColor: isDark
+                                ? "rgba(255, 255, 255, 0.04)"
+                                : "#F8FAFC",
+                              borderColor: colors.border,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.modalFullMessage,
+                              { color: colors.textPrimary },
+                            ]}
+                          >
+                            {selectedNotif.message}
                           </Text>
                         </View>
-                        <Image
-                          source={{
-                            uri: getMediaUrl(
-                              selectedNotif.metadata?.photoUrl ||
-                                selectedNotif.photoUrl ||
-                                selectedNotif.metadata?.lguEvidencePhoto ||
-                                selectedNotif.metadata?.evidencePhoto
-                            ),
-                          }}
-                          style={{
-                            width: '100%',
-                            height: 200,
-                            borderRadius: RADIUS.md,
-                            backgroundColor: colors.border,
-                          }}
-                          resizeMode="cover"
-                        />
-                      </View>
-                    ) : null}
 
-                    {/* Transit Advisory Footer Notice */}
-                    <View style={styles.footerNoticeRow}>
-                      <MaterialCommunityIcons
-                        name="information-outline"
-                        size={15}
-                        color={colors.textMuted}
-                      />
-                      <Text style={[styles.footerNoticeText, { color: colors.textMuted }]}>
-                        Official SmartSakay notification verified by {selectedNotif?.municipality || activeMuni} Transport Authority.
-                      </Text>
-                    </View>
-                  </ScrollView>
+                        {/* Official Evidence Photo attached by LGU */}
+                        {Boolean(
+                          selectedNotif.metadata?.photoUrl ||
+                          selectedNotif.photoUrl ||
+                          selectedNotif.metadata?.lguEvidencePhoto ||
+                          selectedNotif.metadata?.evidencePhoto,
+                        ) ? (
+                          <View style={{ marginBottom: 16 }}>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 6,
+                                marginBottom: 8,
+                              }}
+                            >
+                              <MaterialCommunityIcons
+                                name="image-check"
+                                size={16}
+                                color="#10B981"
+                              />
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: "700",
+                                  color: "#10B981",
+                                  letterSpacing: 0.5,
+                                }}
+                              >
+                                OFFICIAL VERIFIED EVIDENCE PHOTO
+                              </Text>
+                            </View>
+                            <Image
+                              source={{
+                                uri: getMediaUrl(
+                                  selectedNotif.metadata?.photoUrl ||
+                                    selectedNotif.photoUrl ||
+                                    selectedNotif.metadata?.lguEvidencePhoto ||
+                                    selectedNotif.metadata?.evidencePhoto,
+                                ),
+                              }}
+                              style={{
+                                width: "100%",
+                                height: 200,
+                                borderRadius: RADIUS.md,
+                                backgroundColor: colors.border,
+                              }}
+                              resizeMode="cover"
+                            />
+                          </View>
+                        ) : null}
 
-                  {/* Modal Action Footer */}
-                  <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
-                    <TouchableOpacity
-                      style={[
-                        styles.deleteActionBtn,
-                        {
-                          backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#FEF2F2',
-                          borderColor: isDark ? 'rgba(239, 68, 68, 0.35)' : '#FECACA',
-                        },
-                      ]}
-                      onPress={() => handleDeleteNotification(selectedNotif)}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialCommunityIcons
-                        name="trash-can-outline"
-                        size={17}
-                        color="#EF4444"
-                        style={{ marginRight: 6 }}
-                      />
-                      <Text style={styles.deleteActionText}>Delete</Text>
-                    </TouchableOpacity>
+                        {/* Transit Advisory Footer Notice */}
+                        <View style={styles.footerNoticeRow}>
+                          <MaterialCommunityIcons
+                            name="information-outline"
+                            size={15}
+                            color={colors.textMuted}
+                          />
+                          <Text
+                            style={[
+                              styles.footerNoticeText,
+                              { color: colors.textMuted },
+                            ]}
+                          >
+                            Official SmartSakay notification verified by {selectedNotif?.municipality || activeMuni} Transport Authority.
+                          </Text>
+                        </View>
+                      </ScrollView>
 
-                    {cfg.actionScreen ? (
-                      <TouchableOpacity
-                        style={[styles.primaryActionBtn, { backgroundColor: cfg.color }]}
-                        onPress={() => handleActionNavigation(cfg)}
+                      {/* Modal Action Footer */}
+                      <View
+                        style={[
+                          styles.modalFooter,
+                          { borderTopColor: colors.border },
+                        ]}
                       >
-                        <MaterialCommunityIcons
-                          name="open-in-app"
-                          size={18}
-                          color="#FFFFFF"
-                          style={{ marginRight: 6 }}
-                        />
-                        <Text style={styles.primaryActionText}>{cfg.actionText}</Text>
-                      </TouchableOpacity>
-                    ) : null}
+                        <TouchableOpacity
+                          style={[
+                            styles.deleteActionBtn,
+                            {
+                              backgroundColor: isDark
+                                ? "rgba(239, 68, 68, 0.12)"
+                                : "#FEF2F2",
+                              borderColor: isDark
+                                ? "rgba(239, 68, 68, 0.35)"
+                                : "#FECACA",
+                            },
+                          ]}
+                          onPress={() =>
+                            handleDeleteNotification(selectedNotif)
+                          }
+                          activeOpacity={0.7}
+                        >
+                          <MaterialCommunityIcons
+                            name="trash-can-outline"
+                            size={17}
+                            color="#EF4444"
+                            style={{ marginRight: 6 }}
+                          />
+                          <Text style={styles.deleteActionText}>Delete</Text>
+                        </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={[
-                        styles.secondaryCloseBtn,
-                        {
-                          backgroundColor: colors.background,
-                          borderColor: colors.border,
-                        },
-                      ]}
-                      onPress={() => setSelectedNotif(null)}
-                    >
-                      <Text style={[styles.secondaryCloseText, { color: colors.textPrimary }]}>
-                        Close
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                        {cfg.actionScreen ? (
+                          <TouchableOpacity
+                            style={[
+                              styles.primaryActionBtn,
+                              { backgroundColor: cfg.color },
+                            ]}
+                            onPress={() => handleActionNavigation(cfg)}
+                          >
+                            <MaterialCommunityIcons
+                              name="open-in-app"
+                              size={18}
+                              color="#FFFFFF"
+                              style={{ marginRight: 6 }}
+                            />
+                            <Text style={styles.primaryActionText}>
+                              {cfg.actionText}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
+
+                        <TouchableOpacity
+                          style={[
+                            styles.secondaryCloseBtn,
+                            {
+                              backgroundColor: colors.background,
+                              borderColor: colors.border,
+                            },
+                          ]}
+                          onPress={() => setSelectedNotif(null)}
+                        >
+                          <Text
+                            style={[
+                              styles.secondaryCloseText,
+                              { color: colors.textPrimary },
+                            ]}
+                          >
+                            Close
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </SafeAreaView>
                 </View>
-              </SafeAreaView>
-            </View>
-          </Modal>
-        );
-      })() : null}
+              </Modal>
+            );
+          })()
+        : null}
 
       {/* Universal In-App Confirmation Modal */}
       <ConfirmDialogModal
         visible={confirmModalConfig.visible}
-        onClose={() => setConfirmModalConfig((prev) => ({ ...prev, visible: false }))}
+        onClose={() =>
+          setConfirmModalConfig((prev) => ({ ...prev, visible: false }))
+        }
         onConfirm={confirmModalConfig.onConfirm}
         title={confirmModalConfig.title}
         message={confirmModalConfig.message}
@@ -979,23 +1375,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
     paddingBottom: SPACING.xs,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     gap: 12,
   },
-  title: { fontSize: FONTS.sizes.xl, fontWeight: '800' },
+  title: { fontSize: FONTS.sizes.xl, fontWeight: "800" },
   subtitle: { fontSize: FONTS.sizes.xs, marginTop: 2 },
   headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
   },
   headerActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: RADIUS.full,
@@ -1003,7 +1399,7 @@ const styles = StyleSheet.create({
   },
   headerActionText: {
     fontSize: FONTS.sizes.xs,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   // Category Tabs Filter Bar
@@ -1016,8 +1412,8 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   tabChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: RADIUS.full,
@@ -1033,8 +1429,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: RADIUS.full,
     minWidth: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   tabBadgeText: {
     fontSize: 10,
@@ -1053,8 +1449,8 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.xs,
   },
   notifCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     padding: SPACING.md,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
@@ -1065,17 +1461,17 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginTop: 2,
   },
   notifContent: { flex: 1 },
   cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 4,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     gap: 4,
   },
   categoryTag: {
@@ -1086,8 +1482,8 @@ const styles = StyleSheet.create({
   },
   categoryTagText: {
     fontSize: 9.5,
-    fontWeight: '800',
-    textTransform: 'uppercase',
+    fontWeight: "800",
+    textTransform: "uppercase",
     letterSpacing: 0.3,
   },
   subTag: {
@@ -1097,13 +1493,13 @@ const styles = StyleSheet.create({
   },
   subTagText: {
     fontSize: 9,
-    fontWeight: '700',
-    color: '#B45309',
+    fontWeight: "700",
+    color: "#B45309",
   },
   notifTime: {
     fontSize: FONTS.sizes.xs,
-    fontWeight: '500',
-    marginLeft: 'auto',
+    fontWeight: "500",
+    marginLeft: "auto",
   },
   notifTitle: {
     fontSize: FONTS.sizes.md,
@@ -1115,14 +1511,14 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   viewFullRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 2,
     marginTop: 6,
   },
   viewFullText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   unreadDot: {
     width: 8,
@@ -1134,27 +1530,27 @@ const styles = StyleSheet.create({
   // Modal Styles
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContainer: {
-    width: '100%',
+    width: "100%",
     maxWidth: 500,
-    maxHeight: '85%',
+    maxHeight: "85%",
     borderRadius: RADIUS.xl,
     borderWidth: 1,
-    overflow: 'hidden',
-    shadowColor: '#000000',
+    overflow: "hidden",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.35,
     shadowRadius: 20,
     elevation: 10,
   },
   modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
@@ -1163,13 +1559,13 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalBadgeText: {
     fontSize: FONTS.sizes.xs,
-    fontWeight: '800',
-    textTransform: 'uppercase',
+    fontWeight: "800",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   modalTimeText: {
@@ -1180,21 +1576,21 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalScroll: {
     flexGrow: 0,
   },
   modalFullTitle: {
     fontSize: FONTS.sizes.lg,
-    fontWeight: '800',
+    fontWeight: "800",
     lineHeight: 24,
     marginBottom: SPACING.md,
   },
   refBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     padding: 12,
     borderRadius: RADIUS.md,
@@ -1210,11 +1606,11 @@ const styles = StyleSheet.create({
   modalFullMessage: {
     fontSize: 15,
     lineHeight: 24,
-    fontWeight: '400',
+    fontWeight: "400",
   },
   footerNoticeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingTop: 4,
   },
@@ -1224,18 +1620,18 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
   modalFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     gap: 10,
     padding: SPACING.md,
     paddingHorizontal: SPACING.lg,
     borderTopWidth: 1,
   },
   primaryActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
     minHeight: 48,
@@ -1243,8 +1639,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   primaryActionText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
     fontSize: FONTS.sizes.sm,
   },
   secondaryCloseBtn: {
@@ -1253,31 +1649,31 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   secondaryCloseText: {
-    fontWeight: '600',
+    fontWeight: "600",
     fontSize: FONTS.sizes.sm,
   },
   cardDeleteBtn: {
     padding: 6,
     borderRadius: RADIUS.sm,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTrashBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   deleteActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 14,
     paddingVertical: 12,
     minHeight: 48,
@@ -1285,9 +1681,105 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   deleteActionText: {
-    color: '#EF4444',
-    fontWeight: '700',
+    color: "#EF4444",
+    fontWeight: "700",
     fontSize: FONTS.sizes.sm,
+  },
+  cardSeverityBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  cardSeverityText: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+  cardRouteTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    alignSelf: "flex-start",
+    marginBottom: 5,
+    marginTop: 2,
+    maxWidth: "100%",
+  },
+  cardRouteLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  cardRouteValue: {
+    fontSize: 11,
+    fontWeight: "800",
+    flexShrink: 1,
+  },
+  modalMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: SPACING.md,
+  },
+  modalSeverityBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  modalSeverityText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
+  modalRouteTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  modalRouteTagLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  modalRouteTagValue: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  modalRouteBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    marginBottom: SPACING.md,
+  },
+  modalRouteIconWrapper: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalRouteHeader: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  modalRouteTitle: {
+    fontSize: 14,
+    fontWeight: "800",
   },
 });
 

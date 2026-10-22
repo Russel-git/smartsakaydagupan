@@ -19,7 +19,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 
-import { notificationsAPI } from "../api/services";
+import { notificationsAPI, routesAPI } from "../api/services";
 import { useToast } from "../contexts/ToastContext";
 import { useTheme } from "../contexts/theme/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -39,6 +39,7 @@ const NotificationsPage = () => {
   const [evidencePhotoUrl, setEvidencePhotoUrl] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [previewModalImage, setPreviewModalImage] = useState(null);
+  const [availableRoutes, setAvailableRoutes] = useState([]);
 
   const [sending, setSending] = useState(false);
   const [alertMessage, setAlertMessage] = useState(null);
@@ -57,6 +58,21 @@ const NotificationsPage = () => {
     reason: "",
     loading: false,
   });
+
+  const fetchRoutes = async () => {
+    try {
+      const { data } = await routesAPI.getAllRoutes();
+      const list = data?.data || data || [];
+      if (Array.isArray(list)) {
+        const sorted = [...list].sort((a, b) =>
+          (a.name || "").localeCompare(b.name || ""),
+        );
+        setAvailableRoutes(sorted);
+      }
+    } catch (err) {
+      console.error("Failed to load routes for dropdown:", err);
+    }
+  };
 
   // ============================================================
   // FETCH PENDING ROAD ALERTS (FOR LGU & ADMIN)
@@ -93,6 +109,7 @@ const NotificationsPage = () => {
 
   useEffect(() => {
     fetchRecent();
+    fetchRoutes();
     if (isLgu || isAdmin) {
       fetchPendingAlerts();
     }
@@ -111,8 +128,8 @@ const NotificationsPage = () => {
         title,
         message: messageText,
         severity,
-        locationArea,
         municipality: user?.municipality || "Dagupan",
+        route: locationArea,
       });
 
       showSuccess(
@@ -151,12 +168,22 @@ const NotificationsPage = () => {
       const formData = new FormData();
       formData.append("photo", file);
       const res = await notificationsAPI.uploadEvidence(formData);
-      const photoUrl = res.data?.data?.url || res.data?.data?.photoUrl || res.data?.url || res.data?.photoUrl;
+      const photoUrl =
+        res.data?.data?.url ||
+        res.data?.data?.photoUrl ||
+        res.data?.url ||
+        res.data?.photoUrl;
       setEvidencePhotoUrl(photoUrl);
-      showSuccess("Evidence Attached", "Photo uploaded successfully for broadcast credibility.");
+      showSuccess(
+        "Evidence Attached",
+        "Photo uploaded successfully for broadcast credibility.",
+      );
     } catch (err) {
       console.error("Failed to upload evidence photo:", err);
-      showError("Upload Failed", err.response?.data?.message || "Could not upload evidence photo.");
+      showError(
+        "Upload Failed",
+        err.response?.data?.message || "Could not upload evidence photo.",
+      );
     } finally {
       setUploadingPhoto(false);
     }
@@ -182,10 +209,16 @@ const NotificationsPage = () => {
         category: finalCategory,
         severity,
         locationArea,
+        route: locationArea,
         municipality: isLgu ? (user?.municipality || "Dagupan") : targetMunicipality,
         photoUrl: evidencePhotoUrl || null,
         evidencePhoto: evidencePhotoUrl || null,
-        metadata: evidencePhotoUrl ? { photoUrl: evidencePhotoUrl, evidencePhoto: evidencePhotoUrl } : {},
+        metadata: {
+          ...(evidencePhotoUrl
+            ? { photoUrl: evidencePhotoUrl, evidencePhoto: evidencePhotoUrl }
+            : {}),
+          route: locationArea,
+        },
       });
 
       showSuccess(
@@ -221,14 +254,14 @@ const NotificationsPage = () => {
       await notificationsAPI.approveAlert(alertItem._id);
       showSuccess(
         "Alert Approved & Broadcasted",
-        `Road alert "${alertItem.title}" has been broadcast to all commuters.`
+        `Road alert "${alertItem.title}" has been broadcast to all commuters.`,
       );
       fetchPendingAlerts();
       fetchRecent();
     } catch (err) {
       showError(
         "Approval Failed",
-        err.response?.data?.message || "Could not approve alert."
+        err.response?.data?.message || "Could not approve alert.",
       );
     }
   };
@@ -248,14 +281,13 @@ const NotificationsPage = () => {
 
     setRejectModalConfig((prev) => ({ ...prev, loading: true }));
     try {
-      await notificationsAPI.rejectAlert(
-        rejectModalConfig.alert._id,
-        { reason: rejectModalConfig.reason }
-      );
+      await notificationsAPI.rejectAlert(rejectModalConfig.alert._id, {
+        reason: rejectModalConfig.reason,
+      });
 
       showSuccess(
         "Alert Rejected",
-        `Road alert "${rejectModalConfig.alert.title}" was rejected.`
+        `Road alert "${rejectModalConfig.alert.title}" was rejected.`,
       );
 
       setRejectModalConfig({
@@ -269,7 +301,7 @@ const NotificationsPage = () => {
     } catch (err) {
       showError(
         "Rejection Failed",
-        err.response?.data?.message || "Could not reject alert."
+        err.response?.data?.message || "Could not reject alert.",
       );
       setRejectModalConfig((prev) => ({ ...prev, loading: false }));
     }
@@ -281,21 +313,21 @@ const NotificationsPage = () => {
   const posoTemplates = [
     {
       title: "Street Flooding / High Tide Road Impasse",
-      location: "Herrero-Perez & AB Fernandez East",
+      location: "Downtown",
       severity: "warning",
       message:
         "High tide and localized floodwaters reached 6-10 inches along Herrero-Perez. Light vehicles and tricycles advised to avoid corridor or use Mayombo bypass.",
     },
     {
       title: "Severe Traffic Congestion / Vehicle Breakdown",
-      location: "Perez Blvd Corner Rizal Street",
+      location: "CSI Lucao",
       severity: "critical",
       message:
         "Stalled cargo delivery vehicle causing severe choke point along Perez Blvd westbound. POSO enforcers on site directing single-lane alternate flow.",
     },
     {
       title: "Temporary Transit Loop Rerouting Advisory",
-      location: "Downtown Dagupan - Galvan Street",
+      location: "Downtown",
       severity: "advisory",
       message:
         "Special civil event in Galvan St. PUJs bound for Bonuan temporarily rerouted via Burgos St and Perez Blvd until 6:00 PM today.",
@@ -412,8 +444,8 @@ const NotificationsPage = () => {
             {isPoso
               ? "POSO Road Broadcaster Desk"
               : isLgu
-              ? "City Broadcast & Road Alert Approval Desk"
-              : "Municipal Broadcaster & Advisories"}
+                ? "City Broadcast & Road Alert Approval Desk"
+                : "Municipal Broadcaster & Advisories"}
           </span>
 
           <span
@@ -422,13 +454,9 @@ const NotificationsPage = () => {
               backgroundColor: isPoso
                 ? "rgba(217, 119, 6, 0.15)"
                 : isLgu
-                ? "rgba(16, 185, 129, 0.15)"
-                : colors.surfaceElevated,
-              color: isPoso
-                ? "#D97706"
-                : isLgu
-                ? "#059669"
-                : colors.primary,
+                  ? "rgba(16, 185, 129, 0.15)"
+                  : colors.surfaceElevated,
+              color: isPoso ? "#D97706" : isLgu ? "#059669" : colors.primary,
               border: `1px solid ${colors.border}`,
               fontSize: "11px",
             }}
@@ -436,8 +464,8 @@ const NotificationsPage = () => {
             {isPoso
               ? "On-Road Traffic Alert Submissions"
               : isLgu
-              ? "City Transport Authority"
-              : "System Oversight"}
+                ? "City Transport Authority"
+                : "System Oversight"}
           </span>
         </h1>
 
@@ -451,8 +479,8 @@ const NotificationsPage = () => {
           {isPoso
             ? "Since POSO officers are continuously patrolling the roads, draft real-time traffic, flood, and reroute alerts. The Dagupan City LGU will verify and push them directly to commuter notifications."
             : isLgu
-            ? "Review and approve on-road traffic alerts submitted by POSO officers before broadcasting to all commuters, or dispatch official city transit announcements directly."
-            : "Monitor and dispatch categorized transit advisories and commuter announcements across Dagupan City."}
+              ? "Review and approve on-road traffic alerts submitted by POSO officers before broadcasting to all commuters, or dispatch official city transit announcements directly."
+              : "Monitor and dispatch categorized transit advisories and commuter announcements across Dagupan City."}
         </p>
       </div>
 
@@ -523,7 +551,8 @@ const NotificationsPage = () => {
                   Pending POSO Road Alerts (Approval Desk)
                 </h3>
                 <span style={{ fontSize: "12px", color: colors.textMuted }}>
-                  On-road incident alerts submitted by field officers awaiting LGU verification
+                  On-road incident alerts submitted by field officers awaiting
+                  LGU verification
                 </span>
               </div>
             </div>
@@ -550,7 +579,13 @@ const NotificationsPage = () => {
           </div>
 
           {pendingLoading ? (
-            <div style={{ textAlign: "center", padding: "24px 0", color: colors.textMuted }}>
+            <div
+              style={{
+                textAlign: "center",
+                padding: "24px 0",
+                color: colors.textMuted,
+              }}
+            >
               Checking for pending POSO alerts...
             </div>
           ) : pendingRoadAlerts.length === 0 ? (
@@ -570,10 +605,13 @@ const NotificationsPage = () => {
                 color="#059669"
                 style={{ margin: "0 auto 8px auto", display: "block" }}
               />
-              All road alerts have been reviewed. No pending POSO advisories awaiting verification.
+              All road alerts have been reviewed. No pending POSO advisories
+              awaiting verification.
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+            >
               {pendingRoadAlerts.map((alert) => (
                 <div
                   key={alert._id}
@@ -633,7 +671,7 @@ const NotificationsPage = () => {
                         color: colors.textMuted,
                       }}
                     >
-                      {alert.locationArea && (
+                      {(alert.route || alert.locationArea) && (
                         <span
                           style={{
                             display: "inline-flex",
@@ -644,11 +682,17 @@ const NotificationsPage = () => {
                           }}
                         >
                           <MapPin size={13} />
-                          {alert.locationArea}
+                          Route: {alert.route || alert.locationArea}
                         </span>
                       )}
 
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
                         <Car size={13} />
                         Officer:{" "}
                         <strong>
@@ -657,7 +701,13 @@ const NotificationsPage = () => {
                         </strong>
                       </span>
 
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
                         <Clock size={13} />
                         {new Date(alert.createdAt).toLocaleString()}
                       </span>
@@ -665,7 +715,13 @@ const NotificationsPage = () => {
                   </div>
 
                   {/* ACTION BUTTONS */}
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "center",
+                    }}
+                  >
                     <button
                       onClick={() => handleApproveAlert(alert)}
                       className="btn"
@@ -814,7 +870,6 @@ const NotificationsPage = () => {
                 <span>Drafting for LGU {user?.municipality || "Dagupan"} Approval Desk</span>
               </div>
             )}
-
             {/* SEVERITY & LOCATION FIELDS */}
             <div
               style={{
@@ -833,20 +888,34 @@ const NotificationsPage = () => {
                   style={{ fontWeight: "600" }}
                 >
                   <option value="advisory">🔵 Advisory (Normal / Info)</option>
-                  <option value="warning">🟠 Warning (Traffic / Minor Flooding)</option>
-                  <option value="critical">🔴 Critical (Impassable / Emergency)</option>
+                  <option value="warning">
+                    🟠 Warning (Traffic / Minor Flooding)
+                  </option>
+                  <option value="critical">
+                    🔴 Critical (Impassable / Emergency)
+                  </option>
                 </select>
               </div>
 
               <div className="form-group">
-                <label className="form-label">Road Corridor / Location</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Perez Blvd / Herrero-Perez"
-                  className="form-input"
+                <label className="form-label">Route</label>
+                <select
+                  className="form-select"
                   value={locationArea}
                   onChange={(e) => setLocationArea(e.target.value)}
-                />
+                  style={{ fontWeight: "600" }}
+                >
+                  <option value="">-- Select Route --</option>
+                  {availableRoutes.map((rt) => (
+                    <option key={rt._id || rt.name} value={rt.name}>
+                      {rt.name}
+                    </option>
+                  ))}
+                  {locationArea &&
+                    !availableRoutes.some((rt) => rt.name === locationArea) && (
+                      <option value={locationArea}>{locationArea}</option>
+                    )}
+                </select>
               </div>
             </div>
 
@@ -868,9 +937,13 @@ const NotificationsPage = () => {
                     onChange={(e) => setCategory(e.target.value)}
                     style={{ fontWeight: "600" }}
                   >
-                    <option value="broadcast_by_admin">📢 Broadcast by LGU</option>
+                    <option value="broadcast_by_admin">
+                      📢 Broadcast by LGU
+                    </option>
                     <option value="weather_updates">🌦️ Weather Updates</option>
-                    <option value="complaint_updates">📋 Complaint Updates</option>
+                    <option value="complaint_updates">
+                      📋 Complaint Updates
+                    </option>
                   </select>
                 </div>
 
@@ -902,7 +975,9 @@ const NotificationsPage = () => {
 
             {/* MESSAGE BODY */}
             <div className="form-group" style={{ marginBottom: "14px" }}>
-              <label className="form-label">Advisory Details & Instructions *</label>
+              <label className="form-label">
+                Advisory Details & Instructions *
+              </label>
               <textarea
                 rows={4}
                 required
@@ -941,10 +1016,20 @@ const NotificationsPage = () => {
                 }}
               >
                 <Camera size={15} color={colors.primary} />
-                <span>Evidence Photo / Advisory Document (Optional — Increases Public Credibility)</span>
+                <span>
+                  Evidence Photo / Advisory Document (Optional — Increases
+                  Public Credibility)
+                </span>
               </label>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
                 <label
                   style={{
                     display: "inline-flex",
@@ -962,7 +1047,11 @@ const NotificationsPage = () => {
                   }}
                 >
                   <Upload size={14} />
-                  <span>{uploadingPhoto ? "Uploading Photo..." : "Attach Evidence Photo"}</span>
+                  <span>
+                    {uploadingPhoto
+                      ? "Uploading Photo..."
+                      : "Attach Evidence Photo"}
+                  </span>
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
@@ -995,7 +1084,13 @@ const NotificationsPage = () => {
                         border: `1px solid ${colors.border}`,
                       }}
                     />
-                    <span style={{ fontSize: "12px", color: "#059669", fontWeight: "600" }}>
+                    <span
+                      style={{
+                        fontSize: "12px",
+                        color: "#059669",
+                        fontWeight: "600",
+                      }}
+                    >
                       Photo Attached ✓
                     </span>
                     <button
@@ -1016,8 +1111,16 @@ const NotificationsPage = () => {
                   </div>
                 )}
               </div>
-              <span style={{ fontSize: "11px", color: colors.textMuted, marginTop: "6px", display: "block" }}>
-                Accepted: JPG, PNG, WebP up to 5MB. Verified image will be embedded directly in the commuter advisory card.
+              <span
+                style={{
+                  fontSize: "11px",
+                  color: colors.textMuted,
+                  marginTop: "6px",
+                  display: "block",
+                }}
+              >
+                Accepted: JPG, PNG, WebP up to 5MB. Verified image will be
+                embedded directly in the commuter advisory card.
               </span>
             </div>
 
@@ -1045,8 +1148,8 @@ const NotificationsPage = () => {
                 {sending
                   ? "Transmitting..."
                   : isPoso
-                  ? "Submit Alert to LGU for Verification"
-                  : "Publish Broadcast to Commuters"}
+                    ? "Submit Alert to LGU for Verification"
+                    : "Publish Broadcast to Commuters"}
               </span>
             </button>
           </form>
@@ -1070,10 +1173,14 @@ const NotificationsPage = () => {
                 fontWeight: "700",
               }}
             >
-              {isPoso ? "POSO Road Incident Quick Templates" : "Pre-approved City Templates"}
+              {isPoso
+                ? "POSO Road Incident Quick Templates"
+                : "Pre-approved City Templates"}
             </h3>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+            >
               {isPoso
                 ? posoTemplates.map((t, idx) => (
                     <button
@@ -1104,8 +1211,10 @@ const NotificationsPage = () => {
                       >
                         {t.title}
                       </div>
-                      <div style={{ fontSize: "11px", color: colors.textMuted }}>
-                        Location: {t.location}
+                      <div
+                        style={{ fontSize: "11px", color: colors.textMuted }}
+                      >
+                        Route: {t.location}
                       </div>
                     </button>
                   ))
@@ -1234,7 +1343,7 @@ const NotificationsPage = () => {
                   <th style={{ padding: "10px 8px" }}>Status</th>
                   <th style={{ padding: "10px 8px" }}>Severity</th>
                   <th style={{ padding: "10px 8px" }}>Alert Title</th>
-                  <th style={{ padding: "10px 8px" }}>Location</th>
+                  <th style={{ padding: "10px 8px" }}>Route</th>
                   <th style={{ padding: "10px 8px" }}>Message</th>
                   <th style={{ padding: "10px 8px" }}>Date</th>
                 </tr>
@@ -1313,8 +1422,13 @@ const NotificationsPage = () => {
                       >
                         {a.title}
                       </td>
-                      <td style={{ padding: "10px 8px", color: colors.textSecondary }}>
-                        {a.locationArea || "General Dagupan"}
+                      <td
+                        style={{
+                          padding: "10px 8px",
+                          color: colors.textSecondary,
+                        }}
+                      >
+                        {a.route || a.locationArea || "General Dagupan"}
                       </td>
                       <td
                         style={{
@@ -1328,7 +1442,9 @@ const NotificationsPage = () => {
                       >
                         {a.message}
                       </td>
-                      <td style={{ padding: "10px 8px", color: colors.textMuted }}>
+                      <td
+                        style={{ padding: "10px 8px", color: colors.textMuted }}
+                      >
                         {new Date(a.createdAt).toLocaleDateString()}
                       </td>
                     </tr>
@@ -1339,8 +1455,6 @@ const NotificationsPage = () => {
           </div>
         </div>
       )}
-
-
 
       {/* ======================================================
           REJECT ALERT MODAL
@@ -1363,10 +1477,21 @@ const NotificationsPage = () => {
             <form onSubmit={handleConfirmReject}>
               <div
                 className="modal-body"
-                style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
               >
-                <p style={{ fontSize: "13px", color: colors.textSecondary, margin: 0 }}>
-                  Specify why this road alert will not be published to commuters:
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: colors.textSecondary,
+                    margin: 0,
+                  }}
+                >
+                  Specify why this road alert will not be published to
+                  commuters:
                 </p>
                 <textarea
                   className="form-input"
@@ -1404,7 +1529,9 @@ const NotificationsPage = () => {
                   disabled={rejectModalConfig.loading}
                   style={{ backgroundColor: "#DC2626", color: "#FFFFFF" }}
                 >
-                  {rejectModalConfig.loading ? "Rejecting..." : "Confirm Rejection"}
+                  {rejectModalConfig.loading
+                    ? "Rejecting..."
+                    : "Confirm Rejection"}
                 </button>
               </div>
             </form>

@@ -1,4 +1,4 @@
-const Joi = require('joi');
+const Joi = require("joi");
 
 const broadcastSchema = Joi.object({
   title: Joi.string().trim().min(1).max(200).required(),
@@ -9,6 +9,7 @@ const broadcastSchema = Joi.object({
   priority: Joi.string().allow('', null),
   location: Joi.string().allow('', null).max(200),
   locationArea: Joi.string().allow('', null).max(200),
+  route: Joi.string().allow('', null).max(200),
   municipality: Joi.string().allow('', null).max(100),
   photoUrl: Joi.string().allow('', null).max(1000),
   evidencePhoto: Joi.string().allow('', null).max(1000),
@@ -21,10 +22,11 @@ const sendToUserSchema = Joi.object({
   message: Joi.string().trim().min(1).max(1000).required(),
   type: Joi.string().valid('fare_update', 'weather_alert', 'complaint_update', 'system', 'broadcast').default('system'),
   category: Joi.string().allow('', null),
-  severity: Joi.string().valid('info', 'warning', 'critical').default('warning'),
+  severity: Joi.string().valid('info', 'warning', 'critical', 'advisory').default('warning'),
   priority: Joi.string().allow('', null),
   location: Joi.string().allow('', null).max(200),
   locationArea: Joi.string().allow('', null).max(200),
+  route: Joi.string().allow('', null).max(200),
   municipality: Joi.string().allow('', null).max(100),
   photoUrl: Joi.string().allow('', null).max(1000),
   evidencePhoto: Joi.string().allow('', null).max(1000),
@@ -39,6 +41,7 @@ const roadAlertRequestSchema = Joi.object({
   category: Joi.string().allow('', null),
   location: Joi.string().allow('', null).max(200),
   locationArea: Joi.string().allow('', null).max(200),
+  route: Joi.string().allow('', null).max(200),
   municipality: Joi.string().allow('', null).max(100),
   photoUrl: Joi.string().allow('', null).max(1000),
   evidencePhoto: Joi.string().allow('', null).max(1000),
@@ -46,8 +49,8 @@ const roadAlertRequestSchema = Joi.object({
 });
 
 const rejectRoadAlertSchema = Joi.object({
-  reason: Joi.string().allow('', null).max(500),
-  rejectionReason: Joi.string().allow('', null).max(500),
+  reason: Joi.string().allow("", null).max(500),
+  rejectionReason: Joi.string().allow("", null).max(500),
 });
 
 module.exports = {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Location from "expo-location";
 import { WebView } from "react-native-webview";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
@@ -264,6 +263,129 @@ const normalizeLocation = (location) => {
   };
 };
 
+const buildWaitingHtml = () => `
+<!DOCTYPE html>
+<html>
+  <body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#EFE6DD;color:#463737;font-family:sans-serif;">
+    <p>Waiting for your actual GPS location...</p>
+  </body>
+</html>
+`;
+
+const buildRideMapHtml = (lat, lng) => `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; background: #0f172a; }
+    .commuter-marker {
+      width: 24px; height: 24px; border-radius: 50%; background: #2563EB;
+      border: 3px solid #ffffff; box-shadow: 0 0 16px rgba(37,99,235,1);
+      display: flex; align-items: center; justify-content: center;
+      animation: pulse-ring 2s infinite;
+    }
+    .commuter-inner { width: 8px; height: 8px; border-radius: 50%; background: #ffffff; }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(37,99,235,0.8); }
+      70% { box-shadow: 0 0 0 14px rgba(37,99,235,0); }
+      100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+    }
+    .boarding-pin {
+      background: #16A34A; color: white; width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 13px;
+      font-weight: bold; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map', { zoomControl: false, scrollWheelZoom: false }).setView([${lat}, ${lng}], 15);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    // Let web users scroll the page when the cursor is over the map
+    window.addEventListener('wheel', function (e) {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.scrollBy({ top: e.deltaY, left: 0, behavior: 'auto' });
+        }
+      } catch (err) {}
+    }, { passive: true });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    var routeLine = null;
+    var boardMarker = null;
+
+    var commuterIcon = L.divIcon({
+      className: '',
+      html: '<div class="commuter-marker"><div class="commuter-inner"></div></div>',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+    var commuterMarker = L.marker([${lat}, ${lng}], { icon: commuterIcon }).addTo(map);
+    commuterMarker.bindPopup('<b>Your Live Position</b><br/>Tracking ride...');
+
+    var boardIcon = L.divIcon({
+      className: '',
+      html: '<div class="boarding-pin">🚏</div>',
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    });
+
+    // Single entry point used by React: { position?, path?, start? }
+    window.updateMap = function (data) {
+      if (!data) return;
+
+      if (data.position && typeof data.position.lat === 'number' && typeof data.position.lng === 'number') {
+        var ll = [data.position.lat, data.position.lng];
+        commuterMarker.setLatLng(ll);
+        map.panTo(ll, { animate: true });
+      }
+
+      if ('path' in data) {
+        if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+        var raw = data.path || [];
+        var pts = raw.map(function (p) {
+          return Array.isArray(p) ? [p[0], p[1]] : [p.lat, p.lng];
+        });
+        if (pts.length > 0) {
+          routeLine = L.polyline(pts, {
+            color: '#3B82F6', weight: 5, opacity: 0.85,
+            lineJoin: 'round', lineCap: 'round'
+          }).addTo(map);
+        }
+      }
+
+      if ('start' in data) {
+        if (boardMarker) { map.removeLayer(boardMarker); boardMarker = null; }
+        if (data.start) {
+          boardMarker = L.marker([data.start.lat, data.start.lng], { icon: boardIcon })
+            .addTo(map)
+            .bindPopup('<b>Boarding Location</b><br/>Ride started here');
+        }
+      }
+    };
+
+    // Web iframe path: parent sends JSON through postMessage
+    window.addEventListener('message', function (e) {
+      try {
+        var d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (d && d.type === 'UPDATE_MAP') window.updateMap(d);
+      } catch (err) {}
+    });
+  </script>
+</body>
+</html>
+`;
+
 const RideTrackerScreen = ({ route, navigation }) => {
   const {
     selectedRoute: initialSelectedRoute,
@@ -283,8 +405,8 @@ const RideTrackerScreen = ({ route, navigation }) => {
   const mapHeight = isLandscape
     ? Math.max(220, Math.min(360, windowHeight * 0.42))
     : isTablet
-      ? Math.min(420, windowHeight * 0.4)
-      : Math.min(320, Math.max(220, windowHeight * 0.35));
+      ? Math.min(320, windowHeight * 0.4)
+      : Math.min(320, Math.max(400, windowHeight * 0.35));
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState({
     visible: false,
@@ -341,7 +463,6 @@ const RideTrackerScreen = ({ route, navigation }) => {
   const [distanceTraveledKm, setDistanceTraveledKm] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  // References for live subscriptions & timers
   const lastLocationRef = useRef(null);
   const timerIntervalRef = useRef(null);
   const simulationIntervalRef = useRef(null);
@@ -349,6 +470,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
   const headingSubRef = useRef(null);
   const lastSentHeadingRef = useRef(-999);
   const currentHeadingRef = useRef(0);
+  const startedAtRef = useRef(null);
 
   const loadHistory = async () => {
     const data = await getRideHistory();
@@ -356,7 +478,6 @@ const RideTrackerScreen = ({ route, navigation }) => {
   };
 
   const rideStateRef = useRef(rideState);
-
   useEffect(() => {
     rideStateRef.current = rideState;
   }, [rideState]);
@@ -410,6 +531,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
 
     setCurrentLocation(nextLocation);
     setGpsReady(nextLocation.isReal);
+    setGpsError("");
 
     if (rideStateRef.current !== "riding") {
       lastLocationRef.current = nextLocation;
@@ -565,8 +687,10 @@ const RideTrackerScreen = ({ route, navigation }) => {
   const isNearDestination =
     remainingDistanceToDestKm !== null && remainingDistanceToDestKm <= 0.15;
 
+  useEffect(() => () => stopTracking(), []);
+
   // Start Ride handler
-  const handleStartRide = async () => {
+  const handleStartRide = () => {
     if (!gpsReady || !currentLocation || !currentLocation.isReal) {
       showWarning(
         "Actual GPS Required",
@@ -625,17 +749,19 @@ const RideTrackerScreen = ({ route, navigation }) => {
     lastLocationRef.current = initialRouteStart;
     setDistanceTraveledKm(0);
     setElapsedSeconds(0);
+    startedAtRef.current = Date.now();
+    rideStateRef.current = "riding";
     setRideState("riding");
     showInfo(
       "Tracking Started",
       `Live GPS tracking is now active for ${selectedRoute.name}. Safe travels!`,
     );
 
-    // Start timer
+    // Timer based on wall-clock time (no drift, survives brief backgrounding)
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     timerIntervalRef.current = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
+      setElapsedSeconds(Math.floor((Date.now() - startedAtRef.current) / 1000));
     }, 1000);
-
     // Start GPS watch
     try {
       if (
@@ -769,6 +895,10 @@ const RideTrackerScreen = ({ route, navigation }) => {
 
   const handleEndRide = async () => {
     stopTracking();
+    const durationSecs = startedAtRef.current
+      ? Math.floor((Date.now() - startedAtRef.current) / 1000)
+      : elapsedSeconds;
+    setElapsedSeconds(durationSecs);
     setRideState("completed");
 
     const completedRide = {
@@ -782,7 +912,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
       regularFare: liveFareData.regularFare,
       discount,
       distanceKm: distanceTraveledKm,
-      durationSecs: elapsedSeconds,
+      durationSecs,
     };
 
     const updated = await saveRideToHistory(completedRide);
@@ -815,6 +945,7 @@ const RideTrackerScreen = ({ route, navigation }) => {
   // Reset to idle
   const handleResetRide = () => {
     stopTracking();
+    startedAtRef.current = null;
     setDistanceTraveledKm(0);
     setElapsedSeconds(0);
     setStartLocation(null);
@@ -1598,7 +1729,6 @@ const RideTrackerScreen = ({ route, navigation }) => {
   const mapHtml = useMemo(() => {
     return generateMapHtml();
   }, [selectedRoute?._id, startLocation?.lat, startLocation?.lng]);
-
   if (loading) {
     return <LoadingSpinner text="Preparing Live Ride Tracker..." />;
   }

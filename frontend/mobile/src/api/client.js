@@ -4,7 +4,7 @@ import { API_BASE_URL } from '../utils/constants';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -120,7 +120,7 @@ export const getErrorMessage = (error) => {
     return 'Unable to connect to server. Please check your connection or server status.';
   }
   if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-    return 'Request timed out. Please try again.';
+    return 'Server took too long to respond (it may be waking up from cold start). Please try again in a few moments.';
   }
   if (error.message && typeof error.message === 'string' && error.message !== 'Error') {
     return error.message;

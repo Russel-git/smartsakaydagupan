@@ -75,7 +75,12 @@ const DEV_IP = getDevServerIp();
 export const COLORS = getThemeColors("theme1");
 
 export const API_BASE_URL = (() => {
-  // 1. Web browser environment
+  // 1. Explicit environment variable set at build or runtime
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+
+  // 2. Web browser environment
   if (Platform.OS === "web") {
     if (typeof window !== "undefined" && window.location) {
       const hostname = window.location.hostname;
@@ -97,8 +102,8 @@ export const API_BASE_URL = (() => {
     }
   }
 
-  // 2. Live Mobile / Expo Go connection:
-  // Dynamically resolve the host machine's IP address that Expo Go is currently connected to!
+  // 3. Live Mobile / Expo Go connection:
+  // Dynamically resolve laptop's active IP from Expo connection for local mobile testing
   const hostIp = getDevServerIp();
   if (hostIp && hostIp !== "localhost" && hostIp !== "127.0.0.1") {
     return `http://${hostIp}:5000/api`;

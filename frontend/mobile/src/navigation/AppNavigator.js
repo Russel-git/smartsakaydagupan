@@ -30,6 +30,7 @@ import RoutesAndFaresScreen from "../screens/routes/RoutesAndFaresScreen";
 import RouteDetailScreen from "../screens/map/RouteDetailScreen";
 import FareMatrixScreen from "../screens/fare/FareMatrixScreen";
 import PinpointFareScreen from "../screens/fare/PinpointFareScreen";
+import SakayCircleScreen from "../screens/circle/SakayCircleScreen";
 import RideTrackerScreen from "../screens/ride/RideTrackerScreen";
 import RideHistoryScreen from "../screens/ride/RideHistoryScreen";
 import AssistantScreen from "../screens/assistant/AssistantScreen";
@@ -156,6 +157,11 @@ const RoutesAndFaresStack = () => (
       name="PinpointFare"
       component={PinpointFareScreen}
       options={{ headerShown: true, title: "Solo Ride / Visitor" }}
+    />
+    <Stack.Screen
+      name="SakayCircle"
+      component={SakayCircleScreen}
+      options={{ headerShown: true, title: "SakayCircle" }}
     />
   </Stack.Navigator>
 );

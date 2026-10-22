@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, CheckCircle2, X, AlertCircle, Camera, Upload } from "lucide-react";
+import {
+  ShieldCheck,
+  CheckCircle2,
+  X,
+  AlertCircle,
+  Camera,
+  Upload,
+} from "lucide-react";
 import { complaintsAPI } from "../../api/services";
 import { useTheme } from "../../contexts/theme/ThemeContext";
 
@@ -66,7 +73,7 @@ const LguActionModal = ({
             ) : (
               <CheckCircle2 size={20} color="#10b981" />
             )}
-            <h2 style={{ fontSize: "18px", margin: 0, color: "black" }}>
+            <h2 style={{ fontSize: "18px", margin: 0 }}>
               {isAction
                 ? "Record Official LGU Action"
                 : "Resolve Case & Record Official Outcome"}
@@ -100,7 +107,6 @@ const LguActionModal = ({
                 style={{
                   fontSize: "13px",
                   fontWeight: "600",
-                  color: "black",
                   marginBottom: "2px",
                 }}
               >
@@ -166,10 +172,20 @@ const LguActionModal = ({
                 }}
               >
                 <Camera size={15} color="#059669" />
-                <span>Action Evidence Photo (Citation Ticket, Inspection Photo, etc.)</span>
+                <span>
+                  Action Evidence Photo (Citation Ticket, Inspection Photo,
+                  etc.)
+                </span>
               </label>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
                 <label
                   style={{
                     display: "inline-flex",
@@ -186,7 +202,9 @@ const LguActionModal = ({
                   }}
                 >
                   <Upload size={14} />
-                  <span>{uploadingPhoto ? "Uploading..." : "Attach Evidence Photo"}</span>
+                  <span>
+                    {uploadingPhoto ? "Uploading..." : "Attach Evidence Photo"}
+                  </span>
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
@@ -197,7 +215,13 @@ const LguActionModal = ({
                 </label>
 
                 {evidencePhotoUrl && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
                     <img
                       src={evidencePhotoUrl}
                       alt="Action Evidence"
@@ -209,7 +233,15 @@ const LguActionModal = ({
                         border: "1px solid #cbd5e1",
                       }}
                     />
-                    <span style={{ fontSize: "11px", color: "#059669", fontWeight: "600" }}>Attached ✓</span>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "#059669",
+                        fontWeight: "600",
+                      }}
+                    >
+                      Attached ✓
+                    </span>
                     <button
                       type="button"
                       onClick={() => setEvidencePhotoUrl("")}

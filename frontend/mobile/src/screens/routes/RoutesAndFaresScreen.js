@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,17 +6,18 @@ import {
   TouchableOpacity,
   Platform,
   StatusBar,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useTheme } from '../../contexts/ThemeContext';
-import { FONTS, SPACING, RADIUS } from '../../utils/constants';
-import { getRideHistory } from '../../utils/storage';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useTheme } from "../../contexts/ThemeContext";
+import { FONTS, SPACING, RADIUS } from "../../utils/constants";
+import { getRideHistory } from "../../utils/storage";
 
-import RouteMapScreen from '../map/RouteMapScreen';
-import PinpointFareScreen from '../fare/PinpointFareScreen';
-import FareCalculatorScreen from '../fare/FareCalculatorScreen';
-import FareMatrixScreen from '../fare/FareMatrixScreen';
+import RouteMapScreen from "../map/RouteMapScreen";
+import PinpointFareScreen from "../fare/PinpointFareScreen";
+import SakayCircleScreen from "../circle/SakayCircleScreen";
+import FareCalculatorScreen from "../fare/FareCalculatorScreen";
+import FareMatrixScreen from "../fare/FareMatrixScreen";
 
 const RoutesAndFaresScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
@@ -25,15 +26,23 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
   // Cross-device top inset calculation:
   // On Android, use the maximum of insets.top and StatusBar.currentHeight to guarantee
   // that content is pushed below punch-hole cameras, notches, and status icons.
-  const topInset = Platform.OS === 'android'
-    ? Math.max(insets.top, StatusBar.currentHeight || 28)
-    : insets.top;
+  const topInset =
+    Platform.OS === "android"
+      ? Math.max(insets.top, StatusBar.currentHeight || 28)
+      : insets.top;
 
-  // Default tab: 'routes' | 'solo_ride' | 'fares'
+  const parseInitialTab = (tabParam) => {
+    if (tabParam === "tricycle") return "solo_ride";
+    if (tabParam === "peers" || tabParam === "sakaycircle")
+      return "sakaycircle";
+    return tabParam || "routes";
+  };
+
+  // Dedicated modes: 'routes' | 'solo_ride' | 'sakaycircle' | 'fares'
   const [activeTab, setActiveTab] = useState(
-    route?.params?.initialTab === 'tricycle' ? 'solo_ride' : route?.params?.initialTab || 'routes'
+    parseInitialTab(route?.params?.initialTab),
   );
-  const [fareSubTab, setFareSubTab] = useState('calculator'); // 'calculator' | 'matrix'
+  const [fareSubTab, setFareSubTab] = useState("calculator"); // 'calculator' | 'matrix'
   const [historyCount, setHistoryCount] = useState(0);
 
   const loadHistoryCount = async () => {
@@ -49,37 +58,42 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     if (route?.params?.initialTab) {
-      setActiveTab(route.params.initialTab === 'tricycle' ? 'solo_ride' : route.params.initialTab);
+      setActiveTab(parseInitialTab(route.params.initialTab));
     }
   }, [route?.params?.initialTab]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar
-        barStyle={colors.isDark ? 'light-content' : 'dark-content'}
+        barStyle={colors.isDark ? "light-content" : "dark-content"}
         backgroundColor="transparent"
-        translucent={Platform.OS === 'android'}
+        translucent={Platform.OS === "android"}
       />
 
-      {/* Top Navigation Bar: 3 Modes + Ride History Action */}
+      {/* Top Navigation Bar: 4 Dedicated Modes + Ride History Action */}
       <View
         style={[
           styles.topBar,
           {
             backgroundColor: colors.surface,
             borderBottomColor: colors.border,
-            paddingTop: topInset + (Platform.OS === 'ios' ? 4 : 8),
+            paddingTop: topInset + (Platform.OS === "ios" ? 4 : 8),
             paddingLeft: Math.max(insets.left, SPACING.md),
             paddingRight: Math.max(insets.right, SPACING.md),
           },
         ]}
       >
-        <View style={[styles.segmentContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.segmentContainer,
+            { backgroundColor: colors.background, borderColor: colors.border },
+          ]}
+        >
           {/* TAB 1: JEEPNEY ROUTES & HUBS */}
           <TouchableOpacity
             style={[
               styles.segmentBtn,
-              activeTab === 'routes' && {
+              activeTab === "routes" && {
                 backgroundColor: colors.primary,
                 shadowColor: colors.primary,
                 shadowOpacity: 0.25,
@@ -87,22 +101,25 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
                 elevation: 2,
               },
             ]}
-            onPress={() => setActiveTab('routes')}
+            onPress={() => setActiveTab("routes")}
             activeOpacity={0.8}
           >
             <MaterialCommunityIcons
               name="van-passenger"
-              size={16}
-              color={activeTab === 'routes' ? '#FFFFFF' : colors.textSecondary}
+              size={15}
+              color={activeTab === "routes" ? "#FFFFFF" : colors.textSecondary}
             />
             <Text
               style={[
                 styles.segmentText,
-                { color: activeTab === 'routes' ? '#FFFFFF' : colors.textSecondary },
+                {
+                  color:
+                    activeTab === "routes" ? "#FFFFFF" : colors.textSecondary,
+                },
               ]}
               numberOfLines={1}
               adjustsFontSizeToFit
-              minimumFontScale={0.8}
+              minimumFontScale={0.7}
             >
               Jeepneys
             </Text>
@@ -112,40 +129,91 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
           <TouchableOpacity
             style={[
               styles.segmentBtn,
-              (activeTab === 'solo_ride' || activeTab === 'tricycle') && {
-                backgroundColor: '#D97706',
-                shadowColor: '#D97706',
+              (activeTab === "solo_ride" || activeTab === "tricycle") && {
+                backgroundColor: "#D97706",
+                shadowColor: "#D97706",
                 shadowOpacity: 0.25,
                 shadowRadius: 4,
                 elevation: 2,
               },
             ]}
-            onPress={() => setActiveTab('solo_ride')}
+            onPress={() => setActiveTab("solo_ride")}
             activeOpacity={0.8}
           >
             <MaterialCommunityIcons
               name="account-arrow-right"
-              size={16}
-              color={(activeTab === 'solo_ride' || activeTab === 'tricycle') ? '#FFFFFF' : colors.textSecondary}
+              size={15}
+              color={
+                activeTab === "solo_ride" || activeTab === "tricycle"
+                  ? "#FFFFFF"
+                  : colors.textSecondary
+              }
             />
             <Text
               style={[
                 styles.segmentText,
-                { color: (activeTab === 'solo_ride' || activeTab === 'tricycle') ? '#FFFFFF' : colors.textSecondary },
+                {
+                  color:
+                    activeTab === "solo_ride" || activeTab === "tricycle"
+                      ? "#FFFFFF"
+                      : colors.textSecondary,
+                },
               ]}
               numberOfLines={1}
               adjustsFontSizeToFit
-              minimumFontScale={0.75}
+              minimumFontScale={0.7}
             >
               Solo / Visitor
             </Text>
           </TouchableOpacity>
 
-          {/* TAB 3: OFFICIAL FARES */}
+          {/* TAB 3: SAKAYCIRCLE LOCATION SHARING */}
           <TouchableOpacity
             style={[
               styles.segmentBtn,
-              activeTab === 'fares' && {
+              (activeTab === "sakaycircle" || activeTab === "peers") && {
+                backgroundColor: "#8B5CF6",
+                shadowColor: "#8B5CF6",
+                shadowOpacity: 0.25,
+                shadowRadius: 4,
+                elevation: 2,
+              },
+            ]}
+            onPress={() => setActiveTab("sakaycircle")}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons
+              name="account-group"
+              size={15}
+              color={
+                activeTab === "sakaycircle" || activeTab === "peers"
+                  ? "#FFFFFF"
+                  : colors.textSecondary
+              }
+            />
+            <Text
+              style={[
+                styles.segmentText,
+                {
+                  color:
+                    activeTab === "sakaycircle" || activeTab === "peers"
+                      ? "#FFFFFF"
+                      : colors.textSecondary,
+                },
+              ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              SakayCircle
+            </Text>
+          </TouchableOpacity>
+
+          {/* TAB 4: OFFICIAL FARES */}
+          <TouchableOpacity
+            style={[
+              styles.segmentBtn,
+              activeTab === "fares" && {
                 backgroundColor: colors.primary,
                 shadowColor: colors.primary,
                 shadowOpacity: 0.25,
@@ -153,22 +221,25 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
                 elevation: 2,
               },
             ]}
-            onPress={() => setActiveTab('fares')}
+            onPress={() => setActiveTab("fares")}
             activeOpacity={0.8}
           >
             <MaterialCommunityIcons
               name="calculator"
-              size={16}
-              color={activeTab === 'fares' ? '#FFFFFF' : colors.textSecondary}
+              size={15}
+              color={activeTab === "fares" ? "#FFFFFF" : colors.textSecondary}
             />
             <Text
               style={[
                 styles.segmentText,
-                { color: activeTab === 'fares' ? '#FFFFFF' : colors.textSecondary },
+                {
+                  color:
+                    activeTab === "fares" ? "#FFFFFF" : colors.textSecondary,
+                },
               ]}
               numberOfLines={1}
               adjustsFontSizeToFit
-              minimumFontScale={0.8}
+              minimumFontScale={0.7}
             >
               Fares
             </Text>
@@ -177,16 +248,25 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
 
         {/* RIDE HISTORY BUTTON */}
         <TouchableOpacity
-          style={[styles.historyBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
-          onPress={() => navigation.navigate('RideHistory')}
+          style={[
+            styles.historyBtn,
+            { backgroundColor: colors.background, borderColor: colors.border },
+          ]}
+          onPress={() => navigation.navigate("RideHistory")}
           activeOpacity={0.8}
           accessibilityLabel="View Ride History"
         >
-          <MaterialCommunityIcons name="history" size={20} color={colors.primary} />
+          <MaterialCommunityIcons
+            name="history"
+            size={20}
+            color={colors.primary}
+          />
           {historyCount > 0 && (
-            <View style={[styles.historyBadge, { backgroundColor: colors.primary }]}>
+            <View
+              style={[styles.historyBadge, { backgroundColor: colors.primary }]}
+            >
               <Text style={styles.historyBadgeText}>
-                {historyCount > 9 ? '9+' : historyCount}
+                {historyCount > 9 ? "9+" : historyCount}
               </Text>
             </View>
           )}
@@ -195,29 +275,52 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
 
       {/* Main Content Area */}
       <View style={styles.body}>
-        {activeTab === 'routes' && (
-          <RouteMapScreen navigation={navigation} />
+        {activeTab === "routes" && (
+          <RouteMapScreen
+            navigation={navigation}
+            onSwitchToCircle={() => setActiveTab("sakaycircle")}
+          />
         )}
 
-        {(activeTab === 'solo_ride' || activeTab === 'tricycle') && (
+        {(activeTab === "solo_ride" || activeTab === "tricycle") && (
           <PinpointFareScreen navigation={navigation} />
         )}
 
-        {activeTab === 'fares' && (
+        {(activeTab === "sakaycircle" || activeTab === "peers") && (
+          <SakayCircleScreen navigation={navigation} />
+        )}
+
+        {activeTab === "fares" && (
           <View style={styles.fareContainer}>
             {/* Fare Sub-tab switcher */}
-            <View style={[styles.subTabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+            <View
+              style={[
+                styles.subTabBar,
+                {
+                  backgroundColor: colors.surface,
+                  borderBottomColor: colors.border,
+                },
+              ]}
+            >
               <TouchableOpacity
                 style={[
                   styles.subTabBtn,
-                  fareSubTab === 'calculator' && [styles.subTabActive, { borderBottomColor: colors.primary }],
+                  fareSubTab === "calculator" && [
+                    styles.subTabActive,
+                    { borderBottomColor: colors.primary },
+                  ],
                 ]}
-                onPress={() => setFareSubTab('calculator')}
+                onPress={() => setFareSubTab("calculator")}
               >
                 <Text
                   style={[
                     styles.subTabText,
-                    { color: fareSubTab === 'calculator' ? colors.primary : colors.textMuted },
+                    {
+                      color:
+                        fareSubTab === "calculator"
+                          ? colors.primary
+                          : colors.textMuted,
+                    },
                   ]}
                 >
                   Station Fare
@@ -227,14 +330,22 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
               <TouchableOpacity
                 style={[
                   styles.subTabBtn,
-                  fareSubTab === 'matrix' && [styles.subTabActive, { borderBottomColor: colors.primary }],
+                  fareSubTab === "matrix" && [
+                    styles.subTabActive,
+                    { borderBottomColor: colors.primary },
+                  ],
                 ]}
-                onPress={() => setFareSubTab('matrix')}
+                onPress={() => setFareSubTab("matrix")}
               >
                 <Text
                   style={[
                     styles.subTabText,
-                    { color: fareSubTab === 'matrix' ? colors.primary : colors.textMuted },
+                    {
+                      color:
+                        fareSubTab === "matrix"
+                          ? colors.primary
+                          : colors.textMuted,
+                    },
                   ]}
                 >
                   Official Fare Matrix
@@ -244,7 +355,7 @@ const RoutesAndFaresScreen = ({ route, navigation }) => {
 
             {/* Sub-tab view */}
             <View style={{ flex: 1 }}>
-              {fareSubTab === 'calculator' ? (
+              {fareSubTab === "calculator" ? (
                 <FareCalculatorScreen navigation={navigation} />
               ) : (
                 <FareMatrixScreen navigation={navigation} />
@@ -262,15 +373,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingBottom: SPACING.sm + 2,
     borderBottomWidth: 1,
     gap: 8,
   },
   segmentContainer: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: "row",
     borderRadius: RADIUS.full,
     padding: 3,
     borderWidth: 1,
@@ -278,42 +389,42 @@ const styles = StyleSheet.create({
   segmentBtn: {
     flex: 1,
     minHeight: 38,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
     paddingVertical: 6,
     paddingHorizontal: 2,
     borderRadius: RADIUS.full,
   },
   segmentText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: "700",
   },
   historyBtn: {
     width: 38,
     height: 38,
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
   },
   historyBadge: {
-    position: 'absolute',
+    position: "absolute",
     top: -4,
     right: -4,
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 3,
   },
   historyBadgeText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 9,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   body: {
     flex: 1,
@@ -322,7 +433,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   subTabBar: {
-    flexDirection: 'row',
+    flexDirection: "row",
     borderBottomWidth: 1,
     paddingHorizontal: SPACING.md,
   },
@@ -330,14 +441,14 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.lg,
     borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    borderBottomColor: "transparent",
   },
   subTabActive: {
     borderBottomWidth: 2,
   },
   subTabText: {
     fontSize: FONTS.sizes.sm,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });
 

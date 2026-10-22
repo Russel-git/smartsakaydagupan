@@ -14,14 +14,14 @@ const terminalSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['bus', 'jeepney', 'tricycle', 'multimodal'],
+      enum: ['bus', 'jeepney', 'multimodal'],
       default: 'bus',
       required: true,
     },
     address: {
       type: String,
-      required: [true, 'Terminal address is required'],
       trim: true,
+      default: '',
     },
     lat: {
       type: Number,

@@ -30,5 +30,8 @@
     "ltfrb"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "lucide-react": "0.468.0"
+  }
 }

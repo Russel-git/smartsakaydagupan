@@ -39,6 +39,7 @@ const RoutesPage = () => {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [message, setMessage] = useState(null);
   const [drawnPoints, setDrawnPoints] = useState([]);
+  const [routePath, setRoutePath] = useState([]);
 
   // New route form state
   const [newRoute, setNewRoute] = useState({
@@ -144,6 +145,7 @@ const RoutesPage = () => {
 
   const handleOpenAddModal = () => {
     setDrawnPoints([]);
+    setRoutePath([]);
     setNewRoute({
       name: "",
       code: "",
@@ -193,6 +195,10 @@ const RoutesPage = () => {
             : Number(newRoute.endLng),
       };
 
+      const resolvedPath = (routePath && routePath.length > 0)
+        ? routePath.map((pt) => ({ lat: pt.lat, lng: pt.lng }))
+        : drawnPoints.map((pt) => ({ lat: pt.lat, lng: pt.lng }));
+
       const waypoints = drawnPoints.map((pt, idx) => ({
         name:
           idx === 0
@@ -224,13 +230,13 @@ const RoutesPage = () => {
           lng: startPt.lng,
         },
 
-        path: drawnPoints.map((pt) => ({ lat: pt.lat, lng: pt.lng })),
+        path: resolvedPath,
         waypoints,
       });
 
       showSuccess(
         "Route Registered",
-        `New corridor "${newRoute.name}" (${newRoute.code.toUpperCase()}) published with ${drawnPoints.length} track points.`,
+        `New corridor "${newRoute.name}" (${newRoute.code.toUpperCase()}) published with ${resolvedPath.length} road-aligned track points.`,
       );
 
       setMessage({
@@ -240,6 +246,7 @@ const RoutesPage = () => {
 
       setIsAddModalOpen(false);
       setDrawnPoints([]);
+      setRoutePath([]);
       fetchRoutes();
     } catch (err) {
       const errText = err.response?.data?.message || "Failed to create route.";
@@ -1066,8 +1073,13 @@ const RoutesPage = () => {
 
                   <PointToPointRouteMap
                     points={drawnPoints}
-                    onPointsChange={(pts, dist) => {
+                    onPointsChange={(pts, dist, roadCoords) => {
                       setDrawnPoints(pts);
+                      if (roadCoords && roadCoords.length > 0) {
+                        setRoutePath(roadCoords);
+                      } else {
+                        setRoutePath(pts);
+                      }
                       if (pts.length > 0) {
                         setNewRoute((prev) => ({
                           ...prev,
@@ -1218,6 +1230,7 @@ const RoutesPage = () => {
                   onClick={() => {
                     setIsAddModalOpen(false);
                     setDrawnPoints([]);
+                    setRoutePath([]);
                   }}
                   className="btn btn-secondary"
                 >

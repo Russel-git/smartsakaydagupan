@@ -71,7 +71,7 @@ const isPointNearRoute = (ptLat, ptLng, routePath, thresholdKm = 0.45) => {
   return false;
 };
 
-const RouteMapScreen = ({ navigation }) => {
+const RouteMapScreen = ({ navigation, onSwitchToCircle }) => {
   const {
     location: sharedLocation,
     setLocation: setSharedLocation,
@@ -853,7 +853,7 @@ const RouteMapScreen = ({ navigation }) => {
               var peerPopupHtml = 
                 '<div style="font-family:-apple-system, BlinkMacSystemFont, sans-serif; min-width:180px;">' +
                 '<div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">' +
-                '<span style="background:#8B5CF6; color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:3px;">AUTHORIZED PEER</span>' +
+                '<span style="background:#8B5CF6; color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:3px;">SAKAYCIRCLE MEMBER</span>' +
                 '<span style="color:#10B981; font-weight:700; font-size:11px;">● LIVE</span>' +
                 '</div>' +
                 '<div style="font-size:13px; font-weight:800; color:#0f172a;">' + peer.name + '</div>' +
@@ -968,38 +968,6 @@ const RouteMapScreen = ({ navigation }) => {
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          {/* Peer Sharing Button */}
-          <TouchableOpacity
-            style={[
-              styles.peerShareBtn,
-              {
-                backgroundColor: isDark ? "rgba(139, 92, 246, 0.2)" : "#EDE9FE",
-                borderColor: "#C4B5FD",
-              },
-            ]}
-            onPress={() => {
-              if (!isAuthenticated || !user) {
-                showWarning(
-                  "Sign In Required",
-                  "Please sign in to your commuter account to request or share live locations with peers.",
-                );
-                return;
-              }
-              setShowLocationSharingModal(true);
-            }}
-            activeOpacity={0.8}
-            accessibilityLabel="Peer Location Sharing"
-          >
-            <MaterialCommunityIcons
-              name="account-group"
-              size={15}
-              color="#8B5CF6"
-            />
-            <Text style={styles.peerShareBtnText}>
-              Peers {peers.length > 0 ? `(${peers.length})` : ""}
-            </Text>
-          </TouchableOpacity>
-
           {/* Top Arrow Button: Toggles down list of routes so user sees full map, or toggles up */}
           <TouchableOpacity
             style={[
