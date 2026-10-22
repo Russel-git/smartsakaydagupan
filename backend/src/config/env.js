@@ -49,6 +49,7 @@ const config = {
   },
   weather: {
     apiKey: process.env.WEATHER_API_KEY,
+    apiUrl: process.env.WEATHER_API_URL,
   },
   admin: {
     email: process.env.ADMIN_EMAIL,

@@ -85,8 +85,8 @@ export const assistantAPI = {
 };
 
 export const weatherAPI = {
-  getCurrentWeather: () => apiClient.get("/weather/current"),
-  getForecast: () => apiClient.get("/weather/forecast"),
+  getCurrentWeather: (params) => apiClient.get("/weather/current", { params }),
+  getForecast: (params) => apiClient.get("/weather/forecast", { params }),
 };
 
 export const notificationsAPI = {

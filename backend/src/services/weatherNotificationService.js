@@ -4,13 +4,17 @@ const User = require('../models/User');
 
 let lastWeatherCheckTime = null;
 let lastWeatherAlertSent = null;
-let cronTimer = null;
+let dailyTimer = null;
+
+const DAILY_CHECK_HOUR = 8; // 8:00 AM Philippine Time
+const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24-hour cooldown
 
 /**
- * Evaluates current weather in Dagupan City and broadcasts automated notifications
- * to commuters when advisories or significant weather changes occur.
+ * Evaluates current weather (using default/server location) and broadcasts automated
+ * notifications to commuters when advisories or significant weather changes occur.
+ * Runs once daily at 8:00 AM.
  * 
- * @param {boolean} force - If true, bypasses the 4-hour cooldown check.
+ * @param {boolean} force - If true, bypasses the 24-hour cooldown check.
  * @returns {Promise<{notified: boolean, title?: string, message?: string, reason?: string}>}
  */
 const checkAndNotifyWeather = async (force = false) => {
@@ -18,7 +22,7 @@ const checkAndNotifyWeather = async (force = false) => {
     lastWeatherCheckTime = new Date();
     const weatherData = await weatherService.fetchWeather();
     if (!weatherData || !weatherData.current) {
-      return { notified: false, reason: 'Unable to retrieve Dagupan weather data' };
+      return { notified: false, reason: 'Unable to retrieve weather data' };
     }
 
     const { current, forecast = [] } = weatherData;
@@ -28,6 +32,8 @@ const checkAndNotifyWeather = async (force = false) => {
     const condition = (current.conditionText || current.condition || '').toLowerCase();
     const todayForecast = forecast[0] || {};
     const rainChance = todayForecast.chanceOfRain ?? 20;
+    const locationName = current.coordinates?.location || weatherService.DEFAULT_LOCATION;
+    const coords = current.coordinates || { latitude: weatherService.DEFAULT_LAT, longitude: weatherService.DEFAULT_LNG };
 
     let alertTitle = null;
     let alertMessage = null;
@@ -35,55 +41,48 @@ const checkAndNotifyWeather = async (force = false) => {
 
     // 1. Check for Thunderstorm / Severe Weather
     if (condition.includes('thunder') || condition.includes('storm')) {
-      alertTitle = '⛈️ Dagupan Weather Alert: Thunderstorm Warning';
-      alertMessage = `Thunderstorms detected over Dagupan City (${tempC}°C). Wet roadways and possible localized street flooding expected near Lucao & Downtown. Commuters are advised to take covered waiting areas.`;
+      alertTitle = `⛈️ Weather Alert: Thunderstorm Warning`;
+      alertMessage = `Thunderstorms detected over ${locationName} (${tempC}°C). Wet roadways and possible localized street flooding expected. Commuters are advised to take covered waiting areas.`;
       alertSeverity = 'severe';
     }
     // 2. Check for Active Rain or High Rain Chance
     else if (condition.includes('rain') || condition.includes('drizzle') || condition.includes('shower') || rainChance >= 70) {
-      alertTitle = '🌧️ Dagupan Rain Advisory: Wet Road Conditions';
-      alertMessage = `Rain showers in Dagupan City with ${rainChance}% precipitation probability (${tempC}°C). Expect moderate jeepney delays along Perez Blvd and Bonuan routes. Keep umbrellas ready.`;
+      alertTitle = `🌧️ Rain Advisory: Wet Road Conditions`;
+      alertMessage = `Rain showers in ${locationName} with ${rainChance}% precipitation probability (${tempC}°C). Expect moderate jeepney delays. Keep umbrellas ready.`;
       alertSeverity = 'warning';
     }
     // 3. Check for Extreme Heat Index
     else if (tempC >= 35 || feelsLikeC >= 38) {
-      alertTitle = '☀️ Dagupan Heat Advisory: High Heat Index';
-      alertMessage = `Dangerous heat index of ${feelsLikeC}°C recorded in Dagupan City. Commuters are urged to stay hydrated, carry water, and minimize direct sun exposure at PUV terminals.`;
+      alertTitle = `☀️ Heat Advisory: High Heat Index`;
+      alertMessage = `Dangerous heat index of ${feelsLikeC}°C recorded in ${locationName}. Commuters are urged to stay hydrated, carry water, and minimize direct sun exposure at PUV terminals.`;
       alertSeverity = 'warning';
     }
     // 4. Check for Strong Coastal Winds
     else if (windKph >= 35) {
-      alertTitle = '💨 Dagupan Coastal Wind Advisory';
-      alertMessage = `Sustained coastal winds of ${windKph} km/h detected in Dagupan coastal corridors. Secure loose belongings and ride with caution on open tricycles.`;
+      alertTitle = `💨 Wind Advisory`;
+      alertMessage = `Sustained winds of ${windKph} km/h detected in ${locationName}. Secure loose belongings and ride with caution on open tricycles.`;
       alertSeverity = 'warning';
     }
-    // 5. Daily Morning Commuter Bulletin (Favorable conditions between 6 AM and 9 AM)
+    // 5. Daily Morning Commuter Bulletin (favorable conditions)
     else {
-      const currentHour = new Date().getHours();
-      if (currentHour >= 6 && currentHour <= 9) {
-        alertTitle = '🌤️ Dagupan Morning Commuter Weather';
-        alertMessage = `Good morning Dagupan commuters! Current weather is ${current.conditionText || 'Partly Cloudy'}, ${tempC}°C with ${windKph} km/h winds. Clear roads and favorable commuting conditions across city routes.`;
-        alertSeverity = 'info';
-      }
+      alertTitle = `🌤️ Morning Commuter Weather`;
+      alertMessage = `Good morning commuters! Current weather in ${locationName} is ${current.conditionText || 'Partly Cloudy'}, ${tempC}°C with ${windKph} km/h winds. Favorable commuting conditions across city routes.`;
+      alertSeverity = 'info';
     }
 
-    if (!alertTitle) {
-      return { notified: false, reason: 'Weather conditions are normal, no advisory required.' };
-    }
-
-    // Cooldown check: Avoid sending the same alert type within 4 hours unless forced
+    // Cooldown check: Avoid sending the same alert type within 24 hours unless forced
     if (!force) {
-      const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+      const cooldownAgo = new Date(Date.now() - COOLDOWN_MS);
       const recentAlert = await Notification.findOne({
         type: 'weather_alert',
         title: alertTitle,
-        createdAt: { $gte: fourHoursAgo },
+        createdAt: { $gte: cooldownAgo },
       });
 
       if (recentAlert) {
         return {
           notified: false,
-          reason: `Advisory already active (last sent at ${recentAlert.createdAt.toLocaleTimeString()}). Cooldown active to avoid duplicate notifications.`,
+          reason: `Advisory already sent today (last sent at ${recentAlert.createdAt.toLocaleTimeString()}). 24-hour cooldown active.`,
         };
       }
     }
@@ -98,7 +97,7 @@ const checkAndNotifyWeather = async (force = false) => {
       createdAt: { $lt: new Date(Date.now() - WEATHER_EXPIRY_MS) },
     }).catch((e) => console.warn('[WeatherAutoNotifier] Auto-cleanup warning:', e.message));
 
-    // 1. Create single broadcast notification (userId: null)
+    // Create single broadcast notification (userId: null)
     await Notification.create({
       userId: null,
       title: alertTitle,
@@ -114,8 +113,9 @@ const checkAndNotifyWeather = async (force = false) => {
         rainChance,
         precipitation: current.precipitation ?? 0,
         severity: alertSeverity,
-        dagupanCoordinates: { lat: 16.0433, lng: 120.3397 },
-        source: 'Open-Meteo Dagupan Telemetry (16.0433° N, 120.3397° E)',
+        coordinates: { lat: coords.latitude, lng: coords.longitude },
+        location: locationName,
+        source: `Open-Meteo Telemetry (${Number(coords.latitude).toFixed(4)}° N, ${Number(coords.longitude).toFixed(4)}° E)`,
       },
     });
 
@@ -125,13 +125,12 @@ const checkAndNotifyWeather = async (force = false) => {
       sentAt: new Date(),
     };
 
-    console.log(`[WeatherAutoNotifier] Broadcasted automated weather notification: "${alertTitle}" to ${commuters.length} commuters.`);
+    console.log(`[WeatherAutoNotifier] ✅ Daily 8AM weather notification sent: "${alertTitle}" for ${locationName}.`);
 
     return {
       notified: true,
       title: alertTitle,
       message: alertMessage,
-      recipients: commuters.length,
     };
   } catch (error) {
     console.error('[WeatherAutoNotifier] Error checking weather alerts:', error.message);
@@ -140,37 +139,63 @@ const checkAndNotifyWeather = async (force = false) => {
 };
 
 /**
- * Initializes the automated weather background monitoring daemon.
- * Runs an initial check shortly after startup, then checks every 60 minutes.
+ * Calculates the milliseconds until the next 8:00 AM (Philippine Time).
+ */
+const msUntilNext8AM = () => {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(DAILY_CHECK_HOUR, 0, 0, 0);
+
+  // If 8 AM already passed today, schedule for tomorrow
+  if (now >= next) {
+    next.setDate(next.getDate() + 1);
+  }
+
+  return next.getTime() - now.getTime();
+};
+
+/**
+ * Schedules the daily 8 AM weather check. Uses setTimeout to hit 8:00 AM precisely,
+ * then sets a 24-hour interval for subsequent days.
  */
 const startWeatherMonitoring = () => {
-  if (cronTimer) clearInterval(cronTimer);
+  if (dailyTimer) clearTimeout(dailyTimer);
 
-  // Initial check after 8 seconds of server startup
-  setTimeout(() => {
+  const msToNext = msUntilNext8AM();
+  const hoursUntil = (msToNext / 3600000).toFixed(1);
+
+  console.log(`[WeatherAutoNotifier] 🕗 Daily weather check scheduled for 8:00 AM (in ${hoursUntil} hours).`);
+
+  // Schedule the first run at exactly 8:00 AM
+  dailyTimer = setTimeout(() => {
+    // Run the check
     checkAndNotifyWeather(false).catch((err) =>
-      console.warn('[WeatherAutoNotifier] Startup check error:', err.message)
+      console.warn('[WeatherAutoNotifier] Daily check error:', err.message)
     );
-  }, 8000);
 
-  // Recurring check every 60 minutes (3,600,000 ms)
-  cronTimer = setInterval(() => {
-    checkAndNotifyWeather(false).catch((err) =>
-      console.warn('[WeatherAutoNotifier] Scheduled check error:', err.message)
-    );
-  }, 60 * 60 * 1000);
+    // Then repeat every 24 hours
+    dailyTimer = setInterval(() => {
+      checkAndNotifyWeather(false).catch((err) =>
+        console.warn('[WeatherAutoNotifier] Daily check error:', err.message)
+      );
+    }, 24 * 60 * 60 * 1000);
 
-  console.log('[WeatherAutoNotifier] Automated Dagupan City weather monitor daemon active (Interval: 60m).');
+    console.log('[WeatherAutoNotifier] 🔁 24-hour recurring schedule active.');
+  }, msToNext);
 };
 
 const getMonitoringStatus = () => {
+  const msToNext = msUntilNext8AM();
+  const nextRun = new Date(Date.now() + msToNext);
+
   return {
     active: true,
-    location: 'Dagupan City, Pangasinan',
-    coordinates: { lat: 16.0433, lng: 120.3397 },
-    provider: 'Open-Meteo Forecast URL (Free Open-Access)',
-    apiUrl: 'https://api.open-meteo.com/v1/forecast?latitude=16.0433&longitude=120.3397&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&hourly=precipitation_probability&timezone=Asia%2FManila',
-    intervalMinutes: 60,
+    schedule: 'Daily at 8:00 AM',
+    nextScheduledCheck: nextRun.toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
+    location: weatherService.DEFAULT_LOCATION,
+    coordinates: { lat: weatherService.DEFAULT_LAT, lng: weatherService.DEFAULT_LNG },
+    provider: 'Open-Meteo Forecast API (Free Open-Access)',
+    cooldownHours: 24,
     lastCheckTime: lastWeatherCheckTime,
     lastAlertSent: lastWeatherAlertSent,
   };
