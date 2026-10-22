@@ -1,4 +1,4 @@
-// SmartSakay Dagupan — Verified Dagupan City Transport Terminals Seed
+// SmartSakay Dagupan — Verified Transport Terminals Seed
 const terminalSeedData = [
   {
     name: 'Victory Liner Terminal',
@@ -81,7 +81,7 @@ const terminalSeedData = [
     operatingHours: '5:00 AM - 9:30 PM',
     destinations: ['Downtown Dagupan', 'Binmaley', 'Lingayen', 'Calasiao', 'San Fabian'],
     amenities: ['Mall Parking Integration', 'Covered Terminal Bays', 'Security Staff', 'Direct Mall Access', 'Well-lit Loading Zones'],
-    description: 'Premier western Dagupan transport terminal connecting city jeepneys, provincial shuttles, and tricycle feeder lines.',
+    description: 'Premier western Dagupan transport terminal connecting city jeepneys, provincial shuttles, and local feeder lines.',
     isActive: true,
   },
   {
@@ -96,20 +96,6 @@ const terminalSeedData = [
     destinations: ['Lucao / CSI', 'Bonuan Boquig', 'Bonuan Binloc', 'San Fabian', 'Mangaldan', 'Calasiao', 'Tambac'],
     amenities: ['POSO Traffic Assistance Post', 'Street Level Boarding Sheds', 'Directional Signages'],
     description: 'Central downtown staging point where all urban and inter-municipality jeepneys meet and transfer passengers.',
-    isActive: true,
-  },
-  {
-    name: 'Perez TODA Central Tricycle Terminal',
-    company: 'Perez Blvd Tricycle Operators and Drivers Association',
-    type: 'tricycle',
-    address: 'Near Old PNR Station, Perez Blvd, Dagupan City',
-    lat: 16.0425,
-    lng: 120.3375,
-    contactNumber: 'City TFRB (075) 522-8321',
-    operatingHours: '5:30 AM - 10:30 PM',
-    destinations: ['Perez Commercial Zone', 'Malimgas Market', 'Galvan St', 'Herrero-Perez Residential Areas'],
-    amenities: ['Official Fare Matrix Display Board', 'TODA Dispatch Booth', 'Regulated Queue Line'],
-    description: 'Regulated tricycle terminal operating under Dagupan City Ordinance fare rates with certified dispatchers.',
     isActive: true,
   },
 ];

@@ -192,7 +192,7 @@ const LguDashboardView = () => {
     },
     {
       title: "Terminal Hubs",
-      value: stats?.terminals?.total || 4,
+      value: stats?.terminals?.total ?? 0,
       subtitle: "Bus & Jeepney stations",
       icon: Compass,
       to: "/terminals",

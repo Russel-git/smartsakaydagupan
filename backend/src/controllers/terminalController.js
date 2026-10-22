@@ -1,7 +1,7 @@
-const Terminal = require('../models/Terminal');
-const terminalSeeds = require('../seeds/terminalSeeds');
-const apiResponse = require('../utils/apiResponse');
-const { logAuditEvent } = require('../utils/auditLogger');
+const Terminal = require("../models/Terminal");
+const terminalSeeds = require("../seeds/terminalSeeds");
+const apiResponse = require("../utils/apiResponse");
+const { logAuditEvent } = require("../utils/auditLogger");
 
 // Helper to calculate distance in km using Haversine formula
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -18,6 +18,46 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   return Math.round(R * c * 10) / 10;
 };
 
+const reverseGeocodeServer = async (lat, lng) => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
+      {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "SmartSakay-Server/1.0",
+          "Accept-Language": "en",
+        },
+      },
+    );
+    clearTimeout(timeout);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.address) {
+        const addr = data.address;
+        const street =
+          addr.road || addr.street || addr.pedestrian || addr.footway || "";
+        const neighborhood =
+          addr.neighbourhood ||
+          addr.suburb ||
+          addr.quarter ||
+          addr.village ||
+          addr.city_district ||
+          "";
+        const city = addr.city || addr.town || addr.municipality || "";
+        const state = addr.state || addr.region || "";
+        const parts = [street, neighborhood, city, state].filter(Boolean);
+        if (parts.length > 0) return parts.join(", ");
+        if (data.display_name)
+          return data.display_name.split(",").slice(0, 4).join(",").trim();
+      }
+    }
+  } catch (err) {}
+  return "";
+};
+
 // Terminals are exclusively managed and pinpointed by the admin (no auto-seeding)
 const ensureTerminalsSeeded = async () => {
   return;
@@ -28,21 +68,21 @@ const getAllTerminals = async (req, res, next) => {
     const { type, search, lat, lng, includeInactive } = req.query;
     const filter = {};
 
-    if (!includeInactive || includeInactive === 'false') {
+    if (!includeInactive || includeInactive === "false") {
       filter.isActive = true;
     }
 
-    if (type && type !== 'all') {
+    if (type && type !== "all") {
       filter.type = type;
     }
 
     if (search && search.trim()) {
-      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       filter.$or = [
-        { name: { $regex: escaped, $options: 'i' } },
-        { company: { $regex: escaped, $options: 'i' } },
-        { address: { $regex: escaped, $options: 'i' } },
-        { destinations: { $elemMatch: { $regex: escaped, $options: 'i' } } },
+        { name: { $regex: escaped, $options: "i" } },
+        { company: { $regex: escaped, $options: "i" } },
+        { address: { $regex: escaped, $options: "i" } },
+        { destinations: { $elemMatch: { $regex: escaped, $options: "i" } } },
       ];
     }
 
@@ -59,7 +99,11 @@ const getAllTerminals = async (req, res, next) => {
       terminals.sort((a, b) => a.distanceKm - b.distanceKm);
     }
 
-    return apiResponse.success(res, terminals, 'Terminals retrieved successfully');
+    return apiResponse.success(
+      res,
+      terminals,
+      "Terminals retrieved successfully",
+    );
   } catch (error) {
     next(error);
   }
@@ -69,9 +113,9 @@ const getTerminalById = async (req, res, next) => {
   try {
     const terminal = await Terminal.findById(req.params.id);
     if (!terminal) {
-      return apiResponse.error(res, 'Terminal not found', 404);
+      return apiResponse.error(res, "Terminal not found", 404);
     }
-    return apiResponse.success(res, terminal, 'Terminal details retrieved');
+    return apiResponse.success(res, terminal, "Terminal details retrieved");
   } catch (error) {
     next(error);
   }
@@ -79,16 +123,32 @@ const getTerminalById = async (req, res, next) => {
 
 const createTerminal = async (req, res, next) => {
   try {
+    if (!req.body.address || !req.body.address.trim()) {
+      const detected = await reverseGeocodeServer(req.body.lat, req.body.lng);
+      req.body.address =
+        detected ||
+        `${req.body.name || "Transit"} Terminal (${Number(req.body.lat).toFixed(4)}, ${Number(req.body.lng).toFixed(4)})`;
+    }
+
     const terminal = await Terminal.create(req.body);
 
     await logAuditEvent(req, {
-      action: 'TERMINAL_CREATE',
-      resourceType: 'terminal',
+      action: "TERMINAL_CREATE",
+      resourceType: "terminal",
       resourceId: terminal._id,
-      details: { name: terminal.name, type: terminal.type, address: terminal.address },
+      details: {
+        name: terminal.name,
+        type: terminal.type,
+        address: terminal.address,
+      },
     });
 
-    return apiResponse.success(res, terminal, 'Terminal created successfully', 201);
+    return apiResponse.success(
+      res,
+      terminal,
+      "Terminal created successfully",
+      201,
+    );
   } catch (error) {
     next(error);
   }
@@ -96,23 +156,32 @@ const createTerminal = async (req, res, next) => {
 
 const updateTerminal = async (req, res, next) => {
   try {
+    if (
+      req.body.lat &&
+      req.body.lng &&
+      (!req.body.address || !req.body.address.trim())
+    ) {
+      const detected = await reverseGeocodeServer(req.body.lat, req.body.lng);
+      if (detected) req.body.address = detected;
+    }
+
     const terminal = await Terminal.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
     });
 
     if (!terminal) {
-      return apiResponse.error(res, 'Terminal not found', 404);
+      return apiResponse.error(res, "Terminal not found", 404);
     }
 
     await logAuditEvent(req, {
-      action: 'TERMINAL_UPDATE',
-      resourceType: 'terminal',
+      action: "TERMINAL_UPDATE",
+      resourceType: "terminal",
       resourceId: terminal._id,
       details: { name: terminal.name, type: terminal.type, changes: req.body },
     });
 
-    return apiResponse.success(res, terminal, 'Terminal updated successfully');
+    return apiResponse.success(res, terminal, "Terminal updated successfully");
   } catch (error) {
     next(error);
   }
@@ -122,17 +191,17 @@ const deleteTerminal = async (req, res, next) => {
   try {
     const terminal = await Terminal.findByIdAndDelete(req.params.id);
     if (!terminal) {
-      return apiResponse.error(res, 'Terminal not found', 404);
+      return apiResponse.error(res, "Terminal not found", 404);
     }
 
     await logAuditEvent(req, {
-      action: 'TERMINAL_DELETE',
-      resourceType: 'terminal',
+      action: "TERMINAL_DELETE",
+      resourceType: "terminal",
       resourceId: req.params.id,
       details: { name: terminal.name },
     });
 
-    return apiResponse.success(res, null, 'Terminal deleted successfully');
+    return apiResponse.success(res, null, "Terminal deleted successfully");
   } catch (error) {
     next(error);
   }
@@ -142,11 +211,15 @@ const clearAllTerminals = async (req, res, next) => {
   try {
     const result = await Terminal.deleteMany({});
     await logAuditEvent(req, {
-      action: 'TERMINAL_CLEAR_ALL',
-      resourceType: 'terminal',
+      action: "TERMINAL_CLEAR_ALL",
+      resourceType: "terminal",
       details: { deletedCount: result.deletedCount },
     });
-    return apiResponse.success(res, { deletedCount: result.deletedCount }, 'All terminals removed successfully');
+    return apiResponse.success(
+      res,
+      { deletedCount: result.deletedCount },
+      "All terminals removed successfully",
+    );
   } catch (error) {
     next(error);
   }

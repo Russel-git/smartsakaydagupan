@@ -12,7 +12,6 @@ import {
   Compass,
   Check,
   ArrowUpRight,
-  Route as RouteIcon,
 } from "lucide-react";
 import api from "../api/client";
 import { useToast } from "../contexts/ToastContext";
@@ -22,7 +21,6 @@ import ConfirmModal from "../components/common/ConfirmModal";
 const TERMINAL_TYPES = [
   { value: "bus", label: "Provincial Bus", icon: "🚌", color: "#3B82F6" },
   { value: "jeepney", label: "Jeepney Hub", icon: "🚐", color: "#10B981" },
-  { value: "tricycle", label: "Tricycle TODA", icon: "🛺", color: "#F59E0B" },
   {
     value: "multimodal",
     label: "Multimodal Hub",
@@ -31,14 +29,149 @@ const TERMINAL_TYPES = [
   },
 ];
 
-const DAGUPAN_COORDINATE_PRESETS = [
-  { label: "Downtown Perez Blvd", lat: 16.0433, lng: 120.3342 },
-  { label: "CSI The City Mall Lucao", lat: 16.0278, lng: 120.3218 },
-  { label: "Victory Liner Perez", lat: 16.0416, lng: 120.3402 },
-  { label: "Five Star Bus Perez", lat: 16.0423, lng: 120.3421 },
-  { label: "Malimgas Public Market", lat: 16.0429, lng: 120.3361 },
-  { label: "Bonuan Gueset / Blue Beach", lat: 16.082, lng: 120.345 },
+const STANDARD_AMENITIES = [
+  "Waiting Lounge / Seating Area",
+  "Restrooms / Comfort Rooms",
+  "Ticketing Booth / Counter",
+  "Covered Platform / Canopy",
+  "CCTV & Security Guard",
+  "Free Wi-Fi",
+  "PWD Accessibility Ramp",
+  "Baggage Storage / Cargo",
+  "Food Stalls / Canteen",
+  "Charging Stations",
 ];
+
+const reverseGeocode = async (lat, lng) => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
+      {
+        signal: controller.signal,
+        headers: {
+          Accept: "application/json",
+          "Accept-Language": "en",
+        },
+      },
+    );
+    clearTimeout(timeout);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.address) {
+        const addr = data.address;
+        const street =
+          addr.road || addr.street || addr.pedestrian || addr.footway || "";
+        const neighborhood =
+          addr.neighbourhood ||
+          addr.suburb ||
+          addr.quarter ||
+          addr.village ||
+          addr.city_district ||
+          "";
+        const city = addr.city || addr.town || addr.municipality || "";
+        const state = addr.state || addr.region || "";
+        const parts = [street, neighborhood, city, state].filter(Boolean);
+        if (parts.length > 0) return parts.join(", ");
+        if (data.display_name)
+          return data.display_name.split(",").slice(0, 4).join(",").trim();
+      }
+    }
+  } catch (err) {}
+  return "";
+};
+
+// Helper to format 24h time ("05:00") to 12h display string ("5:00 AM")
+const formatTime12h = (time24) => {
+  if (!time24) return "";
+  const parts = time24.split(":");
+  let hour = parseInt(parts[0], 10);
+  const minute = parts[1] || "00";
+  if (isNaN(hour)) return time24;
+  const ampm = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12;
+  if (hour === 0) hour = 12;
+  return `${hour}:${minute} ${ampm}`;
+};
+
+// Helper to parse legacy operating hours string into state
+const parseOperatingHoursToState = (str) => {
+  if (!str) {
+    return { is24Hours: false, start: "05:00", end: "22:00" };
+  }
+  const clean = str.trim().toLowerCase();
+  if (
+    clean.includes("24/7") ||
+    clean.includes("24 hours") ||
+    clean.includes("round the clock")
+  ) {
+    return { is24Hours: true, start: "00:00", end: "23:59" };
+  }
+
+  const match = str.match(
+    /(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:-|to)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
+  );
+  if (match) {
+    const to24 = (t) => {
+      let tNorm = t.trim().toLowerCase();
+      let ampm = "";
+      if (tNorm.includes("am")) ampm = "AM";
+      if (tNorm.includes("pm")) ampm = "PM";
+      tNorm = tNorm.replace(/[^\d:]/g, "");
+      let [h, m] = tNorm.split(":");
+      let hour = parseInt(h, 10);
+      let minute = m ? parseInt(m, 10) : 0;
+      if (isNaN(hour)) return "05:00";
+      if (ampm === "PM" && hour < 12) hour += 12;
+      if (ampm === "AM" && hour === 12) hour = 0;
+      return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+    };
+
+    return {
+      is24Hours: false,
+      start: to24(match[1]),
+      end: to24(match[2]),
+    };
+  }
+
+  return { is24Hours: false, start: "05:00", end: "22:00" };
+};
+
+// Helper to parse existing amenities into checkboxes and "Others" text input
+const parseAmenitiesForForm = (amenitiesInput) => {
+  let list = [];
+  if (Array.isArray(amenitiesInput)) {
+    list = amenitiesInput
+      .map((a) => (typeof a === "string" ? a.trim() : ""))
+      .filter(Boolean);
+  } else if (typeof amenitiesInput === "string" && amenitiesInput.trim()) {
+    list = amenitiesInput
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  const selected = [];
+  const others = [];
+
+  list.forEach((item) => {
+    const matched = STANDARD_AMENITIES.find(
+      (std) => std.toLowerCase() === item.toLowerCase(),
+    );
+    if (matched) {
+      if (!selected.includes(matched)) selected.push(matched);
+    } else {
+      others.push(item);
+    }
+  });
+
+  return {
+    selectedAmenities: selected,
+    isOtherAmenities: others.length > 0,
+    otherAmenities: others.join(", "),
+  };
+};
 
 const TerminalsPage = () => {
   const { colors } = useTheme();
@@ -64,18 +197,22 @@ const TerminalsPage = () => {
     onConfirm: () => {},
   });
 
-  // Form State
+  // Form State - coordinates start completely blank so other LGUs do not see initial preset coordinates
   const [formData, setFormData] = useState({
     name: "",
     company: "",
     type: "bus",
     address: "",
-    lat: "16.0433",
-    lng: "120.3342",
+    lat: "",
+    lng: "",
     contactNumber: "",
-    operatingHours: "24/7",
+    is24Hours: false,
+    operatingHoursStart: "05:00",
+    operatingHoursEnd: "22:00",
     destinations: "",
-    amenities: "Waiting Lounge, Restrooms",
+    selectedAmenities: [],
+    isOtherAmenities: false,
+    otherAmenities: "",
     description: "",
     isActive: true,
   });
@@ -93,16 +230,14 @@ const TerminalsPage = () => {
   const fetchTerminals = async () => {
     try {
       setLoading(true);
-
       const res = await api.get("/terminals", {
         params: { includeInactive: "true" },
       });
-
       const data = res.data?.data || [];
       setTerminals(data);
     } catch (err) {
       console.error("Failed to load terminals:", err);
-      showError("Fetch Failed", "Unable to retrieve Dagupan terminals list.");
+      showError("Fetch Failed", "Unable to retrieve terminals list.");
     } finally {
       setLoading(false);
     }
@@ -127,7 +262,9 @@ const TerminalsPage = () => {
     if (!t || !routes || routes.length === 0) return [];
     const tName = (t.name || "").toLowerCase().trim();
     const tAddress = (t.address || "").toLowerCase().trim();
-    const destinations = (t.destinations || []).map((d) => d.toLowerCase().trim());
+    const destinations = (t.destinations || []).map((d) =>
+      d.toLowerCase().trim(),
+    );
 
     return routes.filter((r) => {
       const rName = (r.name || "").toLowerCase();
@@ -137,31 +274,42 @@ const TerminalsPage = () => {
       const rStart = (r.startPoint?.name || "").toLowerCase();
       const rEnd = (r.endPoint?.name || "").toLowerCase();
 
-      if (tName && (rTermName.includes(tName) || tName.includes(rTermName) || rStart.includes(tName) || rEnd.includes(tName))) {
+      if (
+        tName &&
+        (rTermName.includes(tName) ||
+          tName.includes(rTermName) ||
+          rStart.includes(tName) ||
+          rEnd.includes(tName))
+      ) {
         return true;
       }
       if (tName && (rCorridor.includes(tName) || rName.includes(tName))) {
         return true;
       }
-      if (tAddress && rTermAddress && (tAddress.includes(rTermAddress) || rTermAddress.includes(tAddress))) {
+      if (
+        tAddress &&
+        rTermAddress &&
+        (tAddress.includes(rTermAddress) || rTermAddress.includes(tAddress))
+      ) {
         return true;
       }
       if (destinations.length > 0) {
-        return destinations.some((dest) => dest && (rName.includes(dest) || rStart.includes(dest) || rEnd.includes(dest)));
+        return destinations.some(
+          (dest) =>
+            dest &&
+            (rName.includes(dest) ||
+              rStart.includes(dest) ||
+              rEnd.includes(dest)),
+        );
       }
       return false;
     });
   };
 
-  // ============================================================
-  // FILTERED TERMINALS
-  // ============================================================
-
+  // Filtered terminals
   const filteredTerminals = terminals.filter((t) => {
     const matchesType = typeFilter === "all" || t.type === typeFilter;
-
     const term = search.toLowerCase();
-
     const matchesSearch =
       !term ||
       t.name?.toLowerCase().includes(term) ||
@@ -172,24 +320,16 @@ const TerminalsPage = () => {
     return matchesType && matchesSearch;
   });
 
-  // ============================================================
-  // TERMINAL COUNTS
-  // ============================================================
-
+  // Terminal counts
   const busCount = terminals.filter((t) => t.type === "bus").length;
   const jeepneyCount = terminals.filter((t) => t.type === "jeepney").length;
-  const tricycleCount = terminals.filter((t) => t.type === "tricycle").length;
   const multimodalCount = terminals.filter(
     (t) => t.type === "multimodal",
   ).length;
 
-  // ============================================================
-  // OVERVIEW MAP
-  // ============================================================
-
+  // Overview map initialization
   useEffect(() => {
     if (!overviewMapContainerRef.current || !window.L) return;
-
     const L = window.L;
 
     if (!overviewMapInstanceRef.current) {
@@ -199,31 +339,32 @@ const TerminalsPage = () => {
       });
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors | SmartSakay Dagupan",
+        attribution: "&copy; OpenStreetMap contributors | SmartSakay",
         maxZoom: 19,
       }).addTo(map);
 
-      // Click map to add a terminal
+      // Click map to pinpoint and add a terminal
       map.on("click", (e) => {
         const { lat, lng } = e.latlng;
-
         setEditingTerminal(null);
-
         setFormData({
           name: "",
           company: "",
           type: "bus",
-          address: "Dagupan City, Pangasinan",
+          address: "",
           lat: lat.toFixed(6),
           lng: lng.toFixed(6),
           contactNumber: "",
-          operatingHours: "24/7",
+          is24Hours: false,
+          operatingHoursStart: "05:00",
+          operatingHoursEnd: "22:00",
           destinations: "",
-          amenities: "Waiting Lounge, Restrooms",
+          selectedAmenities: [],
+          isOtherAmenities: false,
+          otherAmenities: "",
           description: "",
           isActive: true,
         });
-
         setModalOpen(true);
       });
 
@@ -236,7 +377,6 @@ const TerminalsPage = () => {
     Object.values(overviewMarkersRef.current).forEach((marker) => {
       map.removeLayer(marker);
     });
-
     overviewMarkersRef.current = {};
 
     // Render filtered terminals
@@ -248,14 +388,12 @@ const TerminalsPage = () => {
         TERMINAL_TYPES[0];
 
       const opacity = t.isActive ? 1.0 : 0.6;
-
       const borderStyle = t.isActive
         ? `3px solid ${colors.textPrimary}`
         : `3px dashed ${colors.disabled}`;
 
       const customHtmlIcon = L.divIcon({
         className: "terminal-map-pin",
-
         html: `
           <div style="
             background: ${typeObj.color};
@@ -275,7 +413,6 @@ const TerminalsPage = () => {
             ${typeObj.icon}
           </div>
         `,
-
         iconSize: [34, 34],
         iconAnchor: [17, 17],
       });
@@ -286,113 +423,37 @@ const TerminalsPage = () => {
 
       // Popup
       const popupContent = document.createElement("div");
-
       popupContent.style.fontFamily =
         '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-
       popupContent.style.minWidth = "220px";
-
       popupContent.innerHTML = `
-        <div style="
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 6px;
-        ">
-          <span style="
-            background: ${typeObj.color}25;
-            color: ${typeObj.color};
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 700;
-            font-size: 10px;
-            border: 1px solid ${typeObj.color}50;
-          ">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="background: ${typeObj.color}25; color: ${typeObj.color}; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 10px; border: 1px solid ${typeObj.color}50;">
             ${typeObj.icon} ${typeObj.label.toUpperCase()}
           </span>
-
-          <span style="
-            font-size: 10px;
-            font-weight: 700;
-            color: ${t.isActive ? colors.success : colors.error};
-          ">
+          <span style="font-size: 10px; font-weight: 700; color: ${t.isActive ? colors.success : colors.error};">
             ${t.isActive ? "● ACTIVE ON COMMUTER MAP" : "○ HIDDEN"}
           </span>
         </div>
-
-        <div style="
-          font-size: 14px;
-          font-weight: 800;
-          color: ${colors.textPrimary};
-          margin-bottom: 2px;
-        ">
+        <div style="font-size: 14px; font-weight: 800; color: ${colors.textPrimary}; margin-bottom: 2px;">
           ${t.name}
         </div>
-
-        <div style="
-          font-size: 11px;
-          color: ${colors.textSecondary};
-          margin-bottom: 4px;
-        ">
-          ${t.company || "Dagupan Transport Operator"}
+        <div style="font-size: 11px; color: ${colors.textSecondary}; margin-bottom: 4px;">
+          ${t.company || "Transport Operator"}
         </div>
-
-        <div style="
-          font-size: 11px;
-          color: ${colors.textSecondary};
-          margin-bottom: 4px;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        ">
+        <div style="font-size: 11px; color: ${colors.textSecondary}; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
           📍 <span>${t.address}</span>
         </div>
-
-        <div style="
-          font-family: monospace;
-          font-size: 11px;
-          color: ${colors.warning};
-          background: ${colors.warningLight};
-          padding: 2px 6px;
-          border-radius: 4px;
-          display: inline-block;
-          margin-bottom: 8px;
-        ">
+        <div style="font-family: monospace; font-size: 11px; color: ${colors.warning}; background: ${colors.warningLight}; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 8px;">
           GPS: ${t.lat.toFixed(5)}°N, ${t.lng.toFixed(5)}°E
         </div>
-
-        <div style="
-          font-size: 11px;
-          color: ${colors.textMuted};
-          margin-bottom: 8px;
-        ">
-          🕒 ${t.operatingHours || "24/7"}
-          ${t.contactNumber ? `• 📞 ${t.contactNumber}` : ""}
+        <div style="font-size: 11px; color: ${colors.textMuted}; margin-bottom: 8px;">
+          🕒 ${t.operatingHours || "24/7"} ${t.contactNumber ? `• 📞 ${t.contactNumber}` : ""}
         </div>
-
-        <div style="
-          display: flex;
-          gap: 6px;
-          border-top: 1px solid ${colors.border};
-          padding-top: 8px;
-        ">
+        <div style="display: flex; gap: 6px; border-top: 1px solid ${colors.border}; padding-top: 8px;">
           <button
             id="popup-edit-${t._id}"
-            style="
-              flex: 1;
-              background: ${colors.info};
-              color: ${colors.white};
-              border: none;
-              padding: 5px 10px;
-              border-radius: 6px;
-              font-size: 11px;
-              font-weight: 600;
-              cursor: pointer;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              gap: 4px;
-            "
+            style="flex: 1; background: ${colors.info}; color: ${colors.white}; border: none; padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;"
           >
             ✏️ Edit & Move Pin
           </button>
@@ -400,10 +461,8 @@ const TerminalsPage = () => {
       `;
 
       marker.bindPopup(popupContent);
-
       marker.on("popupopen", () => {
         const editBtn = document.getElementById(`popup-edit-${t._id}`);
-
         if (editBtn) {
           editBtn.onclick = () => {
             handleOpenEditModal(t);
@@ -419,10 +478,7 @@ const TerminalsPage = () => {
     }, 150);
   }, [terminals, search, typeFilter, viewMode, colors]);
 
-  // ============================================================
-  // MODAL PINPOINT MAP
-  // ============================================================
-
+  // Modal pinpoint map initialization
   useEffect(() => {
     if (!modalOpen) {
       if (modalMapInstanceRef.current) {
@@ -430,33 +486,150 @@ const TerminalsPage = () => {
         modalMapInstanceRef.current = null;
         modalMarkerRef.current = null;
       }
-
       return;
     }
 
     const timer = setTimeout(() => {
       if (!modalMapContainerRef.current || !window.L) return;
-
       const L = window.L;
 
-      const initLat = parseFloat(formData.lat) || 16.0433;
+      const hasValidCoords =
+        formData.lat !== "" &&
+        formData.lng !== "" &&
+        !isNaN(parseFloat(formData.lat)) &&
+        !isNaN(parseFloat(formData.lng));
 
-      const initLng = parseFloat(formData.lng) || 120.3342;
+      const parsedLat = hasValidCoords ? parseFloat(formData.lat) : null;
+      const parsedLng = hasValidCoords ? parseFloat(formData.lng) : null;
+
+      // Determine center: if valid coords exist, center on them. Otherwise, use overview center or neutral fallback
+      const overviewCenter = overviewMapInstanceRef.current?.getCenter();
+      const centerLat = parsedLat ?? overviewCenter?.lat ?? 16.0433;
+      const centerLng = parsedLng ?? overviewCenter?.lng ?? 120.3342;
+      const zoomLevel = hasValidCoords ? 15 : 13;
 
       if (!modalMapInstanceRef.current) {
         const map = L.map(modalMapContainerRef.current, {
-          center: [initLat, initLng],
-          zoom: 15,
+          center: [centerLat, centerLng],
+          zoom: zoomLevel,
         });
 
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: "&copy; OpenStreetMap | SmartSakay Dagupan",
+          attribution: "&copy; OpenStreetMap contributors | SmartSakay",
           maxZoom: 19,
         }).addTo(map);
 
+        const createPinIcon = () =>
+          L.divIcon({
+            className: "modal-draggable-pin",
+            html: `
+              <div style="
+                background: ${colors.info};
+                color: ${colors.white};
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 18px;
+                border: 3px solid ${colors.textPrimary};
+                box-shadow: 0 4px 12px rgba(37, 99, 235, 0.6);
+                cursor: grab;
+              ">
+                📍
+              </div>
+            `,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
+          });
+
+        const setupMarker = (latVal, lngVal) => {
+          const marker = L.marker([latVal, lngVal], {
+            icon: createPinIcon(),
+            draggable: true,
+            autoPan: true,
+          }).addTo(map);
+
+          marker
+            .bindPopup(
+              `
+                <div style="font-family: sans-serif; font-size: 12px; font-weight: 700; color: ${colors.textPrimary};">
+                  📍 Pinpoint Position<br/>
+                  <span style="font-weight: 400; color: ${colors.textMuted}; font-size: 11px;">
+                    Drag or click map to reposition
+                  </span>
+                </div>
+              `,
+            )
+            .openPopup();
+
+          marker.on("dragend", (e) => {
+            const pos = e.target.getLatLng();
+            setFormData((prev) => ({
+              ...prev,
+              lat: pos.lat.toFixed(6),
+              lng: pos.lng.toFixed(6),
+            }));
+          });
+
+          return marker;
+        };
+
+        // Only create marker if coordinate data actually exists!
+        if (hasValidCoords) {
+          modalMarkerRef.current = setupMarker(parsedLat, parsedLng);
+        }
+
+        map.on("click", (e) => {
+          const clickedLat = e.latlng.lat.toFixed(6);
+          const clickedLng = e.latlng.lng.toFixed(6);
+
+          if (!modalMarkerRef.current) {
+            modalMarkerRef.current = setupMarker(e.latlng.lat, e.latlng.lng);
+          } else {
+            modalMarkerRef.current.setLatLng(e.latlng);
+          }
+
+          map.panTo(e.latlng);
+
+          setFormData((prev) => ({
+            ...prev,
+            lat: clickedLat,
+            lng: clickedLng,
+          }));
+        });
+
+        modalMapInstanceRef.current = map;
+
+        setTimeout(() => {
+          map.invalidateSize();
+        }, 200);
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [modalOpen, colors]);
+
+  // Sync modal marker with coordinate changes
+  useEffect(() => {
+    if (!modalMapInstanceRef.current) return;
+
+    const latNum = parseFloat(formData.lat);
+    const lngNum = parseFloat(formData.lng);
+
+    if (
+      !isNaN(latNum) &&
+      !isNaN(lngNum) &&
+      formData.lat !== "" &&
+      formData.lng !== ""
+    ) {
+      if (modalMarkerRef.current) {
+        modalMarkerRef.current.setLatLng([latNum, lngNum]);
+      } else if (window.L) {
+        const L = window.L;
         const pinIcon = L.divIcon({
           className: "modal-draggable-pin",
-
           html: `
             <div style="
               background: ${colors.info};
@@ -475,43 +648,18 @@ const TerminalsPage = () => {
               📍
             </div>
           `,
-
           iconSize: [36, 36],
           iconAnchor: [18, 18],
         });
 
-        const marker = L.marker([initLat, initLng], {
+        const marker = L.marker([latNum, lngNum], {
           icon: pinIcon,
           draggable: true,
           autoPan: true,
-        }).addTo(map);
-
-        marker
-          .bindPopup(
-            `
-              <div style="
-                font-family: sans-serif;
-                font-size: 12px;
-                font-weight: 700;
-                color: ${colors.textPrimary};
-              ">
-                📍 Pinpoint Position<br/>
-
-                <span style="
-                  font-weight: 400;
-                  color: ${colors.textMuted};
-                  font-size: 11px;
-                ">
-                  Drag or click map to reposition
-                </span>
-              </div>
-            `,
-          )
-          .openPopup();
+        }).addTo(modalMapInstanceRef.current);
 
         marker.on("dragend", (e) => {
           const pos = e.target.getLatLng();
-
           setFormData((prev) => ({
             ...prev,
             lat: pos.lat.toFixed(6),
@@ -519,93 +667,65 @@ const TerminalsPage = () => {
           }));
         });
 
-        map.on("click", (e) => {
-          marker.setLatLng(e.latlng);
-          map.panTo(e.latlng);
-
-          setFormData((prev) => ({
-            ...prev,
-            lat: e.latlng.lat.toFixed(6),
-            lng: e.latlng.lng.toFixed(6),
-          }));
-        });
-
-        modalMapInstanceRef.current = map;
         modalMarkerRef.current = marker;
-
-        setTimeout(() => {
-          map.invalidateSize();
-        }, 200);
       }
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [modalOpen, colors]);
-
-  // ============================================================
-  // SYNC MODAL MARKER
-  // ============================================================
-
-  useEffect(() => {
-    if (!modalMapInstanceRef.current || !modalMarkerRef.current) {
-      return;
-    }
-
-    const latNum = parseFloat(formData.lat);
-    const lngNum = parseFloat(formData.lng);
-
-    if (!isNaN(latNum) && !isNaN(lngNum)) {
-      modalMarkerRef.current.setLatLng([latNum, lngNum]);
-
       modalMapInstanceRef.current.panTo([latNum, lngNum]);
+    } else {
+      if (modalMarkerRef.current) {
+        modalMapInstanceRef.current.removeLayer(modalMarkerRef.current);
+        modalMarkerRef.current = null;
+      }
     }
-  }, [formData.lat, formData.lng]);
+  }, [formData.lat, formData.lng, colors]);
 
-  // ============================================================
-  // OPEN ADD MODAL
-  // ============================================================
-
+  // Open Add Modal with completely blank coordinates and blank form
   const handleOpenAddModal = () => {
     setEditingTerminal(null);
-
     setFormData({
       name: "",
       company: "",
       type: "bus",
       address: "",
-      lat: "16.0433",
-      lng: "120.3342",
+      lat: "",
+      lng: "",
       contactNumber: "",
-      operatingHours: "24/7",
+      is24Hours: false,
+      operatingHoursStart: "05:00",
+      operatingHoursEnd: "22:00",
       destinations: "",
-      amenities: "Waiting Lounge, Restrooms",
+      selectedAmenities: [],
+      isOtherAmenities: false,
+      otherAmenities: "",
       description: "",
       isActive: true,
     });
-
     setModalOpen(true);
   };
 
-  // ============================================================
-  // OPEN EDIT MODAL
-  // ============================================================
-
+  // Open Edit Modal with existing terminal data
   const handleOpenEditModal = (t) => {
     setEditingTerminal(t);
+
+    const hoursState = parseOperatingHoursToState(t.operatingHours);
+    const amenitiesState = parseAmenitiesForForm(t.amenities);
 
     setFormData({
       name: t.name || "",
       company: t.company || "",
       type: t.type || "bus",
       address: t.address || "",
-      lat: t.lat?.toFixed ? t.lat.toFixed(6) : t.lat?.toString() || "16.0433",
-      lng: t.lng?.toFixed ? t.lng.toFixed(6) : t.lng?.toString() || "120.3342",
+      lat: t.lat !== undefined && t.lat !== null ? t.lat.toString() : "",
+      lng: t.lng !== undefined && t.lng !== null ? t.lng.toString() : "",
       contactNumber: t.contactNumber || "",
-      operatingHours: t.operatingHours || "24/7",
+      is24Hours: hoursState.is24Hours,
+      operatingHoursStart: hoursState.start,
+      operatingHoursEnd: hoursState.end,
       destinations: Array.isArray(t.destinations)
         ? t.destinations.join(", ")
-        : "",
-      amenities: Array.isArray(t.amenities) ? t.amenities.join(", ") : "",
+        : t.destinations || "",
+      selectedAmenities: amenitiesState.selectedAmenities,
+      isOtherAmenities: amenitiesState.isOtherAmenities,
+      otherAmenities: amenitiesState.otherAmenities,
       description: t.description || "",
       isActive: t.isActive !== false,
     });
@@ -613,15 +733,20 @@ const TerminalsPage = () => {
     setModalOpen(true);
   };
 
-  // ============================================================
-  // SAVE TERMINAL
-  // ============================================================
-
+  // Save terminal
   const handleSaveTerminal = async (e) => {
     e.preventDefault();
 
-    if (!formData.name.trim() || !formData.address.trim()) {
-      showError("Validation Error", "Terminal name and address are required.");
+    if (!formData.name.trim()) {
+      showError("Validation Error", "Terminal name is required.");
+      return;
+    }
+
+    if (!formData.lat || !formData.lng) {
+      showError(
+        "Missing Pinpoint Coordinates",
+        "Please click on the map to pinpoint this terminal's GPS coordinates.",
+      );
       return;
     }
 
@@ -631,45 +756,75 @@ const TerminalsPage = () => {
     if (isNaN(latNum) || isNaN(lngNum)) {
       showError(
         "Invalid Coordinates",
-        "Please enter valid numeric latitude and longitude.",
+        "Please provide valid numeric latitude and longitude coordinates.",
       );
       return;
+    }
+
+    // Determine operating hours string
+    let operatingHoursStr = "24/7";
+    if (formData.is24Hours) {
+      operatingHoursStr = "24/7";
+    } else if (formData.operatingHoursStart && formData.operatingHoursEnd) {
+      operatingHoursStr = `${formatTime12h(formData.operatingHoursStart)} - ${formatTime12h(formData.operatingHoursEnd)}`;
+    } else if (formData.operatingHoursStart) {
+      operatingHoursStr = `Opens at ${formatTime12h(formData.operatingHoursStart)}`;
+    }
+
+    // Combine selected checkboxes and custom "Others" amenities
+    let finalAmenities = [...formData.selectedAmenities];
+    if (formData.isOtherAmenities && formData.otherAmenities.trim()) {
+      const extra = formData.otherAmenities
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      finalAmenities = [...finalAmenities, ...extra];
+    }
+    finalAmenities = Array.from(new Set(finalAmenities));
+
+    setSaving(true);
+
+    let resolvedAddress = (formData.address || "").trim();
+    if (
+      !resolvedAddress ||
+      (editingTerminal &&
+        (editingTerminal.lat !== latNum || editingTerminal.lng !== lngNum))
+    ) {
+      const geocoded = await reverseGeocode(latNum, lngNum);
+      if (geocoded) {
+        resolvedAddress = geocoded;
+      } else if (!resolvedAddress) {
+        resolvedAddress = `${formData.name.trim()} Terminal (${latNum.toFixed(4)}, ${lngNum.toFixed(4)})`;
+      }
     }
 
     const payload = {
       name: formData.name.trim(),
       company: formData.company.trim(),
       type: formData.type,
-      address: formData.address.trim(),
+      address: resolvedAddress,
       lat: latNum,
       lng: lngNum,
       contactNumber: formData.contactNumber.trim(),
-      operatingHours: formData.operatingHours.trim() || "24/7",
+      operatingHours: operatingHoursStr,
       destinations: formData.destinations
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean),
-      amenities: formData.amenities
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
+      amenities: finalAmenities,
       description: formData.description.trim(),
       isActive: formData.isActive,
     };
 
-    setSaving(true);
-
     try {
       if (editingTerminal) {
         await api.put(`/terminals/${editingTerminal._id}`, payload);
-
         showSuccess(
           "Terminal Updated",
           `"${payload.name}" modified successfully and live on commuter map.`,
         );
       } else {
         await api.post("/terminals", payload);
-
         showSuccess(
           "Terminal Added",
           `"${payload.name}" created and now broadcasting to commuter dashboard.`,
@@ -680,17 +835,13 @@ const TerminalsPage = () => {
       fetchTerminals();
     } catch (err) {
       const msg = err.response?.data?.message || "Failed to save terminal.";
-
       showError("Save Error", msg);
     } finally {
       setSaving(false);
     }
   };
 
-  // ============================================================
-  // DELETE TERMINAL
-  // ============================================================
-
+  // Delete terminal
   const handleDeleteTerminal = (t) => {
     setConfirmConfig({
       isOpen: true,
@@ -700,47 +851,32 @@ const TerminalsPage = () => {
       cancelText: "Cancel",
       type: "danger",
       loading: false,
-
       onConfirm: async () => {
-        setConfirmConfig((prev) => ({
-          ...prev,
-          loading: true,
-        }));
-
+        setConfirmConfig((prev) => ({ ...prev, loading: true }));
         try {
           await api.delete(`/terminals/${t._id}`);
-
           showSuccess(
             "Terminal Deleted",
-            `"${t.name}" has been removed from Dagupan transport database.`,
+            `"${t.name}" has been removed from transport database.`,
           );
-
           setConfirmConfig((prev) => ({
             ...prev,
             isOpen: false,
             loading: false,
           }));
-
           fetchTerminals();
         } catch (err) {
           showError(
             "Delete Failed",
             err.response?.data?.message || "Failed to delete terminal.",
           );
-
-          setConfirmConfig((prev) => ({
-            ...prev,
-            loading: false,
-          }));
+          setConfirmConfig((prev) => ({ ...prev, loading: false }));
         }
       },
     });
   };
 
-  // ============================================================
-  // CLEAR ALL TERMINALS
-  // ============================================================
-
+  // Clear all terminals
   const handleClearAllTerminals = () => {
     setConfirmConfig({
       isOpen: true,
@@ -751,85 +887,57 @@ const TerminalsPage = () => {
       cancelText: "Cancel",
       type: "danger",
       loading: false,
-
       onConfirm: async () => {
-        setConfirmConfig((prev) => ({
-          ...prev,
-          loading: true,
-        }));
-
+        setConfirmConfig((prev) => ({ ...prev, loading: true }));
         try {
           await api.delete("/terminals/clear-all");
-
           showSuccess(
             "Terminals Removed",
             "All current terminals have been removed. You can now add and pinpoint new terminals.",
           );
-
           setConfirmConfig((prev) => ({
             ...prev,
             isOpen: false,
             loading: false,
           }));
-
           fetchTerminals();
         } catch (err) {
           showError(
             "Clear Failed",
             err.response?.data?.message || "Failed to remove terminals.",
           );
-
-          setConfirmConfig((prev) => ({
-            ...prev,
-            loading: false,
-          }));
+          setConfirmConfig((prev) => ({ ...prev, loading: false }));
         }
       },
     });
   };
 
-  // ============================================================
-  // TOGGLE STATUS
-  // ============================================================
-
+  // Toggle active status
   const handleToggleStatus = async (t) => {
     try {
       await api.put(`/terminals/${t._id}`, {
         isActive: !t.isActive,
       });
-
       showInfo(
         "Status Updated",
         `"${t.name}" is now ${
           !t.isActive ? "Active (visible on map)" : "Inactive (hidden from map)"
         }.`,
       );
-
       fetchTerminals();
     } catch (err) {
       showError("Toggle Error", "Failed to update terminal status.");
     }
   };
 
-  // ============================================================
-  // PAN TO TERMINAL
-  // ============================================================
-
+  // Pan overview map to terminal
   const handlePanToTerminal = (t) => {
-    if (!overviewMapInstanceRef.current || !t.lat || !t.lng) {
-      return;
-    }
-
+    if (!overviewMapInstanceRef.current || !t.lat || !t.lng) return;
     overviewMapInstanceRef.current.setView([t.lat, t.lng], 16, {
       animate: true,
     });
-
     const marker = overviewMarkersRef.current[t._id];
-
-    if (marker) {
-      marker.openPopup();
-    }
-
+    if (marker) marker.openPopup();
     if (overviewMapContainerRef.current) {
       overviewMapContainerRef.current.scrollIntoView({
         behavior: "smooth",
@@ -838,24 +946,9 @@ const TerminalsPage = () => {
     }
   };
 
-  // ============================================================
-  // APPLY PRESET
-  // ============================================================
-
-  const applyPreset = (preset) => {
-    setFormData((prev) => ({
-      ...prev,
-      lat: preset.lat.toFixed(6),
-      lng: preset.lng.toFixed(6),
-    }));
-  };
-
   return (
     <div>
-      {/* ======================================================
-          HEADER
-      ====================================================== */}
-
+      {/* HEADER */}
       <div
         style={{
           display: "flex",
@@ -876,24 +969,18 @@ const TerminalsPage = () => {
           >
             Transport Terminals & Hubs
           </h1>
-
           <p
             style={{
               color: colors.textMuted,
               fontSize: "14px",
             }}
           >
-            Pinpoint on map, modify coordinates, and manage transit hubs
+            Pinpoint on map, configure coordinates, and manage transit hubs
             dynamically displayed in the commuter app dashboard.
           </p>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-          }}
-        >
+        <div style={{ display: "flex", gap: "10px" }}>
           {terminals.length > 0 && (
             <button
               onClick={handleClearAllTerminals}
@@ -922,7 +1009,7 @@ const TerminalsPage = () => {
               gap: "8px",
               backgroundColor: colors.primary,
               color: colors.white,
-              shadow: `0 4px 12px ${colors.primary}50`,
+              boxShadow: `0 4px 12px ${colors.primary}50`,
             }}
           >
             <Plus size={18} />
@@ -931,10 +1018,7 @@ const TerminalsPage = () => {
         </div>
       </div>
 
-      {/* ======================================================
-          STATS
-      ====================================================== */}
-
+      {/* STATS */}
       <div
         style={{
           display: "grid",
@@ -963,7 +1047,6 @@ const TerminalsPage = () => {
           >
             Provincial Bus
           </div>
-
           <div
             style={{
               fontSize: "24px",
@@ -974,7 +1057,6 @@ const TerminalsPage = () => {
           >
             {busCount} Hubs
           </div>
-
           <div
             style={{
               fontSize: "12px",
@@ -1006,7 +1088,6 @@ const TerminalsPage = () => {
           >
             Jeepney Staging
           </div>
-
           <div
             style={{
               fontSize: "24px",
@@ -1017,7 +1098,6 @@ const TerminalsPage = () => {
           >
             {jeepneyCount} Hubs
           </div>
-
           <div
             style={{
               fontSize: "12px",
@@ -1025,50 +1105,7 @@ const TerminalsPage = () => {
               marginTop: "2px",
             }}
           >
-            Downtown Staging & Inter-town lines
-          </div>
-        </div>
-
-        {/* Tricycle */}
-        <div
-          className="card"
-          style={{
-            backgroundColor: colors.surface,
-            border: `1px solid ${colors.border}`,
-            padding: "16px 20px",
-            borderLeft: `4px solid ${colors.warning}`,
-          }}
-        >
-          <div
-            style={{
-              fontSize: "12px",
-              color: colors.textMuted,
-              textTransform: "uppercase",
-              fontWeight: "600",
-            }}
-          >
-            Tricycle TODA
-          </div>
-
-          <div
-            style={{
-              fontSize: "24px",
-              fontWeight: "800",
-              color: colors.textPrimary,
-              marginTop: "4px",
-            }}
-          >
-            {tricycleCount} Terminals
-          </div>
-
-          <div
-            style={{
-              fontSize: "12px",
-              color: colors.warning,
-              marginTop: "2px",
-            }}
-          >
-            City Ordinance regulated terminals
+            City Staging & Inter-town lines
           </div>
         </div>
 
@@ -1092,7 +1129,6 @@ const TerminalsPage = () => {
           >
             Multimodal Hubs
           </div>
-
           <div
             style={{
               fontSize: "24px",
@@ -1103,7 +1139,6 @@ const TerminalsPage = () => {
           >
             {multimodalCount} Centers
           </div>
-
           <div
             style={{
               fontSize: "12px",
@@ -1111,15 +1146,12 @@ const TerminalsPage = () => {
               marginTop: "2px",
             }}
           >
-            CSI Lucao & Major Transfer Hubs
+            Commercial Centers & Major Transfer Hubs
           </div>
         </div>
       </div>
 
-      {/* ======================================================
-          OVERVIEW MAP
-      ====================================================== */}
-
+      {/* OVERVIEW MAP */}
       <div
         className="card"
         style={{
@@ -1154,7 +1186,6 @@ const TerminalsPage = () => {
                 }}
               >
                 <Compass size={18} color={colors.primary} />
-
                 <span
                   style={{
                     fontSize: "14px",
@@ -1162,9 +1193,8 @@ const TerminalsPage = () => {
                     color: colors.textPrimary,
                   }}
                 >
-                  Dagupan City Terminals Network Map
+                  Transit Terminals Network Map
                 </span>
-
                 <span
                   style={{
                     fontSize: "12px",
@@ -1189,7 +1219,6 @@ const TerminalsPage = () => {
                 }}
               >
                 <MapPin size={13} />
-
                 <span>
                   Tip: Click anywhere on the map to pinpoint & add a new
                   terminal
@@ -1221,15 +1250,9 @@ const TerminalsPage = () => {
                 fontSize: "12px",
               }}
             >
-              <span
-                style={{
-                  color: colors.textMuted,
-                  fontWeight: "600",
-                }}
-              >
+              <span style={{ color: colors.textMuted, fontWeight: "600" }}>
                 PIN LEGEND:
               </span>
-
               {TERMINAL_TYPES.map((t) => (
                 <div
                   key={t.value}
@@ -1254,14 +1277,7 @@ const TerminalsPage = () => {
                   >
                     {t.icon}
                   </span>
-
-                  <span
-                    style={{
-                      color: colors.textSecondary,
-                    }}
-                  >
-                    {t.label}
-                  </span>
+                  <span style={{ color: colors.textSecondary }}>{t.label}</span>
                 </div>
               ))}
 
@@ -1282,10 +1298,7 @@ const TerminalsPage = () => {
         )}
       </div>
 
-      {/* ======================================================
-          FILTER / SEARCH
-      ====================================================== */}
-
+      {/* FILTER / SEARCH */}
       <div
         style={{
           display: "flex",
@@ -1322,7 +1335,6 @@ const TerminalsPage = () => {
                 color: colors.textMuted,
               }}
             />
-
             <input
               type="text"
               className="form-input"
@@ -1342,7 +1354,6 @@ const TerminalsPage = () => {
             <option value="all">All Terminal Types</option>
             <option value="bus">🚌 Provincial Bus</option>
             <option value="jeepney">🚐 Jeepney Hub</option>
-            <option value="tricycle">🛺 Tricycle TODA</option>
             <option value="multimodal">🏢 Multimodal Hub</option>
           </select>
         </div>
@@ -1384,10 +1395,7 @@ const TerminalsPage = () => {
         </div>
       </div>
 
-      {/* ======================================================
-          TABLE
-      ====================================================== */}
-
+      {/* TABLE */}
       {(viewMode === "both" || viewMode === "table") && (
         <div
           className="card"
@@ -1404,7 +1412,7 @@ const TerminalsPage = () => {
                 color: colors.textMuted,
               }}
             >
-              Loading Dagupan terminals...
+              Loading terminals...
             </div>
           ) : filteredTerminals.length === 0 ? (
             <div
@@ -1450,7 +1458,6 @@ const TerminalsPage = () => {
                           >
                             {t.name}
                           </div>
-
                           <div
                             style={{
                               fontSize: "12px",
@@ -1458,9 +1465,8 @@ const TerminalsPage = () => {
                               marginTop: "2px",
                             }}
                           >
-                            {t.company || "Dagupan Transit Operator"}
+                            {t.company || "Transit Operator"}
                           </div>
-
                           <div
                             style={{
                               fontSize: "11px",
@@ -1472,7 +1478,6 @@ const TerminalsPage = () => {
                             }}
                           >
                             <MapPin size={12} color={colors.primary} />
-
                             <span>{t.address}</span>
                           </div>
                         </td>
@@ -1491,24 +1496,38 @@ const TerminalsPage = () => {
                           </span>
                         </td>
 
-                        {/* Connected Routes (Clickable) */}
+                        {/* Connected Routes */}
                         <td>
                           {(() => {
                             const connected = getConnectedRoutes(t);
                             if (connected.length === 0) {
                               return (
-                                <span style={{ fontSize: "12px", color: colors.textMuted, fontStyle: "italic" }}>
+                                <span
+                                  style={{
+                                    fontSize: "12px",
+                                    color: colors.textMuted,
+                                    fontStyle: "italic",
+                                  }}
+                                >
                                   No linked routes
                                 </span>
                               );
                             }
                             return (
-                              <div style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: "160px", maxWidth: "260px" }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "6px",
+                                  minWidth: "160px",
+                                  maxWidth: "260px",
+                                }}
+                              >
                                 {connected.map((r) => (
                                   <Link
                                     key={r._id}
                                     to={`/routes?routeId=${r._id}`}
-                                    title={`Click to open and auto-navigate map to route: ${r.name} (${r.code})`}
+                                    title={`Click to open and view route: ${r.name} (${r.code})`}
                                     style={{
                                       display: "inline-flex",
                                       alignItems: "center",
@@ -1519,32 +1538,49 @@ const TerminalsPage = () => {
                                       backgroundColor: "#2563EB",
                                       color: "#FFFFFF",
                                       border: "1.5px solid #1D4ED8",
-                                      boxShadow: "0 2px 6px rgba(37,99,235,0.3)",
+                                      boxShadow:
+                                        "0 2px 6px rgba(37,99,235,0.3)",
                                       fontSize: "12px",
                                       fontWeight: "700",
                                       textDecoration: "none",
                                       cursor: "pointer",
                                       transition: "all 0.15s ease",
                                     }}
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.backgroundColor = "#1D4ED8";
-                                      e.currentTarget.style.transform = "translateY(-1px)";
-                                      e.currentTarget.style.boxShadow = "0 4px 10px rgba(37,99,235,0.45)";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.backgroundColor = "#2563EB";
-                                      e.currentTarget.style.transform = "translateY(0)";
-                                      e.currentTarget.style.boxShadow = "0 2px 6px rgba(37,99,235,0.3)";
-                                    }}
                                   >
-                                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
-                                      <Compass size={13} style={{ flexShrink: 0 }} />
-                                      <span style={{ fontFamily: "monospace", letterSpacing: "0.5px" }}>{r.code}</span>
-                                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    <div
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "6px",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      <Compass
+                                        size={13}
+                                        style={{ flexShrink: 0 }}
+                                      />
+                                      <span
+                                        style={{
+                                          fontFamily: "monospace",
+                                          letterSpacing: "0.5px",
+                                        }}
+                                      >
+                                        {r.code}
+                                      </span>
+                                      <span
+                                        style={{
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
                                         • {r.name}
                                       </span>
                                     </div>
-                                    <ArrowUpRight size={13} style={{ flexShrink: 0 }} />
+                                    <ArrowUpRight
+                                      size={13}
+                                      style={{ flexShrink: 0 }}
+                                    />
                                   </Link>
                                 ))}
                               </div>
@@ -1572,7 +1608,6 @@ const TerminalsPage = () => {
                             >
                               {t.lat.toFixed(5)}°N, {t.lng.toFixed(5)}°E
                             </div>
-
                             <button
                               type="button"
                               onClick={() => handlePanToTerminal(t)}
@@ -1604,7 +1639,6 @@ const TerminalsPage = () => {
                             }}
                           >
                             <Clock size={13} color={colors.textMuted} />
-
                             <span>{t.operatingHours || "24/7"}</span>
                           </div>
 
@@ -1620,17 +1654,12 @@ const TerminalsPage = () => {
                               }}
                             >
                               <Phone size={11} />
-
                               <span>{t.contactNumber}</span>
                             </div>
                           )}
                         </td>
 
-                        <td
-                          style={{
-                            maxWidth: "220px",
-                          }}
-                        >
+                        <td style={{ maxWidth: "220px" }}>
                           <div
                             style={{
                               display: "flex",
@@ -1683,18 +1712,14 @@ const TerminalsPage = () => {
                             {t.isActive ? (
                               <span
                                 className="badge badge-success"
-                                style={{
-                                  cursor: "pointer",
-                                }}
+                                style={{ cursor: "pointer" }}
                               >
                                 ● On Map (Active)
                               </span>
                             ) : (
                               <span
                                 className="badge badge-danger"
-                                style={{
-                                  cursor: "pointer",
-                                }}
+                                style={{ cursor: "pointer" }}
                               >
                                 ○ Hidden (Inactive)
                               </span>
@@ -1703,12 +1728,7 @@ const TerminalsPage = () => {
                         </td>
 
                         <td>
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: "8px",
-                            }}
-                          >
+                          <div style={{ display: "flex", gap: "8px" }}>
                             <button
                               onClick={() => handleOpenEditModal(t)}
                               className="btn btn-secondary btn-sm"
@@ -1757,10 +1777,7 @@ const TerminalsPage = () => {
         </div>
       )}
 
-      {/* ======================================================
-          ADD / EDIT MODAL
-      ====================================================== */}
-
+      {/* ADD / EDIT MODAL */}
       {modalOpen && (
         <div
           className="modal-overlay"
@@ -1773,8 +1790,8 @@ const TerminalsPage = () => {
           <div
             className="modal-content"
             style={{
-              maxWidth: "720px",
-              maxHeight: "90vh",
+              maxWidth: "760px",
+              maxHeight: "92vh",
               display: "flex",
               flexDirection: "column",
               position: "relative",
@@ -1793,22 +1810,20 @@ const TerminalsPage = () => {
                   }}
                 >
                   <MapPin size={20} color={colors.primary} />
-
                   <span>
                     {editingTerminal
                       ? `Edit & Pinpoint "${editingTerminal.name}"`
-                      : "Pinpoint New Dagupan Transport Terminal"}
+                      : "Pinpoint New Transport Terminal"}
                   </span>
                 </h3>
-
                 <span
                   style={{
                     fontSize: "12px",
                     color: colors.warning,
                   }}
                 >
-                  Drag the map pin or click anywhere in Dagupan to precisely set
-                  coordinates displayed on commuter maps.
+                  Click anywhere on the map to place the pinpoint pin, or enter
+                  coordinates directly below.
                 </span>
               </div>
 
@@ -1835,7 +1850,7 @@ const TerminalsPage = () => {
               }}
             >
               <div className="modal-body">
-                {/* Interactive Map */}
+                {/* Interactive Map Pinpoint Section */}
                 <div
                   style={{
                     background: colors.surfaceElevated,
@@ -1851,6 +1866,8 @@ const TerminalsPage = () => {
                       justifyContent: "space-between",
                       alignItems: "center",
                       marginBottom: "8px",
+                      flexWrap: "wrap",
+                      gap: "8px",
                     }}
                   >
                     <div
@@ -1861,7 +1878,6 @@ const TerminalsPage = () => {
                       }}
                     >
                       <Compass size={16} color={colors.info} />
-
                       <span
                         style={{
                           fontSize: "13px",
@@ -1877,13 +1893,19 @@ const TerminalsPage = () => {
                       style={{
                         fontFamily: "monospace",
                         fontSize: "11px",
-                        color: colors.warning,
+                        color:
+                          formData.lat && formData.lng
+                            ? colors.warning
+                            : colors.textMuted,
                         background: colors.background,
-                        padding: "3px 8px",
+                        padding: "4px 8px",
                         borderRadius: "4px",
+                        border: `1px solid ${colors.border}`,
                       }}
                     >
-                      Lat: {formData.lat} | Lng: {formData.lng}
+                      {formData.lat && formData.lng
+                        ? `Lat: ${formData.lat} | Lng: ${formData.lng}`
+                        : "Coordinates: [ Not Selected — Click Map ]"}
                     </div>
                   </div>
 
@@ -1891,7 +1913,7 @@ const TerminalsPage = () => {
                     ref={modalMapContainerRef}
                     style={{
                       width: "100%",
-                      height: "240px",
+                      height: "230px",
                       borderRadius: "8px",
                       overflow: "hidden",
                       border: `1px solid ${colors.border}`,
@@ -1915,55 +1937,93 @@ const TerminalsPage = () => {
                   >
                     <span>
                       🎯 <strong>Click anywhere on map</strong> or{" "}
-                      <strong>drag the blue pin</strong> to set location.
+                      <strong>drag pin</strong> to set location.
                     </span>
-
-                    <span>Dagupan City</span>
+                    <span
+                      style={{
+                        fontWeight: "600",
+                        color:
+                          formData.lat && formData.lng
+                            ? colors.success
+                            : colors.warning,
+                      }}
+                    >
+                      {formData.lat && formData.lng
+                        ? "✓ Coordinates captured"
+                        : "⚠ Pinpoint pending"}
+                    </span>
                   </div>
 
-                  {/* Presets */}
+                  {/* Manual Coordinate Inputs - blank by default for LGUs */}
                   <div
                     style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "10px",
                       marginTop: "10px",
                       paddingTop: "8px",
                       borderTop: `1px solid ${colors.border}`,
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        color: colors.textMuted,
-                        marginBottom: "6px",
-                      }}
-                    >
-                      Snap to Dagupan Transit Landmarks:
+                    <div>
+                      <label
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: "600",
+                          color: colors.textSecondary,
+                          marginBottom: "3px",
+                          display: "block",
+                        }}
+                      >
+                        Latitude Coordinate *
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Click map or type latitude"
+                        value={formData.lat}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            lat: e.target.value,
+                          })
+                        }
+                        style={{
+                          fontSize: "12px",
+                          fontFamily: "monospace",
+                          padding: "6px 10px",
+                        }}
+                      />
                     </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "6px",
-                      }}
-                    >
-                      {DAGUPAN_COORDINATE_PRESETS.map((preset, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => applyPreset(preset)}
-                          style={{
-                            fontSize: "11px",
-                            background: colors.surfaceElevated,
-                            border: `1px solid ${colors.border}`,
-                            borderRadius: "4px",
-                            color: colors.info,
-                            padding: "3px 8px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
+                    <div>
+                      <label
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: "600",
+                          color: colors.textSecondary,
+                          marginBottom: "3px",
+                          display: "block",
+                        }}
+                      >
+                        Longitude Coordinate *
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Click map or type longitude"
+                        value={formData.lng}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            lng: e.target.value,
+                          })
+                        }
+                        style={{
+                          fontSize: "12px",
+                          fontFamily: "monospace",
+                          padding: "6px 10px",
+                        }}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1977,18 +2037,12 @@ const TerminalsPage = () => {
                     marginBottom: "14px",
                   }}
                 >
-                  <div
-                    className="form-group"
-                    style={{
-                      marginBottom: 0,
-                    }}
-                  >
+                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Terminal Name *</label>
-
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="e.g. Victory Liner Dagupan Terminal"
+                      placeholder="e.g. Central Integrated Transit Terminal"
                       value={formData.name}
                       onChange={(e) =>
                         setFormData({
@@ -2000,14 +2054,8 @@ const TerminalsPage = () => {
                     />
                   </div>
 
-                  <div
-                    className="form-group"
-                    style={{
-                      marginBottom: 0,
-                    }}
-                  >
+                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Terminal Type *</label>
-
                     <select
                       className="form-select"
                       value={formData.type}
@@ -2020,13 +2068,12 @@ const TerminalsPage = () => {
                     >
                       <option value="bus">🚌 Provincial Bus</option>
                       <option value="jeepney">🚐 Jeepney Hub</option>
-                      <option value="tricycle">🛺 Tricycle TODA</option>
                       <option value="multimodal">🏢 Multimodal Hub</option>
                     </select>
                   </div>
                 </div>
 
-                {/* Company & Hours */}
+                {/* Company & Operating Hours Range */}
                 <div
                   style={{
                     display: "grid",
@@ -2035,20 +2082,14 @@ const TerminalsPage = () => {
                     marginBottom: "14px",
                   }}
                 >
-                  <div
-                    className="form-group"
-                    style={{
-                      marginBottom: 0,
-                    }}
-                  >
+                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">
                       Operating Company / Association
                     </label>
-
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="e.g. Victory Liner, Inc. or Perez TODA"
+                      placeholder="e.g. Bus Lines Inc. / Drivers Transport Coop"
                       value={formData.company}
                       onChange={(e) =>
                         setFormData({
@@ -2059,120 +2100,135 @@ const TerminalsPage = () => {
                     />
                   </div>
 
-                  <div
-                    className="form-group"
-                    style={{
-                      marginBottom: 0,
-                    }}
-                  >
-                    <label className="form-label">Operating Hours</label>
-
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. 24/7 or 5:00 AM - 10:00 PM"
-                      value={formData.operatingHours}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          operatingHours: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
-                {/* Address */}
-                <div
-                  className="form-group"
-                  style={{
-                    marginBottom: "14px",
-                  }}
-                >
-                  <label className="form-label">
-                    Physical Street Address *
-                  </label>
-
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. Perez Blvd, Downtown Dagupan City, Pangasinan"
-                    value={formData.address}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        address: e.target.value,
-                      })
-                    }
-                    required
-                  />
-                </div>
-
-                {/* Coordinates */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "14px",
-                    marginBottom: "14px",
-                  }}
-                >
-                  <div
-                    className="form-group"
-                    style={{
-                      marginBottom: 0,
-                    }}
-                  >
-                    <label className="form-label">
-                      Latitude (6 decimal places)
-                    </label>
-
-                    <input
-                      type="number"
-                      step="any"
-                      className="form-input"
-                      placeholder="Latitude (e.g. 16.0416)"
-                      value={formData.lat}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          lat: e.target.value,
-                        })
-                      }
-                      required
+                  {/* Range of Hours Selector */}
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <div
                       style={{
-                        fontFamily: "monospace",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "4px",
                       }}
-                    />
-                  </div>
+                    >
+                      <label className="form-label" style={{ marginBottom: 0 }}>
+                        Operating Hours
+                      </label>
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          fontSize: "12px",
+                          color: colors.primary,
+                          cursor: "pointer",
+                          fontWeight: "600",
+                          userSelect: "none",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.is24Hours}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              is24Hours: e.target.checked,
+                            })
+                          }
+                          style={{
+                            width: "15px",
+                            height: "15px",
+                            cursor: "pointer",
+                          }}
+                        />
+                        <span>Open 24/7</span>
+                      </label>
+                    </div>
 
-                  <div
-                    className="form-group"
-                    style={{
-                      marginBottom: 0,
-                    }}
-                  >
-                    <label className="form-label">
-                      Longitude (6 decimal places)
-                    </label>
-
-                    <input
-                      type="number"
-                      step="any"
-                      className="form-input"
-                      placeholder="Longitude (e.g. 120.3402)"
-                      value={formData.lng}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          lng: e.target.value,
-                        })
-                      }
-                      required
-                      style={{
-                        fontFamily: "monospace",
-                      }}
-                    />
+                    {formData.is24Hours ? (
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: "6px",
+                          backgroundColor: colors.surfaceElevated,
+                          border: `1px solid ${colors.border}`,
+                          fontSize: "12px",
+                          color: colors.info,
+                          fontWeight: "600",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <Clock size={14} />
+                        <span>24 Hours Daily (Continuous Operations)</span>
+                      </div>
+                    ) : (
+                      <div>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <div style={{ flex: 1 }}>
+                            <input
+                              type="time"
+                              className="form-input"
+                              value={formData.operatingHoursStart}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  operatingHoursStart: e.target.value,
+                                })
+                              }
+                              style={{ padding: "6px 8px", fontSize: "12px" }}
+                              title="Opening Time"
+                            />
+                          </div>
+                          <span
+                            style={{
+                              fontSize: "12px",
+                              color: colors.textMuted,
+                              fontWeight: "600",
+                            }}
+                          >
+                            to
+                          </span>
+                          <div style={{ flex: 1 }}>
+                            <input
+                              type="time"
+                              className="form-input"
+                              value={formData.operatingHoursEnd}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  operatingHoursEnd: e.target.value,
+                                })
+                              }
+                              style={{ padding: "6px 8px", fontSize: "12px" }}
+                              title="Closing Time"
+                            />
+                          </div>
+                        </div>
+                        {formData.operatingHoursStart &&
+                          formData.operatingHoursEnd && (
+                            <div
+                              style={{
+                                fontSize: "11px",
+                                color: colors.textMuted,
+                                marginTop: "4px",
+                              }}
+                            >
+                              Schedule:{" "}
+                              <strong>
+                                {formatTime12h(formData.operatingHoursStart)} –{" "}
+                                {formatTime12h(formData.operatingHoursEnd)}
+                              </strong>
+                            </div>
+                          )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2185,20 +2241,14 @@ const TerminalsPage = () => {
                     marginBottom: "14px",
                   }}
                 >
-                  <div
-                    className="form-group"
-                    style={{
-                      marginBottom: 0,
-                    }}
-                  >
+                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">
                       Destinations (Comma-separated)
                     </label>
-
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="e.g. Cubao, Pasay, Baguio, Lingayen"
+                      placeholder="e.g. Manila, Baguio, Clark, Lingayen"
                       value={formData.destinations}
                       onChange={(e) =>
                         setFormData({
@@ -2209,14 +2259,8 @@ const TerminalsPage = () => {
                     />
                   </div>
 
-                  <div
-                    className="form-group"
-                    style={{
-                      marginBottom: 0,
-                    }}
-                  >
+                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Contact Hotline</label>
-
                     <input
                       type="text"
                       className="form-input"
@@ -2232,57 +2276,127 @@ const TerminalsPage = () => {
                   </div>
                 </div>
 
-                {/* Amenities */}
-                <div
-                  className="form-group"
-                  style={{
-                    marginBottom: "14px",
-                  }}
-                >
-                  <label className="form-label">
-                    Passenger Amenities (Comma-separated)
+                {/* Passenger Amenities: Checkboxes + Others with comma-separated text input */}
+                <div className="form-group" style={{ marginBottom: "14px" }}>
+                  <label className="form-label" style={{ marginBottom: "6px" }}>
+                    Passenger Amenities
                   </label>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(210px, 1fr))",
+                      gap: "8px",
+                      backgroundColor: colors.surfaceElevated,
+                      padding: "12px",
+                      borderRadius: "8px",
+                      border: `1px solid ${colors.border}`,
+                    }}
+                  >
+                    {STANDARD_AMENITIES.map((amenity) => {
+                      const isChecked =
+                        formData.selectedAmenities.includes(amenity);
+                      return (
+                        <label
+                          key={amenity}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            fontSize: "12px",
+                            color: colors.textPrimary,
+                            cursor: "pointer",
+                            userSelect: "none",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setFormData((prev) => ({
+                                ...prev,
+                                selectedAmenities: checked
+                                  ? [...prev.selectedAmenities, amenity]
+                                  : prev.selectedAmenities.filter(
+                                      (a) => a !== amenity,
+                                    ),
+                              }));
+                            }}
+                            style={{
+                              width: "16px",
+                              height: "16px",
+                              cursor: "pointer",
+                            }}
+                          />
+                          <span>{amenity}</span>
+                        </label>
+                      );
+                    })}
 
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. Air-conditioned Lounge, Restrooms, Ticketing Counter, CCTV"
-                    value={formData.amenities}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        amenities: e.target.value,
-                      })
-                    }
-                  />
+                    {/* Others Checkbox */}
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "12px",
+                        fontWeight: "700",
+                        color: colors.primary,
+                        cursor: "pointer",
+                        userSelect: "none",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.isOtherAmenities}
+                        onChange={(e) => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            isOtherAmenities: e.target.checked,
+                          }));
+                        }}
+                        style={{
+                          width: "16px",
+                          height: "16px",
+                          cursor: "pointer",
+                        }}
+                      />
+                      <span>Others</span>
+                    </label>
+                  </div>
+
+                  {formData.isOtherAmenities && (
+                    <div style={{ marginTop: "10px" }}>
+                      <label
+                        style={{
+                          fontSize: "11px",
+                          color: colors.textSecondary,
+                          marginBottom: "4px",
+                          display: "block",
+                          fontWeight: "600",
+                        }}
+                      >
+                        Other Amenities (Comma-separated):
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. Express Baggage Counter, Food Stalls, Mobile Charging Station"
+                        value={formData.otherAmenities}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            otherAmenities: e.target.value,
+                          })
+                        }
+                        autoFocus
+                      />
+                    </div>
+                  )}
                 </div>
 
-                {/* Description */}
-                <div
-                  className="form-group"
-                  style={{
-                    marginBottom: "14px",
-                  }}
-                >
-                  <label className="form-label">
-                    Terminal Overview & Commuter Guide
-                  </label>
-
-                  <textarea
-                    rows={2}
-                    className="form-textarea"
-                    placeholder="Provide commuter directions, transfer tips, or terminal services..."
-                    value={formData.description}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        description: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                {/* Active */}
+                {/* Active Toggle */}
                 <div
                   style={{
                     display: "flex",
@@ -2306,7 +2420,6 @@ const TerminalsPage = () => {
                       cursor: "pointer",
                     }}
                   />
-
                   <label
                     htmlFor="isActiveCheck"
                     style={{
@@ -2327,7 +2440,9 @@ const TerminalsPage = () => {
                   borderTop: `1px solid ${colors.border}`,
                   paddingTop: "16px",
                   display: "flex",
-                  justifyContent: editingTerminal ? "space-between" : "flex-end",
+                  justifyContent: editingTerminal
+                    ? "space-between"
+                    : "flex-end",
                   alignItems: "center",
                 }}
               >
@@ -2379,11 +2494,10 @@ const TerminalsPage = () => {
                       gap: "8px",
                       backgroundColor: colors.primary,
                       color: colors.white,
-                      shadow: `0 4px 12px ${colors.primary}50`,
+                      boxShadow: `0 4px 12px ${colors.primary}50`,
                     }}
                   >
                     <Check size={16} />
-
                     <span>
                       {saving
                         ? "Saving Terminal..."
@@ -2399,10 +2513,7 @@ const TerminalsPage = () => {
         </div>
       )}
 
-      {/* ======================================================
-          CONFIRMATION MODAL
-      ====================================================== */}
-
+      {/* CONFIRMATION MODAL */}
       <ConfirmModal
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
