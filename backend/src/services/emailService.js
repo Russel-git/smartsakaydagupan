@@ -13,9 +13,9 @@ const createGmailTransporter = () => {
       pass,
     },
     family: 4,
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 4000,
+    greetingTimeout: 4000,
+    socketTimeout: 6000,
   });
 };
 
@@ -33,9 +33,9 @@ const createSmtpTransporter = (port = 465, secure = true) => {
       pass,
     },
     family: 4,
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 4000,
+    greetingTimeout: 4000,
+    socketTimeout: 6000,
     tls: {
       rejectUnauthorized: false,
     },
@@ -50,7 +50,7 @@ const sendOtp = async (email, code, type = 'registration') => {
   };
 
   const mailOptions = {
-    from: `"SmartSakay Dagupan" <${config.gmail.user || config.smtp.user || 'flamease.config@gmail.com'}>`,
+    from: `"SmartSakay Dagupan" <${config.gmail.user || config.smtp.user || 'smartsakaydagupan@gmail.com'}>`,
     to: email,
     subject: subjects[type] || subjects.registration,
     html: `
