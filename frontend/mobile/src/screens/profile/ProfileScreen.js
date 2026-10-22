@@ -59,7 +59,7 @@ const ProfileScreen = ({ navigation }) => {
         if (!permissionResult.granted) {
           Alert.alert(
             "Permission Required",
-            "Photo library access is needed to select a profile photo."
+            "Photo library access is needed to select a profile photo.",
           );
           return;
         }
@@ -100,14 +100,14 @@ const ProfileScreen = ({ navigation }) => {
       await refreshProfile();
       showSuccess(
         "Photo Updated",
-        "Your profile photo has been securely updated."
+        "Your profile photo has been securely updated.",
       );
     } catch (err) {
       showError(
         "Upload Failed",
         err.response?.data?.message ||
           err.message ||
-          "Failed to update profile photo."
+          "Failed to update profile photo.",
       );
     } finally {
       setUploadingPhoto(false);
@@ -216,7 +216,7 @@ const ProfileScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         <Text style={styles.userName}>
-          {user?.firstName} {user?.lastName}
+          {user?.firstName} {user?.lastName} {user?.suffix}
         </Text>
         <Text style={styles.userEmail}>{user?.email}</Text>
         <View

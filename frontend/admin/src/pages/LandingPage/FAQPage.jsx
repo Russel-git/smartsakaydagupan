@@ -584,7 +584,7 @@ export default function FAQPage() {
               <SearchIcon />
 
               <input
-                type="search"
+                type="text"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search questions, fares, complaints..."

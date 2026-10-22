@@ -119,7 +119,15 @@ const RegisterScreen = ({ navigation }) => {
       e.lastName = "Maximum 25 characters";
     }
 
-    if (form.suffix && form.suffix.trim().length > 10) {
+    if (selectedExtension === "Others") {
+      const cleanSuffix = form.suffix.trim();
+
+      if (!cleanSuffix) {
+        e.suffix = "Please enter your name extension";
+      } else if (cleanSuffix.length > 10) {
+        e.suffix = "Name extension cannot exceed 10 characters";
+      }
+    } else if (form.suffix && form.suffix.trim().length > 10) {
       e.suffix = "Name extension cannot exceed 10 characters";
     }
 
