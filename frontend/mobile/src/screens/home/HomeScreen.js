@@ -22,6 +22,7 @@ import {
   Badge,
 } from "../../components/common/SharedComponents";
 import AuthPromptModal from "../../components/common/AuthPromptModal";
+import { LocationPermissionModal } from "../../components/common/LocationPermissionPrompt";
 import HomeMapWidget from "../../components/common/HomeMapWidget";
 import { faresAPI, weatherAPI, complaintsAPI } from "../../api/services";
 import { FONTS, SPACING, RADIUS, SHADOWS } from "../../utils/constants";
@@ -46,6 +47,7 @@ const HomeScreen = ({ navigation }) => {
     icon: "account-lock",
     tag: "",
   });
+  const [showLocationModal, setShowLocationModal] = useState(false);
   const userCoordsRef = useRef(null);
 
   const topInset =
@@ -85,7 +87,30 @@ const HomeScreen = ({ navigation }) => {
         accuracy: Location.Accuracy.Balanced,
         timeout: 8000,
       });
-      return { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+
+      let locationName = null;
+      try {
+        const geocoded = await Location.reverseGeocodeAsync({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
+        if (geocoded && geocoded.length > 0) {
+          const g = geocoded[0];
+          const city = g.city || g.subregion || g.district || g.name || "";
+          const region = g.region || g.country || "";
+          if (city && region && city !== region) {
+            locationName = `${city}, ${region}`;
+          } else {
+            locationName = city || region || null;
+          }
+        }
+      } catch (_) {}
+
+      return {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        locationName,
+      };
     } catch (_) {
       return null;
     }
@@ -100,7 +125,13 @@ const HomeScreen = ({ navigation }) => {
       }
 
       const weatherParams = coords
-        ? { latitude: coords.latitude, longitude: coords.longitude }
+        ? {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            ...(coords.locationName
+              ? { locationName: coords.locationName }
+              : {}),
+          }
         : {};
 
       const promises = [
@@ -172,6 +203,14 @@ const HomeScreen = ({ navigation }) => {
         message={promptModal.message}
         icon={promptModal.icon}
         featureTag={promptModal.tag}
+      />
+      <LocationPermissionModal
+        visible={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
+        onRetry={async () => {
+          setShowLocationModal(false);
+          await onRefresh();
+        }}
       />
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
@@ -248,6 +287,37 @@ const HomeScreen = ({ navigation }) => {
             {/* Weather mini card */}
             {Boolean(weather)
               ? (() => {
+                  const hasLocation =
+                    weather.current?.hasLocation !== false &&
+                    userCoordsRef.current !== null;
+                  if (!hasLocation) {
+                    return (
+                      <TouchableOpacity
+                        style={[
+                          styles.weatherMini,
+                          { backgroundColor: "rgba(255, 255, 255, 0.15)" },
+                        ]}
+                        activeOpacity={0.8}
+                        onPress={() => setShowLocationModal(true)}
+                      >
+                        <MaterialCommunityIcons
+                          name="map-marker-alert-outline"
+                          size={20}
+                          color="#FBBF24"
+                        />
+                        <Text style={styles.weatherDesc} numberOfLines={1}>
+                          Please turn on your location permission
+                        </Text>
+                        <MaterialCommunityIcons
+                          name="chevron-right"
+                          size={16}
+                          color="rgba(255,255,255,0.6)"
+                          style={{ marginLeft: "auto" }}
+                        />
+                      </TouchableOpacity>
+                    );
+                  }
+
                   const conditionStr =
                     weather.current?.condition?.text ||
                     (typeof weather.current?.condition === "string"

@@ -12,7 +12,7 @@ const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24-hour cooldown
 const checkAndNotifyWeather = async (force = false) => {
   try {
     lastWeatherCheckTime = new Date();
-    const weatherData = await weatherService.fetchWeather();
+    const weatherData = await weatherService.fetchWeather(weatherService.DEFAULT_LAT, weatherService.DEFAULT_LNG, weatherService.DEFAULT_LOCATION);
     if (!weatherData || !weatherData.current) {
       return { notified: false, reason: "Unable to retrieve weather data" };
     }

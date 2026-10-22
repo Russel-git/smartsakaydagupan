@@ -106,23 +106,18 @@ const generateAdvisories = (
 const reverseGeocode = async (latitude, longitude) => {
   try {
     const response = await axios.get(
-      "https://geocoding-api.open-meteo.com/v1/search",
-      {
-        params: {
-          name: `${latitude},${longitude}`,
-          count: 1,
-          language: "en",
-          format: "json",
-        },
-        timeout: 3000,
-      },
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
+      { timeout: 4000 },
     );
-    const result = response.data?.results?.[0];
-    if (result) {
-      const parts = [result.name, result.admin1, result.country].filter(
-        Boolean,
-      );
-      return parts.join(", ");
+    const data = response.data;
+    if (data) {
+      const city = data.city || data.locality || "";
+      const state = data.principalSubdivision || data.countryName || "";
+      if (city && state && city !== state) {
+        return `${city}, ${state}`;
+      }
+      if (city) return city;
+      if (state) return state;
     }
   } catch (_) {}
 
@@ -137,8 +132,10 @@ const reverseGeocode = async (latitude, longitude) => {
           zoom: 10,
           "accept-language": "en",
         },
-        headers: { "User-Agent": "SmartSakay/1.0" },
-        timeout: 3000,
+        headers: {
+          "User-Agent": "SmartSakayApp/1.0 (smartsakay.transit@gmail.com)",
+        },
+        timeout: 3500,
       },
     );
     const addr = response.data?.address;
@@ -151,11 +148,8 @@ const reverseGeocode = async (latitude, longitude) => {
         addr.county ||
         "";
       const state = addr.state || addr.region || "";
-      return (
-        [city, state].filter(Boolean).join(", ") ||
-        response.data?.display_name?.split(",").slice(0, 2).join(",").trim() ||
-        null
-      );
+      const resolved = [city, state].filter(Boolean).join(", ");
+      if (resolved) return resolved;
     }
   } catch (_) {}
 
@@ -176,13 +170,23 @@ const formatWeatherData = ({
   latitude,
   longitude,
   locationName,
+  hasLocation = true,
 }) => {
-  const roundedTemp = Math.round(tempC);
-  const roundedFeels = Math.round(feelsLikeC);
-  const roundedWind = Math.round(windKph);
-  const lat = latitude || DEFAULT_LAT;
-  const lng = longitude || DEFAULT_LNG;
-  const locName = locationName || DEFAULT_LOCATION;
+  const roundedTemp =
+    tempC !== null && tempC !== undefined ? Math.round(tempC) : null;
+  const roundedFeels =
+    feelsLikeC !== null && feelsLikeC !== undefined
+      ? Math.round(feelsLikeC)
+      : null;
+  const roundedWind =
+    windKph !== null && windKph !== undefined ? Math.round(windKph) : null;
+  const lat = latitude ?? null;
+  const lng = longitude ?? null;
+  const locName =
+    locationName ||
+    (hasLocation && lat && lng
+      ? `${Number(lat).toFixed(2)}° N, ${Number(lng).toFixed(2)}° E`
+      : "Please turn on your location permission");
 
   const formattedForecast = (forecastDays || []).map((day) => {
     const maxT = Math.round(day.maxTempC);
@@ -216,13 +220,14 @@ const formatWeatherData = ({
       condition: conditionText,
       conditionText: conditionText,
       icon: icon || "//cdn.weatherapi.com/weather/64x64/day/116.png",
-      humidity: humidity || 75,
+      humidity: humidity ?? null,
       windKph: roundedWind,
       wind_kph: roundedWind,
       feelsLikeC: roundedFeels,
       feelslike_c: roundedFeels,
       precipitation: Number(precipitation) || 0,
       rainChance: currentHourPrecipitationProbability ?? 20,
+      hasLocation: Boolean(hasLocation),
       coordinates: { latitude: lat, longitude: lng, location: locName },
       lastUpdated: new Date().toLocaleTimeString("en-PH", {
         hour: "2-digit",
@@ -231,14 +236,18 @@ const formatWeatherData = ({
     },
     forecast: formattedForecast,
     alerts,
-    travelAdvisory: generateAdvisories(
-      roundedTemp,
-      roundedWind,
-      conditionText,
-      precipitation,
-      currentHourPrecipitationProbability,
-      locName,
-    ),
+    travelAdvisory: hasLocation
+      ? generateAdvisories(
+          roundedTemp,
+          roundedWind,
+          conditionText,
+          precipitation,
+          currentHourPrecipitationProbability,
+          locName,
+        )
+      : [
+          "Please turn on your location permission to view live local weather and transit advisories.",
+        ],
   };
 };
 
@@ -247,9 +256,9 @@ const buildOpenMeteoUrl = (latitude, longitude) => {
 };
 
 const fetchFromOpenMeteo = async (
-  latitude = DEFAULT_LAT,
-  longitude = DEFAULT_LNG,
-  locationName = null,
+  latitude,
+  longitude,
+  customLocationName = null,
 ) => {
   const targetUrl = buildOpenMeteoUrl(latitude, longitude);
 
@@ -259,13 +268,12 @@ const fetchFromOpenMeteo = async (
   const hourly = response.data.hourly || {};
   const wmo = mapWmoCode(cur.weather_code);
 
-  // Extract current hour precipitation probability if hourly data exists
   let currentHourPrecipitationProbability = null;
   if (
     Array.isArray(hourly.time) &&
     Array.isArray(hourly.precipitation_probability)
   ) {
-    const nowIso = new Date().toISOString().slice(0, 13); // 'YYYY-MM-DDTHH'
+    const nowIso = new Date().toISOString().slice(0, 13);
     const matchIdx = hourly.time.findIndex((t) => t.startsWith(nowIso));
     if (matchIdx !== -1) {
       currentHourPrecipitationProbability =
@@ -286,7 +294,7 @@ const fetchFromOpenMeteo = async (
   });
 
   const resolvedLocation =
-    locationName ||
+    customLocationName ||
     (await reverseGeocode(latitude, longitude)) ||
     `${Number(latitude).toFixed(2)}° N, ${Number(longitude).toFixed(2)}° E`;
 
@@ -303,20 +311,49 @@ const fetchFromOpenMeteo = async (
     latitude,
     longitude,
     locationName: resolvedLocation,
+    hasLocation: true,
   });
 };
 
-const fetchWeather = async (latitude = null, longitude = null) => {
-  const lat = latitude && !isNaN(latitude) ? parseFloat(latitude) : DEFAULT_LAT;
-  const lng =
-    longitude && !isNaN(longitude) ? parseFloat(longitude) : DEFAULT_LNG;
+const fetchWeather = async (
+  latitude = null,
+  longitude = null,
+  customLocationName = null,
+) => {
+  const hasCoordinates =
+    latitude !== null &&
+    latitude !== undefined &&
+    longitude !== null &&
+    longitude !== undefined &&
+    !isNaN(latitude) &&
+    !isNaN(longitude);
 
-  // Use rounded coordinates as cache key for location-based caching
-  const cacheKey = `weather_${lat.toFixed(2)}_${lng.toFixed(2)}`;
+  if (!hasCoordinates) {
+    return formatWeatherData({
+      tempC: null,
+      conditionText: "Location Permission Needed",
+      icon: "//cdn.weatherapi.com/weather/64x64/day/116.png",
+      humidity: null,
+      windKph: null,
+      feelsLikeC: null,
+      precipitation: 0,
+      forecastDays: [],
+      alerts: [],
+      latitude: null,
+      longitude: null,
+      locationName: "Please turn on your location permission",
+      hasLocation: false,
+    });
+  }
+
+  const lat = parseFloat(latitude);
+  const lng = parseFloat(longitude);
+
+  const cacheKey = `weather_${lat.toFixed(2)}_${lng.toFixed(2)}_${customLocationName ? encodeURIComponent(customLocationName) : ""}`;
   const cached = weatherCache.get(cacheKey);
   if (cached) return cached;
 
-  // 1. Try WeatherAPI if user has configured a custom key
+  // 1. Try WeatherAPI if user has configured custom key
   if (
     config.weather?.apiKey &&
     config.weather.apiKey !== "your-weatherapi-key"
@@ -338,7 +375,8 @@ const fetchWeather = async (latitude = null, longitude = null) => {
 
       const cur = response.data.current;
       const loc = response.data.location;
-      const locationName = loc ? `${loc.name}, ${loc.region}` : null;
+      const locationName =
+        customLocationName || (loc ? `${loc.name}, ${loc.region}` : null);
       const forecastDays = (response.data.forecast?.forecastday || []).map(
         (day) => ({
           date: day.date,
@@ -362,30 +400,29 @@ const fetchWeather = async (latitude = null, longitude = null) => {
         latitude: lat,
         longitude: lng,
         locationName,
+        hasLocation: true,
       });
 
       weatherCache.set(cacheKey, data);
       return data;
-    } catch (e) {
-      console.warn(
-        "WeatherAPI attempt failed, falling back to live Open-Meteo.",
-      );
-    }
+    } catch (_) {}
   }
 
-  // 2. Try Open-Meteo for live real-time weather at user's location
+  // 2. Open-Meteo for live real-time weather at user's coordinates
   try {
-    const liveData = await fetchFromOpenMeteo(lat, lng);
+    const liveData = await fetchFromOpenMeteo(lat, lng, customLocationName);
     weatherCache.set(cacheKey, liveData);
     return liveData;
   } catch (openMeteoError) {
     console.warn(
-      "Open-Meteo unavailable, returning offline fallback data:",
+      "Open-Meteo unavailable, returning offline fallback data for coords:",
       openMeteoError.message,
     );
   }
 
-  // 3. Fallback data if completely offline
+  // 3. Fallback for these coordinates if completely offline
+  const fallbackLocation =
+    customLocationName || `${lat.toFixed(2)}° N, ${lng.toFixed(2)}° E`;
   const todayStr = new Date().toISOString().split("T")[0];
   const offlineData = formatWeatherData({
     tempC: 30,
@@ -396,7 +433,8 @@ const fetchWeather = async (latitude = null, longitude = null) => {
     feelsLikeC: 34,
     latitude: lat,
     longitude: lng,
-    locationName: DEFAULT_LOCATION,
+    locationName: fallbackLocation,
+    hasLocation: true,
     forecastDays: [
       {
         date: todayStr,
@@ -405,22 +443,6 @@ const fetchWeather = async (latitude = null, longitude = null) => {
         conditionText: "Partly Cloudy",
         icon: "//cdn.weatherapi.com/weather/64x64/day/116.png",
         chanceOfRain: 25,
-      },
-      {
-        date: new Date(Date.now() + 86400000).toISOString().split("T")[0],
-        maxTempC: 32,
-        minTempC: 25,
-        conditionText: "Light Rain Shower",
-        icon: "//cdn.weatherapi.com/weather/64x64/day/353.png",
-        chanceOfRain: 45,
-      },
-      {
-        date: new Date(Date.now() + 172800000).toISOString().split("T")[0],
-        maxTempC: 34,
-        minTempC: 26,
-        conditionText: "Mainly Clear",
-        icon: "//cdn.weatherapi.com/weather/64x64/day/113.png",
-        chanceOfRain: 15,
       },
     ],
   });
