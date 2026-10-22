@@ -750,6 +750,20 @@ const TerminalsPage = () => {
       return;
     }
 
+    const validatePHPhoneNumber = (phone) => {
+      const cleaned = phone.trim().replace(/[\s-]/g, "");
+      const regex = /^(?:\+639\d{9}|639\d{9}|09\d{9})$/;
+      return regex.test(cleaned);
+    };
+
+    if (!validatePHPhoneNumber(formData.contactNumber)) {
+      showError(
+        "Incorrect number format.",
+        "Please enter a valid Philippine number format",
+      );
+      return;
+    }
+
     const latNum = parseFloat(formData.lat);
     const lngNum = parseFloat(formData.lng);
 
@@ -2260,11 +2274,11 @@ const TerminalsPage = () => {
                   </div>
 
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Contact Hotline</label>
+                    <label className="form-label">Contact Number</label>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="e.g. (075) 522-0925"
+                      placeholder="e.g. +63 9123456789"
                       value={formData.contactNumber}
                       onChange={(e) =>
                         setFormData({

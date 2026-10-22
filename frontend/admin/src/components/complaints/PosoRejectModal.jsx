@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { XCircle, X, AlertTriangle } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { XCircle, X } from "lucide-react";
+import { useTheme } from "../../contexts/theme/ThemeContext";
 
 const REJECTION_REASONS = [
   { value: "Insufficient Evidence", label: "Insufficient / Inconclusive Photo Evidence" },
@@ -10,6 +11,17 @@ const REJECTION_REASONS = [
   { value: "Other", label: "Other inspection findings (specify in remarks)" },
 ];
 
+const STANDARD_REJECTION_REMARKS = [
+  "Insufficient or inconclusive photo / video evidence",
+  "Vehicle plate number unreadable or unregistered",
+  "Incident occurred outside Dagupan City route jurisdiction",
+  "Fare charged is within official LTFRB / LGU fare matrix",
+  "Reported incident does not constitute a traffic violation",
+  "Duplicate grievance report already being processed",
+  "Vehicle and driver cleared upon on-site field verification",
+  "Parties reached mutual amicable settlement on-site",
+];
+
 const PosoRejectModal = ({
   isOpen,
   complaint,
@@ -17,19 +29,49 @@ const PosoRejectModal = ({
   onConfirm,
   loading,
 }) => {
+  const { colors } = useTheme();
   const [reason, setReason] = useState(REJECTION_REASONS[0].value);
-  const [remarks, setRemarks] = useState("");
+  const [selectedRemarks, setSelectedRemarks] = useState([]);
+  const [isOtherRemarks, setIsOtherRemarks] = useState(false);
+  const [otherRemarks, setOtherRemarks] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      setReason(REJECTION_REASONS[0].value);
+      setSelectedRemarks([]);
+      setIsOtherRemarks(false);
+      setOtherRemarks("");
+      setError("");
+    }
+  }, [isOpen, complaint]);
 
   if (!isOpen || !complaint) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onConfirm(complaint, reason, remarks);
+    const finalRemarksList = [...selectedRemarks];
+    if (isOtherRemarks && otherRemarks.trim()) {
+      finalRemarksList.push(otherRemarks.trim());
+    }
+
+    if (finalRemarksList.length === 0) {
+      setError("Please select at least one rejection remark or specify in Others.");
+      return;
+    }
+
+    onConfirm(complaint, reason, finalRemarksList.join("; "));
   };
+
+  const surfaceElevated = colors?.surfaceElevated || "#F8FAFC";
+  const borderColor = colors?.border || "#E2E8F0";
+  const textPrimary = colors?.textPrimary || "#1E293B";
+  const textSecondary = colors?.textSecondary || "#64748B";
+  const primaryColor = colors?.primary || "#0284C7";
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content" style={{ maxWidth: "520px" }}>
+      <div className="modal-content" style={{ maxWidth: "580px" }}>
         <div className="modal-header">
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <XCircle size={20} color="#EF4444" />
@@ -66,7 +108,7 @@ const PosoRejectModal = ({
             </div>
 
             <div>
-              <label className="form-label">
+              <label className="form-label" style={{ marginBottom: "6px" }}>
                 Official Rejection Reason *
               </label>
               <select
@@ -83,19 +125,125 @@ const PosoRejectModal = ({
               </select>
             </div>
 
-            <div>
-              <label className="form-label">
+            {/* Checkbox remarks + Others just like pinpoint terminal in LGU dashboard */}
+            <div className="form-group" style={{ marginBottom: "0" }}>
+              <label className="form-label" style={{ marginBottom: "6px" }}>
                 Officer Remarks & Verification Findings *
               </label>
-              <textarea
-                className="form-input"
-                rows={4}
-                required
-                placeholder="Explain the specific reason why this complaint cannot be endorsed (e.g., Video did not show overcharging; Plate number verified not in PUJ franchise database)."
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-              />
-              <span style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))",
+                  gap: "8px",
+                  backgroundColor: surfaceElevated,
+                  padding: "12px",
+                  borderRadius: "8px",
+                  border: `1px solid ${borderColor}`,
+                }}
+              >
+                {STANDARD_REJECTION_REMARKS.map((remark) => {
+                  const isChecked = selectedRemarks.includes(remark);
+                  return (
+                    <label
+                      key={remark}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "12px",
+                        color: textPrimary,
+                        cursor: "pointer",
+                        userSelect: "none",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedRemarks((prev) =>
+                            checked
+                              ? [...prev, remark]
+                              : prev.filter((r) => r !== remark)
+                          );
+                          if (error) setError("");
+                        }}
+                        style={{
+                          width: "16px",
+                          height: "16px",
+                          cursor: "pointer",
+                        }}
+                      />
+                      <span>{remark}</span>
+                    </label>
+                  );
+                })}
+
+                {/* Others Checkbox */}
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    color: primaryColor,
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isOtherRemarks}
+                    onChange={(e) => {
+                      setIsOtherRemarks(e.target.checked);
+                      if (error) setError("");
+                    }}
+                    style={{
+                      width: "16px",
+                      height: "16px",
+                      cursor: "pointer",
+                    }}
+                  />
+                  <span>Others</span>
+                </label>
+              </div>
+
+              {/* Conditional Text Input for Others */}
+              {isOtherRemarks && (
+                <div style={{ marginTop: "10px" }}>
+                  <label
+                    style={{
+                      fontSize: "11px",
+                      color: textSecondary,
+                      marginBottom: "4px",
+                      display: "block",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Other Rejection Remarks / Findings:
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Video did not show overcharging; Plate number verified not in PUJ franchise database"
+                    value={otherRemarks}
+                    onChange={(e) => {
+                      setOtherRemarks(e.target.value);
+                      if (error) setError("");
+                    }}
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              {error && (
+                <div style={{ color: "#EF4444", fontSize: "12px", marginTop: "6px" }}>
+                  {error}
+                </div>
+              )}
+
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px", display: "block" }}>
                 The reporting commuter will be notified of this rejection decision and reason.
               </span>
             </div>
