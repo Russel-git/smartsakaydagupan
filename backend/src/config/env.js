@@ -40,6 +40,13 @@ const config = {
     user: process.env.GMAIL_USER || "smartsakaydagupan@gmail.com",
     pass: process.env.GMAIL_APP_PASSWORD || "jihe smul jpnq spcq",
   },
+  brevo: {
+    apiKey: process.env.BREVO_API_KEY || "",
+    senderEmail: process.env.BREVO_SENDER_EMAIL || process.env.GMAIL_USER || "smartsakaydagupan@gmail.com",
+    senderName: process.env.BREVO_SENDER_NAME || "SmartSakay Dagupan",
+    smtpUser: process.env.BREVO_SMTP_USER || "",
+    smtpKey: process.env.BREVO_SMTP_KEY || "",
+  },
 
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,

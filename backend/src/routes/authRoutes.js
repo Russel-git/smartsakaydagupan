@@ -19,6 +19,5 @@ router.get('/me', authMiddleware, (req, res) => {
   return apiResponse.success(res, req.user, 'Profile retrieved successfully');
 });
 router.post('/logout', authMiddleware, authController.logout);
-router.get('/test-email', authController.testEmail);
 
 module.exports = router;
