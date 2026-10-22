@@ -30,15 +30,15 @@ const config = {
   jwtAccessExpiry: "15m",
   jwtRefreshExpiry: "7d",
   gmail: {
-    user: process.env.GMAIL_USER || "",
-    appPassword: process.env.GMAIL_APP_PASSWORD || "",
+    user: process.env.GMAIL_USER || "smartsakaydagupan@gmail.com",
+    appPassword: process.env.GMAIL_APP_PASSWORD || "jihe smul jpnq spcq",
   },
   smtp: {
     host: process.env.GMAIL_HOST || "smtp.gmail.com",
     port: parseInt(process.env.GMAIL_PORT, 10) || 587,
     secure: process.env.SMTP_SECURE === "true",
-    user: process.env.GMAIL_USER || "",
-    pass: process.env.GMAIL_APP_PASSWORD || "",
+    user: process.env.GMAIL_USER || "smartsakaydagupan@gmail.com",
+    pass: process.env.GMAIL_APP_PASSWORD || "jihe smul jpnq spcq",
   },
 
   gemini: {
