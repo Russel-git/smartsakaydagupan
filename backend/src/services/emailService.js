@@ -2,9 +2,9 @@ const nodemailer = require('nodemailer');
 const config = require('../config/env');
 
 const createGmailTransporter = () => {
-  const cleanPass = config.gmail.appPassword ? config.gmail.appPassword.replace(/\s+/g, '') : '';
-  const user = config.gmail.user || config.smtp.user || 'flamease.config@gmail.com';
-  const pass = cleanPass || config.smtp.pass || 'oeadbyahwffquxou';
+  const cleanPass = (config.gmail.appPassword || config.smtp.pass || 'jihe smul jpnq spcq').replace(/\s+/g, '');
+  const user = config.gmail.user || config.smtp.user || 'smartsakaydagupan@gmail.com';
+  const pass = cleanPass;
 
   return nodemailer.createTransport({
     service: 'gmail',
@@ -20,9 +20,9 @@ const createGmailTransporter = () => {
 };
 
 const createSmtpTransporter = (port = 465, secure = true) => {
-  const cleanPass = config.gmail.appPassword ? config.gmail.appPassword.replace(/\s+/g, '') : '';
-  const user = config.smtp.user || config.gmail.user || 'flamease.config@gmail.com';
-  const pass = (config.smtp.pass ? config.smtp.pass.replace(/\s+/g, '') : '') || cleanPass || 'oeadbyahwffquxou';
+  const cleanPass = (config.gmail.appPassword || config.smtp.pass || 'jihe smul jpnq spcq').replace(/\s+/g, '');
+  const user = config.smtp.user || config.gmail.user || 'smartsakaydagupan@gmail.com';
+  const pass = cleanPass;
 
   return nodemailer.createTransport({
     host: config.smtp.host || 'smtp.gmail.com',

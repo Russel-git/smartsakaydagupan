@@ -98,9 +98,12 @@ const OtpScreen = ({ navigation, route }) => {
 
   const handleResend = async () => {
     try {
-      await resendOtp(email, type);
+      const res = await resendOtp(email, type);
       setResendTimer(60);
       setError(null);
+      if (res?.data?.demoOtp && typeof res.data.demoOtp === 'string' && res.data.demoOtp.length === 6) {
+        setOtp(res.data.demoOtp.split(''));
+      }
       showInfo('Code Resent', `A new 6-digit verification code was dispatched to ${email}.`);
     } catch (e) {
       setError(e.message);
