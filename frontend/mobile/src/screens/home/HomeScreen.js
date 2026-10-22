@@ -15,6 +15,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { useSharedLocation } from '../../contexts/LocationContext';
 import { Card, SectionHeader, Badge } from '../../components/common/SharedComponents';
 import AuthPromptModal from '../../components/common/AuthPromptModal';
 import HomeMapWidget from '../../components/common/HomeMapWidget';
@@ -27,6 +28,7 @@ const HomeScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
   const { user, isGuest } = useAuth();
   const { unreadCount } = useNotifications();
+  const { location } = useSharedLocation();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isTablet = Math.min(width, height) >= 600;
@@ -62,9 +64,14 @@ const HomeScreen = ({ navigation }) => {
       const currentMuni = (savedMuni || user?.municipality || 'Dagupan').trim();
       setActiveMuni(currentMuni);
 
+      const weatherParams = location?.lat && location?.lng ? {
+        lat: location.lat,
+        lon: location.lng,
+      } : undefined;
+
       const promises = [
         faresAPI.getActiveFares(),
-        weatherAPI.getCurrentWeather(),
+        weatherAPI.getCurrentWeather(weatherParams),
       ];
       if (!isGuest) {
         promises.push(complaintsAPI.getMyComplaints({ municipality: currentMuni }));
@@ -84,7 +91,7 @@ const HomeScreen = ({ navigation }) => {
         setActiveComplaint(active || null);
       }
     } catch (e) { /* Silently fail */ }
-  }, [isGuest, user?.municipality]);
+  }, [isGuest, user?.municipality, location?.lat, location?.lng]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -170,7 +177,7 @@ const HomeScreen = ({ navigation }) => {
                     {weather.current?.temp_c ?? weather.current?.tempC ?? weather.temp_c ?? '--'}°C
                   </Text>
                   <Text style={styles.weatherDesc} numberOfLines={1}>
-                    {conditionStr} • {activeMuni}
+                    {conditionStr} • {weather?.current?.coordinates?.location ? (weather.current.coordinates.location.split(',')[0].replace(/^Coordinates\s*\(|\)$/g, '').trim() || activeMuni) : activeMuni}
                   </Text>
                   <MaterialCommunityIcons name="chevron-right" size={16} color="rgba(255,255,255,0.6)" style={{ marginLeft: 'auto' }} />
                 </TouchableOpacity>

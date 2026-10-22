@@ -18,25 +18,40 @@ const mapWmoCode = (code) => {
   return { text: 'Partly Cloudy', icon: '//cdn.weatherapi.com/weather/64x64/day/116.png' };
 };
 
-const generateAdvisories = (tempC, windKph, conditionText, precipitation = 0, rainChance = 0) => {
+const generateAdvisories = (tempC, windKph, conditionText, precipitation = 0, rainChance = 0, locationLabel = 'Dagupan City') => {
   const advisories = [];
   const textLower = (conditionText || '').toLowerCase();
+  const locName = locationLabel || 'your area';
 
   if (textLower.includes('thunder') || textLower.includes('storm')) {
-    advisories.push('⛈️ Thunderstorms detected over Dagupan City — take shelter and anticipate road waterlogging near Lucao & Downtown.');
+    advisories.push(`⛈️ Thunderstorms detected in ${locName} — take shelter and anticipate road waterlogging near low-lying transit corridors.`);
   } else if (textLower.includes('rain') || textLower.includes('drizzle') || textLower.includes('shower') || precipitation > 0 || rainChance >= 60) {
-    advisories.push(`🌧️ Wet road conditions in Dagupan City${precipitation > 0 ? ` (${precipitation}mm rainfall)` : ''} — carry an umbrella and allow extra travel time.`);
+    advisories.push(`🌧️ Wet road conditions in ${locName}${precipitation > 0 ? ` (${precipitation}mm rainfall)` : ''} — carry an umbrella and allow extra travel time.`);
   }
   if (windKph > 35) {
-    advisories.push(`💨 Strong coastal winds (${windKph} km/h) in Dagupan — exercise caution near open transport terminals and on tricycles.`);
+    advisories.push(`💨 Strong gusty winds (${windKph} km/h) in ${locName} — exercise caution near open transport terminals and on tricycles.`);
   }
   if (tempC > 34) {
     advisories.push(`☀️ High heat index (${tempC}°C) — stay hydrated and seek shaded waiting sheds at jeepney stops.`);
   }
-  return advisories.length > 0 ? advisories : ['Favorable commuting weather in Dagupan City.'];
+  return advisories.length > 0 ? advisories : [`Favorable commuting weather in ${locName}.`];
 };
 
-const formatWeatherData = ({ tempC, conditionText, icon, humidity, windKph, feelsLikeC, precipitation = 0, currentHourPrecipitationProbability = null, forecastDays, alerts = [] }) => {
+const formatWeatherData = ({
+  tempC,
+  conditionText,
+  icon,
+  humidity,
+  windKph,
+  feelsLikeC,
+  precipitation = 0,
+  currentHourPrecipitationProbability = null,
+  forecastDays,
+  alerts = [],
+  latitude = 16.0433,
+  longitude = 120.3397,
+  locationLabel = 'Dagupan City, Pangasinan',
+}) => {
   const roundedTemp = Math.round(tempC);
   const roundedFeels = Math.round(feelsLikeC);
   const roundedWind = Math.round(windKph);
@@ -80,17 +95,17 @@ const formatWeatherData = ({ tempC, conditionText, icon, humidity, windKph, feel
       feelslike_c: roundedFeels,
       precipitation: Number(precipitation) || 0,
       rainChance: currentHourPrecipitationProbability ?? 20,
-      coordinates: { latitude: 16.0433, longitude: 120.3397, location: 'Dagupan City, Pangasinan' },
+      coordinates: { latitude, longitude, location: locationLabel },
       lastUpdated: new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }),
     },
     forecast: formattedForecast,
     alerts,
-    travelAdvisory: generateAdvisories(roundedTemp, roundedWind, conditionText, precipitation, currentHourPrecipitationProbability),
+    travelAdvisory: generateAdvisories(roundedTemp, roundedWind, conditionText, precipitation, currentHourPrecipitationProbability, locationLabel),
   };
 };
 
-const fetchFromOpenMeteo = async () => {
-  const targetUrl = config.weather?.apiUrl || 'https://api.open-meteo.com/v1/forecast?latitude=16.0433&longitude=120.3397&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,apparent_temperature,wind_speed_10m&hourly=precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FManila';
+const fetchFromOpenMeteo = async (lat = 16.0433, lon = 120.3397, locationLabel = 'Dagupan City, Pangasinan') => {
+  const targetUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,apparent_temperature,wind_speed_10m&hourly=precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FManila`;
 
   const response = await axios.get(targetUrl, { timeout: 8000 });
   const cur = response.data.current || {};
@@ -130,21 +145,38 @@ const fetchFromOpenMeteo = async () => {
     precipitation: cur.precipitation ?? 0,
     currentHourPrecipitationProbability,
     forecastDays,
+    latitude: lat,
+    longitude: lon,
+    locationLabel,
   });
 };
 
-const fetchWeather = async () => {
-  const cacheKey = 'dagupan_weather';
+const fetchWeather = async (options = {}) => {
+  const { lat, lon, latitude, longitude, locationName } = options || {};
+  const parsedLat = parseFloat(lat ?? latitude);
+  const parsedLon = parseFloat(lon ?? longitude);
+  const hasCoords = !isNaN(parsedLat) && !isNaN(parsedLon) && parsedLat >= -90 && parsedLat <= 90 && parsedLon >= -180 && parsedLon <= 180;
+
+  const targetLat = hasCoords ? Number(parsedLat.toFixed(4)) : 16.0433;
+  const targetLon = hasCoords ? Number(parsedLon.toFixed(4)) : 120.3397;
+  const locationLabel = locationName
+    ? locationName
+    : hasCoords
+      ? `Coordinates (${targetLat.toFixed(2)}° N, ${targetLon.toFixed(2)}° E)`
+      : 'Dagupan City, Pangasinan';
+
+  const cacheKey = `weather_${targetLat.toFixed(2)}_${targetLon.toFixed(2)}`;
   const cached = weatherCache.get(cacheKey);
   if (cached) return cached;
 
   // 1. Try WeatherAPI if user has configured a custom key
   if (config.weather?.apiKey && config.weather.apiKey !== 'your-weatherapi-key') {
     try {
+      const qParam = hasCoords ? `${targetLat},${targetLon}` : 'Dagupan,Philippines';
       const response = await axios.get('http://api.weatherapi.com/v1/forecast.json', {
         params: {
           key: config.weather.apiKey,
-          q: 'Dagupan,Philippines',
+          q: qParam,
           days: 3,
           aqi: 'no',
           alerts: 'yes',
@@ -162,6 +194,10 @@ const fetchWeather = async () => {
         chanceOfRain: day.day.daily_chance_of_rain,
       }));
 
+      const locResultName = response.data.location?.name
+        ? `${response.data.location.name}${response.data.location.region ? `, ${response.data.location.region}` : ''}`
+        : locationLabel;
+
       const data = formatWeatherData({
         tempC: cur.temp_c,
         conditionText: cur.condition.text,
@@ -171,6 +207,9 @@ const fetchWeather = async () => {
         feelsLikeC: cur.feelslike_c,
         forecastDays,
         alerts: response.data.alerts?.alert || [],
+        latitude: targetLat,
+        longitude: targetLon,
+        locationLabel: locResultName,
       });
 
       weatherCache.set(cacheKey, data);
@@ -180,13 +219,13 @@ const fetchWeather = async () => {
     }
   }
 
-  // 2. Try Open-Meteo for live Dagupan real-time weather
+  // 2. Try Open-Meteo for live real-time weather at the exact coordinates
   try {
-    const liveData = await fetchFromOpenMeteo();
+    const liveData = await fetchFromOpenMeteo(targetLat, targetLon, locationLabel);
     weatherCache.set(cacheKey, liveData);
     return liveData;
   } catch (openMeteoError) {
-    console.warn('Open-Meteo unavailable, returning Dagupan offline fallback data:', openMeteoError.message);
+    console.warn(`Open-Meteo unavailable for (${targetLat}, ${targetLon}), returning fallback:`, openMeteoError.message);
   }
 
   // 3. Fallback data if completely offline
@@ -203,6 +242,9 @@ const fetchWeather = async () => {
       { date: new Date(Date.now() + 86400000).toISOString().split('T')[0], maxTempC: 32, minTempC: 25, conditionText: 'Light Rain Shower', icon: '//cdn.weatherapi.com/weather/64x64/day/353.png', chanceOfRain: 45 },
       { date: new Date(Date.now() + 172800000).toISOString().split('T')[0], maxTempC: 34, minTempC: 26, conditionText: 'Mainly Clear', icon: '//cdn.weatherapi.com/weather/64x64/day/113.png', chanceOfRain: 15 },
     ],
+    latitude: targetLat,
+    longitude: targetLon,
+    locationLabel,
   });
 
   weatherCache.set(cacheKey, offlineData);

@@ -30,13 +30,16 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (err) {
         if (
-          err.response?.status === 401 ||
-          (err.response?.status === 403 &&
-            (err.response?.data?.message?.toLowerCase().includes('deactivated') ||
-             err.response?.data?.message?.toLowerCase().includes('suspended')))
+          err.response?.status === 403 &&
+          (err.response?.data?.message?.toLowerCase().includes('deactivated') ||
+           err.response?.data?.message?.toLowerCase().includes('suspended') ||
+           err.response?.data?.errors === 'ACCOUNT_SUSPENDED')
         ) {
           logout();
           window.location.href = '/login?suspended=true';
+        } else if (err.response?.status === 401) {
+          logout();
+          window.location.href = '/login';
         }
       }
     }, 4000);

@@ -538,7 +538,7 @@ const LguDashboardView = () => {
               LTFRB Compliance & Fare Rules
             </h4>
             <p style={{ margin: 0, fontSize: "13px", color: "#B45309", lineHeight: "1.6" }}>
-              All Dagupan City PUV franchises must strictly implement the <strong>20% statutory discount</strong> for Students, Senior Citizens, and PWDs under RA 11314 and LTFRB Memorandum Circulars. Overcharging and refusal to convey passengers are subject to City Transport sanctions.
+              All {currentMunicipality} PUV franchises must strictly implement the <strong>20% statutory discount</strong> for Students, Senior Citizens, and PWDs under RA 11314 and LTFRB Memorandum Circulars. Overcharging and refusal to convey passengers are subject to LGU Transport sanctions.
             </p>
           </div>
         </div>

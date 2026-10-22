@@ -1665,6 +1665,7 @@ const ComplaintsPage = () => {
       <PosoEndorseModal
         isOpen={endorseModalOpen}
         complaint={targetForEndorse}
+        municipality={activeMunicipality}
         onClose={() => {
           setEndorseModalOpen(false);
           setTargetForEndorse(null);
@@ -1677,6 +1678,7 @@ const ComplaintsPage = () => {
       <PosoRejectModal
         isOpen={rejectModalOpen}
         complaint={targetForReject}
+        municipality={activeMunicipality}
         onClose={() => {
           setRejectModalOpen(false);
           setTargetForReject(null);
@@ -1688,6 +1690,7 @@ const ComplaintsPage = () => {
       {/* POSO DIRECT FIELD REPORT MODAL */}
       <PosoFieldReportModal
         isOpen={fieldReportModalOpen}
+        municipality={activeMunicipality}
         onClose={() => setFieldReportModalOpen(false)}
         onSubmit={handleSubmitFieldReport}
         loading={fieldReportLoading}

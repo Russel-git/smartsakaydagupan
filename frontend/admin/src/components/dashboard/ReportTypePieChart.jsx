@@ -68,7 +68,7 @@ const DEFAULT_CATEGORIES = [
     color: "#6B7280",
     focusArea: "General Commuter Relations",
     recommendation:
-      "Review general commuter feedback and coordinate service quality orientations with Dagupan transport federation leaders.",
+      "Review general commuter feedback and coordinate service quality orientations with local transport federation leaders.",
   },
 ];
 
@@ -211,7 +211,7 @@ const ReportTypePieChart = ({
               <span>Commuter Grievance Category Distribution</span>
             </h3>
             <p style={{ fontSize: "12px", color: colors.textMuted, margin: "4px 0 0 0" }}>
-              Comprehensive breakdown of reported commuter infractions across Dagupan City transit corridors
+              Comprehensive breakdown of reported commuter infractions across transit corridors
             </p>
           </div>
 

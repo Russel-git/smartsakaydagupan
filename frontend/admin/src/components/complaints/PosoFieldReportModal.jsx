@@ -1,12 +1,17 @@
 import React, { useState } from "react";
 import { Car, X, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext";
 
 const PosoFieldReportModal = ({
   isOpen,
   onClose,
   onSubmit,
   loading,
+  municipality,
 }) => {
+  const { user, admin } = useAuth();
+  const currentMuni = municipality || user?.municipality || admin?.municipality || "Dagupan";
+
   const [form, setForm] = useState({
     vehiclePlateNumber: "",
     category: "reckless_driving",
@@ -22,6 +27,7 @@ const PosoFieldReportModal = ({
     e.preventDefault();
     onSubmit({
       ...form,
+      municipality: currentMuni,
       location: form.location ? { address: form.location } : undefined,
     });
   };
@@ -58,7 +64,7 @@ const PosoFieldReportModal = ({
                 color: "#991B1B",
               }}
             >
-              This report will be filed under your official POSO badge and escalated directly to the Dagupan City Transport Authority.
+              This report will be filed under your official POSO badge and escalated directly to the {currentMuni} Transport Authority.
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -68,7 +74,7 @@ const PosoFieldReportModal = ({
                   type="text"
                   className="form-input"
                   required
-                  placeholder="e.g. ABC-1234 or Dagupan-102"
+                  placeholder={`e.g. ABC-1234 or ${currentMuni}-102`}
                   value={form.vehiclePlateNumber}
                   onChange={(e) => setForm({ ...form, vehiclePlateNumber: e.target.value })}
                 />

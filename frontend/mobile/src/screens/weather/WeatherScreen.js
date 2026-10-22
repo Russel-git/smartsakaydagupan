@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSharedLocation } from '../../contexts/LocationContext';
 import { Card, LoadingSpinner } from '../../components/common/SharedComponents';
 import { weatherAPI } from '../../api/services';
 import { FONTS, SPACING, RADIUS } from '../../utils/constants';
@@ -9,28 +11,75 @@ import { getWeatherIcon, getTravelAdvisory } from '../../utils/helpers';
 
 const WeatherScreen = () => {
   const { colors } = useTheme();
+  const { location } = useSharedLocation();
   const [current, setCurrent] = useState(null);
   const [forecast, setForecast] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [displayLocation, setDisplayLocation] = useState('Detecting current location...');
 
-  const loadWeather = async () => {
+  const resolveLocationLabel = async (lat, lng) => {
     try {
-      const [currentRes, forecastRes] = await Promise.allSettled([
-        weatherAPI.getCurrentWeather(),
-        weatherAPI.getForecast(),
-      ]);
-      if (currentRes.status === 'fulfilled') setCurrent(currentRes.value.data.data);
-      if (forecastRes.status === 'fulfilled') setForecast(forecastRes.value.data.data?.forecast || []);
-    } catch (e) { /* */ }
-    setLoading(false);
+      const rev = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+      if (rev && rev.length > 0) {
+        const item = rev[0];
+        const parts = [
+          item.district || item.street,
+          item.city || item.subregion || item.region,
+        ].filter(Boolean);
+        if (parts.length > 0) return parts.join(', ');
+      }
+    } catch (_) {}
+    return `Location (${lat.toFixed(2)}° N, ${lng.toFixed(2)}° E)`;
   };
 
-  useEffect(() => { loadWeather(); }, []);
+  const loadWeather = useCallback(async () => {
+    try {
+      let params = undefined;
+      let locLabel = 'Dagupan City, Pangasinan';
 
-  const onRefresh = async () => { setRefreshing(true); await loadWeather(); setRefreshing(false); };
+      if (location?.lat && location?.lng) {
+        locLabel = await resolveLocationLabel(location.lat, location.lng);
+        setDisplayLocation(locLabel);
+        params = {
+          lat: location.lat,
+          lon: location.lng,
+          locationName: locLabel,
+        };
+      }
 
-  if (loading) return <LoadingSpinner text="Loading weather data..." />;
+      const [currentRes, forecastRes] = await Promise.allSettled([
+        weatherAPI.getCurrentWeather(params),
+        weatherAPI.getForecast(params),
+      ]);
+
+      if (currentRes.status === 'fulfilled') {
+        const data = currentRes.value.data.data;
+        setCurrent(data);
+        if (data?.current?.coordinates?.location) {
+          setDisplayLocation(data.current.coordinates.location);
+        }
+      }
+      if (forecastRes.status === 'fulfilled') {
+        setForecast(forecastRes.value.data.data?.forecast || []);
+      }
+    } catch (e) {
+      /* Silently fail to fallback */
+    }
+    setLoading(false);
+  }, [location?.lat, location?.lng]);
+
+  useEffect(() => {
+    loadWeather();
+  }, [loadWeather]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadWeather();
+    setRefreshing(false);
+  };
+
+  if (loading) return <LoadingSpinner text="Loading hyper-local weather data..." />;
 
   const getConditionString = (cond) => {
     if (!cond) return 'Partly Cloudy';
@@ -50,6 +99,9 @@ const WeatherScreen = () => {
 
   const mainIcon = getWeatherIcon(condText);
   const isRainOrStorm = condText.toLowerCase().includes('rain') || condText.toLowerCase().includes('thunder');
+  const coordLat = current?.current?.coordinates?.latitude ?? location?.lat ?? 16.04;
+  const coordLon = current?.current?.coordinates?.longitude ?? location?.lng ?? 120.34;
+  const locTitle = displayLocation || current?.current?.coordinates?.location || 'Dagupan City, Pangasinan';
 
   return (
     <ScrollView
@@ -58,7 +110,13 @@ const WeatherScreen = () => {
     >
       {/* Current Weather */}
       <View style={[styles.currentCard, { backgroundColor: colors.primary }]}>
-        <Text style={styles.locationText}>📍 Dagupan City, Pangasinan (16.04° N, 120.33° E)</Text>
+        <View style={styles.badgeRow}>
+          <MaterialCommunityIcons name="crosshairs-gps" size={14} color="#A7F3D0" />
+          <Text style={styles.gpsBadgeText}>LIVE COMMUTER GPS TELEMETRY</Text>
+        </View>
+        <Text style={styles.locationText} numberOfLines={2}>
+          📍 {locTitle} ({Number(coordLat).toFixed(2)}° N, {Number(coordLon).toFixed(2)}° E)
+        </Text>
         <View style={styles.tempRow}>
           <MaterialCommunityIcons name={mainIcon} size={64} color={isRainOrStorm ? "#93C5FD" : "#FBBF24"} />
           <View>
@@ -93,10 +151,10 @@ const WeatherScreen = () => {
             <View style={styles.pulseDot} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.daemonTitle, { color: colors.textPrimary }]}>
-                Dagupan Auto-Weather Alerts Active
+                Commuter Weather Telemetry Active
               </Text>
               <Text style={[styles.daemonSubtitle, { color: colors.textSecondary }]}>
-                Continuously monitors Dagupan City weather. When rain, thunderstorms, or severe heat occur, transit alerts are dispatched automatically to your Notifications tab.
+                Live weather tracking is synchronizing with your current GPS location. When rain, thunderstorms, or severe heat occur on your route, transit alerts are dispatched automatically.
               </Text>
             </View>
             <MaterialCommunityIcons name="bell-ring-outline" size={22} color={colors.primary} />
@@ -170,8 +228,10 @@ const WeatherScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  currentCard: { paddingTop: 50, paddingBottom: SPACING.xxl, paddingHorizontal: SPACING.xxl, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
-  locationText: { color: 'rgba(255,255,255,0.8)', fontSize: FONTS.sizes.sm, marginBottom: SPACING.md },
+  currentCard: { paddingTop: 45, paddingBottom: SPACING.xxl, paddingHorizontal: SPACING.xxl, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, backgroundColor: 'rgba(255,255,255,0.15)', alignSelf: 'flex-start', paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12 },
+  gpsBadgeText: { color: '#A7F3D0', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+  locationText: { color: 'rgba(255,255,255,0.9)', fontSize: FONTS.sizes.sm, fontWeight: '600', marginBottom: SPACING.md },
   tempRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xl, marginBottom: SPACING.xl },
   tempText: { fontSize: 56, fontWeight: '800', color: '#FFFFFF' },
   condText: { fontSize: FONTS.sizes.lg, color: 'rgba(255,255,255,0.8)' },

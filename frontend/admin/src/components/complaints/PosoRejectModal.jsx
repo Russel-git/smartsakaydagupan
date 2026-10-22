@@ -1,14 +1,6 @@
-import React, { useState } from "react";
-import { XCircle, X, AlertTriangle } from "lucide-react";
-
-const REJECTION_REASONS = [
-  { value: "Insufficient Evidence", label: "Insufficient / Inconclusive Photo Evidence" },
-  { value: "Invalid Vehicle Plate", label: "Invalid or Unregistered Vehicle / Plate Number" },
-  { value: "Outside Dagupan Jurisdiction", label: "Incident occurred outside Dagupan City route jurisdiction" },
-  { value: "Not a Violation", label: "Reported incident does not constitute an LTFRB/LGU traffic violation" },
-  { value: "Duplicate Report", label: "Duplicate grievance report already being processed" },
-  { value: "Other", label: "Other inspection findings (specify in remarks)" },
-];
+import React, { useState, useEffect } from "react";
+import { XCircle, X } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext";
 
 const PosoRejectModal = ({
   isOpen,
@@ -16,9 +8,37 @@ const PosoRejectModal = ({
   onClose,
   onConfirm,
   loading,
+  municipality,
 }) => {
-  const [reason, setReason] = useState(REJECTION_REASONS[0].value);
+  const { user, admin } = useAuth();
+  const currentMuni =
+    complaint?.municipality ||
+    municipality ||
+    user?.municipality ||
+    admin?.municipality ||
+    "Dagupan";
+
+  const rejectionReasons = [
+    { value: "Insufficient Evidence", label: "Insufficient / Inconclusive Photo Evidence" },
+    { value: "Invalid Vehicle Plate", label: "Invalid or Unregistered Vehicle / Plate Number" },
+    {
+      value: `Outside ${currentMuni} Jurisdiction`,
+      label: `Incident occurred outside ${currentMuni} route jurisdiction`,
+    },
+    { value: "Not a Violation", label: "Reported incident does not constitute an LTFRB/LGU traffic violation" },
+    { value: "Duplicate Report", label: "Duplicate grievance report already being processed" },
+    { value: "Other", label: "Other inspection findings (specify in remarks)" },
+  ];
+
+  const [reason, setReason] = useState(rejectionReasons[0].value);
   const [remarks, setRemarks] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      setReason(rejectionReasons[0].value);
+      setRemarks("");
+    }
+  }, [isOpen, complaint, currentMuni]);
 
   if (!isOpen || !complaint) return null;
 
@@ -75,7 +95,7 @@ const PosoRejectModal = ({
                 onChange={(e) => setReason(e.target.value)}
                 style={{ width: "100%" }}
               >
-                {REJECTION_REASONS.map((r) => (
+                {rejectionReasons.map((r) => (
                   <option key={r.value} value={r.value}>
                     {r.label}
                   </option>
@@ -91,12 +111,12 @@ const PosoRejectModal = ({
                 className="form-input"
                 rows={4}
                 required
-                placeholder="Explain the specific reason why this complaint cannot be endorsed (e.g., Video did not show overcharging; Plate number verified not in PUJ franchise database)."
+                placeholder={`Explain the specific reason why this complaint cannot be endorsed in ${currentMuni} (e.g., Video did not show overcharging; Plate number verified not in PUJ franchise database).`}
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
               />
               <span style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
-                The reporting commuter will be notified of this rejection decision and reason.
+                The reporting commuter will be notified of this rejection decision by {currentMuni} POSO.
               </span>
             </div>
           </div>

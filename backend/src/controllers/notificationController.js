@@ -95,14 +95,18 @@ const getNotifications = async (req, res, next) => {
       } else if (category === 'complaint_updates') {
         filter.$and = [{ $or: [{ category: 'complaint_updates' }, { type: 'complaint_update' }] }];
       } else if (category === 'broadcast_by_admin') {
-        filter.$and = [{
-          $or: [
-            { category: 'broadcast_by_admin' },
-            { type: { $in: ['broadcast', 'system', 'fare_update'] } },
-            { userId: null },
-            { createdByRole: { $in: ['lgu', 'poso', 'admin'] } },
-          ],
-        }];
+        filter.$and = [
+          {
+            $or: [
+              { category: 'broadcast_by_admin' },
+              { type: { $in: ['broadcast', 'system', 'fare_update'] } },
+              { userId: null },
+            ],
+          },
+          { category: { $nin: ['complaint_updates', 'weather_updates'] } },
+          { type: { $nin: ['complaint_update', 'weather_alert'] } },
+          { 'metadata.complaintId': { $exists: false } },
+        ];
       } else {
         filter.category = category;
       }
@@ -307,14 +311,18 @@ const broadcast = async (req, res, next) => {
     let finalCategory = category;
     let finalType = type || 'broadcast';
 
-    // Broadcasts and advisories published by LGU, POSO or Admin are official LGU broadcasts
-    if (req.user.role === 'lgu' || req.user.role === 'poso' || finalType === 'broadcast' || finalCategory === 'broadcast_by_admin') {
+    // Ensure proper categorization: complaint updates and weather alerts keep their categories
+    if (finalType === 'complaint_update' || finalCategory === 'complaint_updates') {
+      finalCategory = 'complaint_updates';
+      finalType = 'complaint_update';
+    } else if (finalType === 'weather_alert' || finalCategory === 'weather_updates') {
+      finalCategory = 'weather_updates';
+      finalType = 'weather_alert';
+    } else if (req.user.role === 'lgu' || req.user.role === 'poso' || finalType === 'broadcast' || finalCategory === 'broadcast_by_admin') {
       finalCategory = 'broadcast_by_admin';
       finalType = 'broadcast';
     } else if (!finalCategory) {
-      if (finalType === 'weather_alert') finalCategory = 'weather_updates';
-      else if (finalType === 'complaint_update') finalCategory = 'complaint_updates';
-      else finalCategory = 'broadcast_by_admin';
+      finalCategory = 'broadcast_by_admin';
     }
 
     // Determine target municipality

@@ -293,6 +293,7 @@ const verifyAndEndorseToLgu = async (req, res, next) => {
       title: `🏛️ Verified & Endorsed to ${muniName} LGU`,
       message: `Your complaint "${complaint.subject}" was verified by transit operators and escalated to ${muniName} POSO/LGU. Case Tracking No: ${lguCaseNumber}.`,
       type: 'complaint_update',
+      category: 'complaint_updates',
       municipality: muniName,
       metadata: { complaintId: complaint._id, status: 'endorsed_to_lgu', lguCaseNumber },
     });
@@ -394,6 +395,7 @@ const endorseToLgu = async (req, res, next) => {
         title: `🏛️ Verified by POSO & Endorsed to ${muniName} LGU`,
         message: `Your complaint "${complaint.subject}" has been road-verified by POSO Officers and escalated to ${muniName} LGU. Tracking No: ${lguCaseNumber}.${officerNotes ? ` Notes: ${officerNotes}` : ''}`,
         type: 'complaint_update',
+        category: 'complaint_updates',
         municipality: muniName,
         metadata: { complaintId: complaint._id, status: 'endorsed_to_lgu', lguCaseNumber },
       });
@@ -529,6 +531,7 @@ const lguTakeAction = async (req, res, next) => {
       title: '🚨 Official Action Taken by LGU',
       message: `${req.user.municipality || 'Dagupan'} LGU/POSO has taken administrative action on your complaint "${complaint.subject}": ${lguActionNotes}`,
       type: 'complaint_update',
+      category: 'complaint_updates',
       metadata: { complaintId: complaint._id, status: 'action_taken', evidencePhoto: photoToSave || null },
     });
 
@@ -574,6 +577,7 @@ const lguTerminate = async (req, res, next) => {
       title: '✅ Grievance Officially Resolved',
       message: `Your complaint "${complaint.subject}" has been officially resolved by ${muniName} authorities: ${notesToSave || 'Case successfully concluded and resolved.'}`,
       type: 'complaint_update',
+      category: 'complaint_updates',
       municipality: muniName,
       metadata: { complaintId: complaint._id, status: 'resolved' },
     });
@@ -621,6 +625,7 @@ const updateComplaintStatus = async (req, res, next) => {
         title: `📋 Complaint Status: ${label}`,
         message: `Your complaint "${complaint.subject}" was updated to ${label}.${adminNotes ? ` Note: ${adminNotes}` : ''}`,
         type: 'complaint_update',
+        category: 'complaint_updates',
         municipality: muniName,
         metadata: {
           complaintId: complaint._id,
@@ -653,6 +658,7 @@ const addAdminNotes = async (req, res, next) => {
         title: '💬 Officer Note on Your Report',
         message: `An update note was added to your report "${complaint.subject}": ${adminNotes}`,
         type: 'complaint_update',
+        category: 'complaint_updates',
         metadata: {
           complaintId: complaint._id,
           status: complaint.status,
@@ -860,6 +866,7 @@ const rejectComplaint = async (req, res, next) => {
         title: '❌ Complaint Rejected by POSO',
         message: `Your report "${complaint.subject}" was reviewed and rejected. Reason: ${fullReason}`,
         type: 'complaint_update',
+        category: 'complaint_updates',
         metadata: { complaintId: complaint._id, status: 'rejected' },
       });
     }

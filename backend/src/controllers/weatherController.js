@@ -4,7 +4,10 @@ const apiResponse = require('../utils/apiResponse');
 
 const getCurrentWeather = async (req, res, next) => {
   try {
-    const weather = await weatherService.fetchWeather();
+    const lat = req.query.lat || req.query.latitude;
+    const lon = req.query.lon || req.query.lng || req.query.longitude;
+    const locationName = req.query.locationName || req.query.location;
+    const weather = await weatherService.fetchWeather({ lat, lon, locationName });
     return apiResponse.success(res, {
       current: weather.current, alerts: weather.alerts, travelAdvisory: weather.travelAdvisory,
     }, 'Current weather retrieved');
@@ -13,7 +16,10 @@ const getCurrentWeather = async (req, res, next) => {
 
 const getForecast = async (req, res, next) => {
   try {
-    const weather = await weatherService.fetchWeather();
+    const lat = req.query.lat || req.query.latitude;
+    const lon = req.query.lon || req.query.lng || req.query.longitude;
+    const locationName = req.query.locationName || req.query.location;
+    const weather = await weatherService.fetchWeather({ lat, lon, locationName });
     return apiResponse.success(res, {
       forecast: weather.forecast, alerts: weather.alerts, travelAdvisory: weather.travelAdvisory,
     }, 'Forecast retrieved');

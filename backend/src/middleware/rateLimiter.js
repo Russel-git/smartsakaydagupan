@@ -28,8 +28,8 @@ const authLimiter = rateLimit({
   skip: (req) => {
     // In development mode, bypass auth rate limiting
     if (isDev) return true;
-    // Do not rate-limit token refreshes or logout
-    if (req.path === '/refresh-token' || req.path === '/logout') {
+    // Do not rate-limit token refreshes, logout, or heartbeat me checks
+    if (req.path === '/refresh-token' || req.path === '/logout' || req.path === '/me') {
       return true;
     }
     return false;

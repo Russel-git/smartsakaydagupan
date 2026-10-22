@@ -164,9 +164,32 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
 
   const handlePickFromGallery = async () => {
     try {
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
+      if (Platform.OS === "web") {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.onchange = (e) => {
+          const file = e.target?.files?.[0];
+          if (file) {
+            const uri = URL.createObjectURL(file);
+            setSelectedImage({
+              uri,
+              file,
+              name: file.name || "gallery_evidence.jpg",
+              type: file.type || "image/jpeg",
+              size: file.size,
+            });
+          }
+        };
+        input.click();
+        return;
+      }
+
+      let perm = await ImagePicker.getMediaLibraryPermissionsAsync();
+      if (perm.status !== "granted") {
+        perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      }
+      if (perm.status !== "granted") {
         showWarning(
           "Permission Needed",
           "Access to photos is required to attach evidence.",
@@ -175,7 +198,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
+        allowsEditing: false,
         quality: 0.8,
       });
 
@@ -189,8 +212,33 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
 
   const handleTakePhoto = async () => {
     try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== "granted") {
+      if (Platform.OS === "web") {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.setAttribute("capture", "environment");
+        input.onchange = (e) => {
+          const file = e.target?.files?.[0];
+          if (file) {
+            const uri = URL.createObjectURL(file);
+            setSelectedImage({
+              uri,
+              file,
+              name: file.name || "camera_evidence.jpg",
+              type: file.type || "image/jpeg",
+              size: file.size,
+            });
+          }
+        };
+        input.click();
+        return;
+      }
+
+      let perm = await ImagePicker.getCameraPermissionsAsync();
+      if (perm.status !== "granted") {
+        perm = await ImagePicker.requestCameraPermissionsAsync();
+      }
+      if (perm.status !== "granted") {
         showWarning(
           "Permission Needed",
           "Camera access is required to take an evidence photo.",
@@ -198,7 +246,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
+        allowsEditing: false,
         quality: 0.8,
       });
 
@@ -206,6 +254,7 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         setSelectedImage(result.assets[0]);
       }
     } catch (e) {
+      console.warn("Camera error:", e);
       showError("Error", "Could not access device camera.");
     }
   };
@@ -300,9 +349,13 @@ const SubmitComplaintScreen = ({ route, navigation }) => {
         const fileType = match ? `image/${match[1]}` : "image/jpeg";
 
         if (Platform.OS === "web") {
-          const response = await fetch(uri);
-          const blob = await response.blob();
-          formData.append("photo", blob, fileName);
+          if (selectedImage.file) {
+            formData.append("photo", selectedImage.file, selectedImage.name || fileName);
+          } else {
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            formData.append("photo", blob, fileName);
+          }
         } else {
           formData.append("photo", {
             uri: Platform.OS === "ios" ? uri.replace("file://", "") : uri,

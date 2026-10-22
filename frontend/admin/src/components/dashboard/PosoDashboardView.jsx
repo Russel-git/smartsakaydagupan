@@ -18,12 +18,21 @@ import {
 import api from "../../api/client";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/theme/ThemeContext";
+import { formatMunicipalityShort, formatLguJurisdiction } from "../../utils/lguHelpers";
 import AnalyticsChart from "./AnalyticsChart";
 
 const PosoDashboardView = () => {
-  const { admin } = useAuth();
+  const { admin, user } = useAuth();
   const { colors } = useTheme();
   const navigate = useNavigate();
+
+  const activeUser = admin || user;
+  const muni = activeUser?.municipality || "Dagupan";
+  const muniShort = formatMunicipalityShort(muni);
+  const isCity = muniShort.toLowerCase().includes("city");
+  const defaultZone = isCity ? "Poblacion / Lucao Sector" : `${muni} Patrol Sector`;
+  const hallLabel = isCity ? "City Hall" : "Municipal Hall";
+  const officeName = `${muniShort} Public Order & Safety Office`;
 
   const [pendingComplaints, setPendingComplaints] = useState([]);
   const [endorsedCount, setEndorsedCount] = useState(0);
@@ -117,7 +126,7 @@ const PosoDashboardView = () => {
     {
       title: "Endorsed to LGU",
       value: posoTotals.endorsed || endorsedCount,
-      subtitle: "Verified grievances forwarded to City Hall",
+      subtitle: `Verified grievances forwarded to ${hallLabel}`,
       icon: FileCheck2,
       color: "#10B981",
       bgColor: "#ECFDF5",
@@ -179,14 +188,14 @@ const PosoDashboardView = () => {
               ON-DUTY FIELD ENFORCER
             </span>
             <span style={{ fontSize: "12px", color: colors.textMuted }}>
-              Badge: <strong>{admin?.badgeNumber || "POSO-DAG-01"}</strong>
+              Badge: <strong>{activeUser?.badgeNumber || `POSO-${muni.substring(0, 3).toUpperCase()}-01`}</strong>
             </span>
           </div>
           <h1 style={{ fontSize: "22px", fontWeight: "800", color: colors.textPrimary, margin: 0 }}>
             POSO Field Enforcement Hub
           </h1>
           <p style={{ fontSize: "13px", color: colors.textSecondary, margin: "4px 0 0 0" }}>
-            Assigned Sector: <strong>{admin?.assignedZone || "Poblacion / Lucao Sector"}</strong> — Dagupan City Public Order & Safety Office
+            Assigned Sector: <strong>{activeUser?.assignedZone || defaultZone}</strong> — {officeName}
           </p>
         </div>
 

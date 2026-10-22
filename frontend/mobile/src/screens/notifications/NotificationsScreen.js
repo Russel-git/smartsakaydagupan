@@ -38,53 +38,31 @@ const getMediaUrl = (url) => {
 
 // Helper to determine notification category
 export const getNotificationCategory = (item) => {
-  if (item?.category === 'complaint_updates' || item?.type === 'complaint_update' || item?.metadata?.complaintId) {
+  // 1. Complaint Updates (Highest priority: grievance filing, POSO review, endorsement, action taken, resolution)
+  if (
+    item?.category === 'complaint_updates' ||
+    item?.type === 'complaint_update' ||
+    Boolean(item?.metadata?.complaintId)
+  ) {
     return 'complaint_updates';
   }
+  // 2. Weather Updates (Rain advisories, weather alerts)
   if (
-    item?.category === 'broadcast_by_admin' ||
-    item?.type === 'broadcast' ||
-    item?.createdByRole === 'lgu' ||
-    item?.createdByRole === 'poso' ||
-    item?.userId == null
+    item?.category === 'weather_updates' ||
+    item?.type === 'weather_alert' ||
+    Boolean(item?.metadata?.tempC) ||
+    Boolean(item?.metadata?.source?.includes('Open-Meteo'))
   ) {
-    return 'broadcast_by_admin';
-  }
-  if (item?.category === 'weather_updates' || item?.type === 'weather_alert') {
     return 'weather_updates';
   }
+  // 3. Official LGU/POSO/Admin Broadcasts (Road advisories, rerouting, transit notices, fare updates)
   return 'broadcast_by_admin';
 };
 
-// Multi-category tab membership helper
+// Strict category tab membership helper (each notification belongs to its exact category, and 'all')
 export const isNotificationInTab = (item, tabId) => {
-  if (tabId === 'all') return true;
-  if (tabId === 'complaint_updates') {
-    return (
-      item?.category === 'complaint_updates' ||
-      item?.type === 'complaint_update' ||
-      Boolean(item?.metadata?.complaintId)
-    );
-  }
-  if (tabId === 'broadcast_by_admin') {
-    return (
-      item?.category === 'broadcast_by_admin' ||
-      item?.type === 'broadcast' ||
-      item?.userId == null ||
-      item?.createdByRole === 'lgu' ||
-      item?.createdByRole === 'poso' ||
-      item?.createdByRole === 'admin'
-    );
-  }
-  if (tabId === 'weather_updates') {
-    return (
-      item?.category === 'weather_updates' ||
-      item?.type === 'weather_alert' ||
-      Boolean(item?.metadata?.tempC) ||
-      Boolean(item?.metadata?.source?.includes('Open-Meteo'))
-    );
-  }
-  return true;
+  if (!tabId || tabId === 'all') return true;
+  return getNotificationCategory(item) === tabId;
 };
 
 // Dynamic Category UI Configuration scoped to town
@@ -556,7 +534,11 @@ const NotificationsScreen = ({ navigation }) => {
         }
         renderItem={({ item }) => {
           const cat = getNotificationCategory(item);
-          const cfg = NOTIF_CONFIG[item.type] || NOTIF_CONFIG[cat] || NOTIF_CONFIG.broadcast;
+          const cfg = (cat === 'complaint_updates')
+            ? (NOTIF_CONFIG.complaint_updates || NOTIF_CONFIG.complaint_update)
+            : (cat === 'weather_updates')
+            ? (NOTIF_CONFIG.weather_updates || NOTIF_CONFIG.weather_alert)
+            : (NOTIF_CONFIG[item.type] || NOTIF_CONFIG[cat] || NOTIF_CONFIG.broadcast);
           const isCategorySelected = activeTab !== 'all';
 
           return (
@@ -659,7 +641,11 @@ const NotificationsScreen = ({ navigation }) => {
                 <View style={styles.viewFullRow}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flex: 1 }}>
                     <Text style={[styles.viewFullText, { color: cfg.color }]}>
-                      Tap to view announcement
+                      {cat === 'complaint_updates'
+                        ? 'Tap to view case details'
+                        : cat === 'weather_updates'
+                        ? 'Tap to view weather advisory'
+                        : 'Tap to view announcement'}
                     </Text>
                     <MaterialCommunityIcons name="chevron-right" size={15} color={cfg.color} />
                   </View>
@@ -695,7 +681,11 @@ const NotificationsScreen = ({ navigation }) => {
       {/* Full-Context Announcement Detail Modal */}
       {Boolean(selectedNotif) ? (() => {
         const cat = getNotificationCategory(selectedNotif);
-        const cfg = NOTIF_CONFIG[selectedNotif.type] || NOTIF_CONFIG[cat] || NOTIF_CONFIG.broadcast;
+        const cfg = (cat === 'complaint_updates')
+          ? (NOTIF_CONFIG.complaint_updates || NOTIF_CONFIG.complaint_update)
+          : (cat === 'weather_updates')
+          ? (NOTIF_CONFIG.weather_updates || NOTIF_CONFIG.weather_alert)
+          : (NOTIF_CONFIG[selectedNotif.type] || NOTIF_CONFIG[cat] || NOTIF_CONFIG.broadcast);
 
         return (
           <Modal
