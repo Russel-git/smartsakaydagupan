@@ -14,6 +14,11 @@ router.post('/login', validate(loginSchema), authController.login);
 router.post('/refresh-token', authController.refreshTokenHandler);
 router.post('/forgot-password', validate(forgotPasswordSchema), authController.forgotPassword);
 router.post('/reset-password', validate(resetPasswordSchema), authController.resetPassword);
+router.get('/me', authMiddleware, (req, res) => {
+  const apiResponse = require('../utils/apiResponse');
+  return apiResponse.success(res, req.user, 'Profile retrieved successfully');
+});
 router.post('/logout', authMiddleware, authController.logout);
+router.get('/test-email', authController.testEmail);
 
 module.exports = router;
