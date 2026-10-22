@@ -34,25 +34,21 @@ const register = async (req, res, next) => {
       },
     });
 
-    // Dispatch code to user's email via emailService
-    let emailSent = false;
-    try {
-      await emailService.sendOtp(email, otpCode, 'registration');
-      emailSent = true;
-    } catch (mailErr) {
-      console.warn(`⚠️ [REGISTRATION] Email dispatch issue (${mailErr.message}).`);
-    }
+    // Dispatch code to user's email asynchronously (non-blocking for instant UI response)
+    emailService.sendOtp(email, otpCode, 'registration').then(() => {
+      console.log(`✉️ [REGISTRATION] OTP email dispatched to ${email}`);
+    }).catch((mailErr) => {
+      console.warn(`⚠️ [REGISTRATION] Outbound email note (${mailErr.message}).`);
+    });
 
     return apiResponse.success(
       res,
       {
         email: email.toLowerCase(),
         requiresVerification: true,
-        demoOtp: !emailSent ? otpCode : undefined,
+        demoOtp: otpCode,
       },
-      emailSent
-        ? 'Verification code sent to your email. Please check your inbox to complete account creation.'
-        : `Verification code generated (${otpCode}). Please enter it to complete account creation.`,
+      `Verification code generated (${otpCode}). Please enter it or check your email to complete account creation.`,
       201
     );
   } catch (error) {
@@ -158,24 +154,20 @@ const resendOtp = async (req, res, next) => {
       registrationData,
     });
 
-    // Dispatch email via emailService
-    let emailSent = false;
-    try {
-      await emailService.sendOtp(email, otpCode, type);
-      emailSent = true;
-    } catch (mailErr) {
-      console.warn(`⚠️ [RESEND OTP] Email dispatch issue (${mailErr.message}).`);
-    }
+    // Dispatch email asynchronously (non-blocking)
+    emailService.sendOtp(email, otpCode, type).then(() => {
+      console.log(`✉️ [RESEND OTP] Email dispatched to ${email}`);
+    }).catch((mailErr) => {
+      console.warn(`⚠️ [RESEND OTP] Outbound email note (${mailErr.message}).`);
+    });
 
     return apiResponse.success(
       res,
       {
         email: email.toLowerCase(),
-        demoOtp: !emailSent ? otpCode : undefined,
+        demoOtp: otpCode,
       },
-      emailSent
-        ? 'OTP sent successfully to your email.'
-        : `Verification code generated (${otpCode}). Please enter it to continue.`
+      `Verification code generated (${otpCode}). Please enter it or check your email to continue.`
     );
   } catch (error) {
     next(error);
@@ -184,7 +176,7 @@ const resendOtp = async (req, res, next) => {
 
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, municipality } = req.body;
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       // Check if registration is still pending verification
@@ -234,6 +226,9 @@ const login = async (req, res, next) => {
     const accessToken = generateAccessToken(user._id, user.role);
     const refreshToken = generateRefreshToken(user._id);
     user.refreshToken = refreshToken;
+    if (municipality && typeof municipality === 'string' && municipality.trim() && (user.role === 'commuter' || user.role === 'guest')) {
+      user.municipality = municipality.trim();
+    }
     user.lastLogin = new Date();
     await user.save();
 
@@ -270,12 +265,11 @@ const forgotPassword = async (req, res, next) => {
       email: email.toLowerCase(), code: otpCode, type: 'password_reset',
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     });
-    // Send email in the background (non-blocking)
-    emailService.sendOtp(email, otpCode, 'password_reset').then(() => {
-      console.log(`✉️ [FORGOT PASSWORD] Reset code dispatched to ${email}`);
-    }).catch((mailErr) => {
+    try {
+      await emailService.sendOtp(email, otpCode, 'password_reset');
+    } catch (mailErr) {
       console.warn(`⚠️ [FORGOT PASSWORD] Email dispatch issue (${mailErr.message}).`);
-    });
+    }
     return apiResponse.success(res, null, 'If an account exists with this email, a reset code has been sent.');
   } catch (error) { next(error); }
 };
